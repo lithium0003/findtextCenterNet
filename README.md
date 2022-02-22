@@ -129,3 +129,13 @@ test_image.pyを実行すると推論できます。
 ```bash
 ./test_image.py img/test1.png
 ```
+
+# Reference 
+- Objects as Points
+https://arxiv.org/abs/1904.07850
+- EfficientNetV2
+https://arxiv.org/abs/2104.00298
+- PyTorchではじめるAI開発　(p.256-)
+https://www.amazon.co.jp/dp/B096WWVFJN
+
+
