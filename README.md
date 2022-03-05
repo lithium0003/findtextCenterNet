@@ -22,7 +22,7 @@ Backbone networkに EfficientNetV2 https://github.com/google/automl/tree/master/
 
 入力画像は 512x512x3
 
-EfficientNetV2-XLの出力と、x2,x4,x8のブロックからの途中出力を引き出し、strinde 2のConv2DTransposeで、最終的に
+EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズとなるのブロックからの途中出力を引き出し、strinde 2のConv2DTransposeで、最終的に
 256x256xNの出力を得ます。
 
 ```mermaid
