@@ -10,11 +10,11 @@ Backbone networkに EfficientNetV2 https://github.com/google/automl/tree/master/
 文字コードとして文章を出力する予定です。
 
 # Example
-- 手書き文字
+## 手書き文字
 ![手書き文字サンプル1入力](https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1.png "入力1")
 ![手書き文字サンプル1出力](https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1_result.png "出力1")
 
-- フォント
+## フォント
 ![フォントサンプル2入力](https://github.com/lithium0003/findtextCenterNet/blob/main/img/test2.png "入力2")
 ![フォントサンプル2出力](https://github.com/lithium0003/findtextCenterNet/blob/main/img/test2_result.png "出力2")
 
@@ -78,20 +78,17 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
 
 # Prepare 
 Python3でtensorflowを使用します。
-学習の際に、horovodを使用しています。
 
 ```bash
 pip3 install tensorflow
 pip3 install matplotlib
 pip3 install scikit-image
-pip3 install --no-cache-dir horovod
 ```
 
-データフォルダにある、make_kanji_list.shを事前に1回実行して、文字リストファイルを作成する必要があります。
+学習の際に、horovodを使用する場合は、インストールします。
 
 ```bash
-cd data
-./make_kanji_list.sh
+pip3 install --no-cache-dir horovod
 ```
 
 学習時に使用するload_fontをコンパイルするのに、libfreetype6-devが必要です
