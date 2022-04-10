@@ -1,3 +1,6 @@
+*.obj
+*.exe
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -127,3 +130,4 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+data/load_font/load_font.obj
