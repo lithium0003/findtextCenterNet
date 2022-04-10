@@ -1,6 +1,11 @@
 *.obj
 *.exe
 
+data/background/
+data/enfont/
+data/jpfont/
+data/handwritten/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -10,6 +10,11 @@
 #include FT_TRUETYPE_TABLES_H
 #include FT_TRUETYPE_TAGS_H
 
+#ifdef _WIN64
+#include <fcntl.h>
+#include <io.h>
+#endif
+
 uint16_t read_uint16(FT_Bytes data)
 {
 	return (uint16_t)*data << 8 | *(data + 1);
@@ -54,9 +59,14 @@ int main(int argc, char *argv[])
 
 	error = FT_New_Face(library, argv[1], 0, &face);
 	if(error) {
-		fprintf(stderr, "FT_New_Face error %d\n", error);
+		fprintf(stderr, "FT_New_Face error %d %s\n", error, argv[1]);
 		return 1;
 	}
+
+#ifdef _WIN64
+	_setmode(_fileno(stdin), _O_BINARY);
+	_setmode(_fileno(stdout), _O_BINARY);
+#endif
 
 	std::map<uint16_t, uint16_t> glyphMap;
 	FT_ULong length = 0;

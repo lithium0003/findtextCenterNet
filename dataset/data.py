@@ -29,7 +29,7 @@ class BaseData:
         self.glyph_id[''] = 0
         self.glyphs[0] = ''
 
-        with open('data/codepoints.csv','r') as f:
+        with open(os.path.join('data','codepoints.csv'),'r') as f:
             reader = csv.reader(f)
             for row in reader:
                 codehex = row[1]
@@ -41,7 +41,7 @@ class BaseData:
                 self.glyph_id[code] = i
                 self.glyphs[i] = code
 
-        with open('data/id_map.csv','r') as f:
+        with open(os.path.join('data','id_map.csv'),'r') as f:
             reader = csv.reader(f)
             for row in reader:
                 code = bytes.fromhex(row[2]).decode()
@@ -57,8 +57,12 @@ class BaseData:
         self.id_count = len(self.glyph_id)
 
 def sub_load(args):
+    exe = os.path.join('data','load_font','load_font.exe')
+    if not os.path.exists(exe):
+        exe = os.path.join('data','load_font','load_font')
+
     proc = subprocess.Popen([
-        './data/load_font/load_font',
+        exe,
         args[0],
         '128',
         ], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -299,10 +303,10 @@ class FontData(BaseData):
 
         self.img_cache = {}
         print('loading handwrite image')
-        self.img_cache.update(sub_load_image('data/handwritten'))
+        self.img_cache.update(sub_load_image(os.path.join('data','handwritten')))
 
         print('loading enfont')
-        enfont_files = sorted(glob.glob('data/enfont/*.ttf') + glob.glob('data/enfont/*.otf'))
+        enfont_files = sorted(glob.glob(os.path.join('data','enfont','*.ttf')) + glob.glob(os.path.join('data','enfont','*.otf')))
         en_glyphs = [self.glyphs[key] for key in self.glyphs.keys() if self.glyph_type.get(key,-1) in [0,1,2,6]]
         items = [(f, en_glyphs) for f in enfont_files]
         total = len(enfont_files)
@@ -314,7 +318,7 @@ class FontData(BaseData):
                 progress.add(1)
 
         print('loading jpfont')
-        jpfont_files = sorted(glob.glob('data/jpfont/*.ttf') + glob.glob('data/jpfont/*.otf'))
+        jpfont_files = sorted(glob.glob(os.path.join('data','jpfont','*.ttf')) + glob.glob(os.path.join('data','jpfont','*.otf')))
         items = [(f, list(self.glyphs.values())) for f in jpfont_files]
         total = len(jpfont_files)
         with Pool() as pool:
@@ -436,7 +440,7 @@ class FontData(BaseData):
                 0.
                 ]
 
-        self.random_background = glob.glob('data/background/*')
+        self.random_background = glob.glob(os.path.join('data','background','*'))
 
         self.max_std = 8.0
         self.min_ker = 4
@@ -666,18 +670,18 @@ class FontData(BaseData):
                 isnum += 1
             i += 1
 
-        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x, pad_y))
-        lines = lines.rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x, pad_y))
+        lines = lines.rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         keymapim = np.maximum(keymapim1, keymapim2)
-        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         labels = np.stack([keymapim, xsizeim, ysizeim, xoffsetim, yoffsetim, np.asarray(lines) / 255., sepim], -1)
-        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
 
         images = np.asarray(im) / 255.
         ids = np.asarray(idsim)
@@ -848,18 +852,18 @@ class FontData(BaseData):
             b = sep_end // scale
             seps[t:b, l-1:l+2] = 1
 
-        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x, pad_y))
-        lines = lines.rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x, pad_y))
+        lines = lines.rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         keymapim = np.maximum(keymapim1, keymapim2)
-        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         labels = np.stack([keymapim, xsizeim, ysizeim, xoffsetim, yoffsetim, np.asarray(lines) / 255., sepim], -1)
-        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
 
         images = np.asarray(im) / 255.
         ids = np.asarray(idsim)
@@ -1030,18 +1034,18 @@ class FontData(BaseData):
             left = sep_end // scale
             seps[l-1:l+2, left:right] = 1
 
-        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x, pad_y))
-        lines = lines.rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x, pad_y))
+        lines = lines.rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         keymapim = np.maximum(keymapim1, keymapim2)
-        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         labels = np.stack([keymapim, xsizeim, ysizeim, xoffsetim, yoffsetim, np.asarray(lines) / 255., sepim], -1)
-        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
 
         images = np.asarray(im) / 255.
         ids = np.asarray(idsim)
@@ -1321,18 +1325,18 @@ class FontData(BaseData):
             left = sep_end // scale
             seps[l-1:l+2, left:right] = 1
 
-        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x, pad_y))
-        lines = lines.rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x, pad_y))
+        lines = lines.rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         keymapim = np.maximum(keymapim1, keymapim2)
-        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         labels = np.stack([keymapim, xsizeim, ysizeim, xoffsetim, yoffsetim, np.asarray(lines) / 255., sepim], -1)
-        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
 
         images = np.asarray(im) / 255.
         ids = np.asarray(idsim)
@@ -1612,18 +1616,18 @@ class FontData(BaseData):
             b = sep_end // scale
             seps[t:b, l-1:l+2] = 1
 
-        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x, pad_y))
-        lines = lines.rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x, pad_y))
+        lines = lines.rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         keymapim = np.maximum(keymapim1, keymapim2)
-        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         labels = np.stack([keymapim, xsizeim, ysizeim, xoffsetim, yoffsetim, np.asarray(lines) / 255., sepim], -1)
-        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
 
         images = np.asarray(im) / 255.
         ids = np.asarray(idsim)
@@ -1869,17 +1873,17 @@ class FontData(BaseData):
                 images[y1:y2,x1:x2] = 255 - crop
             i += 1
 
-        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x, pad_y))
-        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x, pad_y))
+        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         keymapim = np.maximum(keymapim1, keymapim2)
-        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         labels = np.stack([keymapim, xsizeim, ysizeim, xoffsetim, yoffsetim, lines, sepim], -1)
-        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
 
         images = np.asarray(im) / 255.
         ids = np.asarray(idsim)
@@ -2150,18 +2154,18 @@ class FontData(BaseData):
                 else:
                     prev -= 1
 
-        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x, pad_y))
-        lines = lines.rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x, pad_y))
+        lines = lines.rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         keymapim = np.maximum(keymapim1, keymapim2)
-        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         labels = np.stack([keymapim, xsizeim, ysizeim, xoffsetim, yoffsetim, np.asarray(lines) / 255., sepim], -1)
-        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
 
         images = np.asarray(im) / 255.
         ids = np.asarray(idsim)
@@ -2738,18 +2742,18 @@ class FontData(BaseData):
                     prev -= 1
 
 
-        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x, pad_y))
-        lines = lines.rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x, pad_y))
+        lines = lines.rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        keymapim1 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        keymapim2 = Image.fromarray(keymap).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         keymapim = np.maximum(keymapim1, keymapim2)
-        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
-        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
-        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        xsizeim = Image.fromarray(xsizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        ysizeim = Image.fromarray(ysizes).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        xoffsetim = Image.fromarray(offsetx).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        yoffsetim = Image.fromarray(offsety).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
+        sepim = Image.fromarray(seps).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
         labels = np.stack([keymapim, xsizeim, ysizeim, xoffsetim, yoffsetim, np.asarray(lines) / 255., sepim], -1)
-        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.NEAREST, translate=(pad_x / scale, pad_y / scale))
+        idsim = Image.fromarray(ids).rotate(angle / np.pi * 180, resample=Image.Resampling.NEAREST, translate=(pad_x / scale, pad_y / scale))
 
         images = np.asarray(im) / 255.
         ids = np.asarray(idsim)
@@ -3031,8 +3035,8 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     data = FontData()
 
-    ds = data.test_data(8, 100)
-    ds = data.train_data(8, 100)
+    ds = data.test_data(8)
+    ds = data.train_data(8)
 
     for i,d in enumerate(ds):
         image, labels, ids = d
@@ -3066,5 +3070,3 @@ if __name__ == '__main__':
             plt.imshow(label1[...,6], vmin=0, vmax=1)
 
             plt.show()
-            
-            
