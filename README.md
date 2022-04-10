@@ -82,10 +82,9 @@ Python3でtensorflowを使用します。
 
 ```bash
 pip3 install tensorflow
-pip3 install tqdm
 pip3 install matplotlib
 pip3 install scikit-image
-HOROVOD_WITH_TENSORFLOW=1 HOROVOD_GPU_OPERATIONS=NCCL HOROVOD_WITHOUT_GLOO=1 pip3 install --no-cache-dir horovod
+pip3 install --no-cache-dir horovod
 ```
 
 データフォルダにある、make_kanji_list.shを事前に1回実行して、文字リストファイルを作成する必要があります。
@@ -113,17 +112,38 @@ resource_list.txtを参照して、適宜フォントデータを配置してく
 筆者と同じデータで学習を希望する方は、[メール](<mailto:contact@lithium03.info>)を送ってください。
 
 # Train
-horovodで8並列のA100で学習するのがよさげでした。もっとバッチサイズを小さくしても学習できると思いますが、あまり小さくすると上手くいかないことがあります。
-efficientnetv2の学習済みの重みからスタートして、GCEのGPU8並列で、1日から2日回すと十分学習できると思われます。
+## horovodを使用して、A100の8並列で学習する場合
 
 ```bash
-wget https://storage.googleapis.com/cloud-tpu-checkpoints/efficientnet/v2/efficientnetv2-xl-21k-ft1k.tgz
-tar xvf efficientnetv2-xl-21k-ft1k.tgz
-./run.sh
+./run_hvd.sh
+```
+
+## 1枚のA100で学習する場合
+
+```bash
+./train14.py
+```
+
+## 1枚の1080Tiで学習する場合(うまくいかない可能性があります)
+
+```bash
+./train1.py
+```
+
+## TPU v3-8で学習させる場合
+
+学習データをクラウドに保存
+```bash
+python3 makedata_fortpu.py
+```
+
+学習
+```bash
+./train_tpu.py
 ```
 
 # Test
-学習データを、result/step1/ もしくは pretrain/ に置いた状態で、
+学習データを、ckpt/　に置いた状態で、
 test_image.pyを実行すると推論できます。
 
 ```bash
