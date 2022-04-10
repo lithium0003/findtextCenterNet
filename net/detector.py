@@ -1,5 +1,4 @@
 import tensorflow as tf
-tf.keras.mixed_precision.set_global_policy('mixed_float16')
 
 import copy
 
@@ -7,11 +6,8 @@ from keras import backend
 from keras import layers
 from keras.applications import imagenet_utils
 from keras.engine import training
-from keras.utils import data_utils
 from keras.utils import layer_utils
 from keras.applications.efficientnet_v2 import round_filters, CONV_KERNEL_INITIALIZER, DENSE_KERNEL_INITIALIZER, MBConvBlock, FusedMBConvBlock, round_repeats
-
-import re
 
 width = 512
 height = 512
@@ -43,7 +39,6 @@ def EfficientNetV2(
     include_preprocessing=True,
 ):
   """Instantiates the EfficientNetV2 architecture using given scaling coefficients.
-
   Args:
     width_coefficient: float, scaling coefficient for network width.
     depth_coefficient: float, scaling coefficient for network depth.
@@ -78,10 +73,8 @@ def EfficientNetV2(
       `classifier_activation=None` to return the logits of the `"top"` layer.
     include_preprocessing: Boolean, whether to include the preprocessing layer
       (`Rescaling`) at the bottom of the network. Defaults to `True`.
-
   Returns:
     A `keras.Model` instance.
-
   Raises:
     ValueError: in case of invalid argument for `weights`,
       or invalid input shape.
@@ -238,8 +231,49 @@ def EfficientNetV2(
 
   return model
 
+
+def change_bn(backbone):
+    mapping = {} # 元モデルのレイヤー名=>改変モデルでの同じ位置のレイヤーにおける出力
+
+    inpt = backbone.input
+    for i, layer in enumerate(backbone.layers):
+        if i == 0: # 一番底のレイヤ
+            x = layer.output
+            out_name = layer.output.name
+            mapping[layer.output.name] = x  # モデルの上方でこのレイヤと繋がっている場合はこのテンソルを持ってきて入力する
+            continue
+
+        # 元モデルのレイヤーに入力されるテンソルに対応した、改変後モデルにおけるテンソルを持ってくる
+        if type(layer.input) is list: # layer.inputは複数入力のときだけlistになっている
+            input_tensors = list(map(lambda t: mapping[t.name], layer.input))
+        else:
+            input_tensors = mapping[layer.input.name]
+
+        
+        out_name = layer.output.name
+        # ここで差し替え
+        if isinstance(layer, tf.keras.layers.BatchNormalization):
+            newlayer = tf.keras.layers.BatchNormalization(
+                axis=layer.axis,
+                renorm = True,
+                name=layer.name)
+            x = newlayer(input_tensors)
+        else:
+            # 差し替えの必要がないレイヤーは再利用
+            x = layer(input_tensors)
+        mapping[out_name] = x
+
+    # 途中のレイヤーから引き出す
+    mid1 = [mapping[lname] for lname in mapping if lname.startswith('block5')][-1]
+    mid2 = [mapping[lname] for lname in mapping if lname.startswith('block3')][-1]
+    mid3 = [mapping[lname] for lname in mapping if lname.startswith('block2')][-1]
+
+    outputs = [mid3, mid2, mid1, x]    
+    newmodel = tf.keras.Model(inpt, outputs, name=backbone.name)
+    return newmodel
+
 class BackboneModel(tf.keras.Model):
-    def __init__(self, **kwarg):
+    def __init__(self, pre_weight=True, renorm=False, **kwarg):
         super().__init__(**kwarg)
         blocks_args=[
             {
@@ -323,13 +357,26 @@ class BackboneModel(tf.keras.Model):
             blocks_args=blocks_args,
             )
 
-        outlayers = [layer for layer in base_model.layers if layer.name.endswith('_add')]
-        mid_output3 = [layer for layer in outlayers if 'block2' in layer.name][-1]
-        mid_output2 = [layer for layer in outlayers if 'block3' in layer.name][-1]
-        mid_output1 = [layer for layer in outlayers if 'block5' in layer.name][-1]
-        self.extract_model = tf.keras.Model(base_model.input, [mid_output3.output, mid_output2.output, mid_output1.output, base_model.output], name='efficientnetv2-xl')
 
-        ckpt = tf.train.latest_checkpoint('efficientnetv2-xl-21k-ft1k')
+        if renorm:
+            self.extract_model = change_bn(base_model)
+        else:
+            outlayers = [layer for layer in base_model.layers if layer.name.endswith('_add')]
+            mid_output3 = [layer for layer in outlayers if 'block2' in layer.name][-1]
+            mid_output2 = [layer for layer in outlayers if 'block3' in layer.name][-1]
+            mid_output1 = [layer for layer in outlayers if 'block5' in layer.name][-1]
+            self.extract_model = tf.keras.Model(base_model.input, [mid_output3.output, mid_output2.output, mid_output1.output, base_model.output], name='efficientnetv2-xl')
+
+        if pre_weight:
+            path_to_downloaded_file = tf.keras.utils.get_file(
+                'efficientnetv2-xl-21k-ft1k', 
+                'https://storage.googleapis.com/cloud-tpu-checkpoints/efficientnet/v2/efficientnetv2-xl-21k-ft1k.tgz',
+                untar=True)
+
+            ckpt = tf.train.latest_checkpoint(path_to_downloaded_file)
+        else:
+            ckpt = None
+
         if ckpt:
             print(ckpt)
 
@@ -395,12 +442,27 @@ class BackboneModel(tf.keras.Model):
                 bname, lname = bname.split('_', 1)
                 for l, n in blocknames[bname]:
                     if lname == l:
-                        key = n+'/'+destname.split('/')[-1]
-                        #print(key, variable_map[key])
-
-                        tensor = reader.get_tensor(key)
-                        #print(tensor)
-                        v.assign(tensor)
+                        k = destname.split('/')[-1]
+                        if renorm and k == 'moving_stddev':
+                            key = n+'/'+'moving_variance'
+                            tensor = reader.get_tensor(key)
+                            tensor = tf.sqrt(tensor)
+                            v.assign(tensor)
+                        elif renorm and k == 'renorm_mean':
+                            key = n+'/'+'moving_mean'
+                            tensor = reader.get_tensor(key)
+                            v.assign(tensor)
+                        elif renorm and k == 'renorm_stddev':
+                            key = n+'/'+'moving_variance'
+                            tensor = reader.get_tensor(key)
+                            tensor = tf.sqrt(tensor)
+                            v.assign(tensor)
+                        else:
+                            key = n+'/'+k
+                            #print(key, variable_map[key])
+                                
+                            tensor = reader.get_tensor(key)
+                            v.assign(tensor)
 
         #print([layer.weights for layer in self.extract_model.layers])
 
@@ -411,24 +473,25 @@ class BackboneModel(tf.keras.Model):
         return mid_output3,mid_output2,mid_output,final_output
 
 class LeafmapModel(tf.keras.Model):
-    def __init__(self, out_dim=1, conv_dim=128, **kwarg):
+    def __init__(self, out_dim=1, conv_dim=32, renorm=False, freezebn=False, **kwarg):
         super().__init__(**kwarg)
         self.conv1 = []
+        momentum = 0.99 if renorm else 0.9
         for _ in range(3):
             self.conv1.append([
                 tf.keras.layers.Conv2DTranspose(conv_dim, kernel_size=3, strides=2, padding='same', use_bias=False, kernel_initializer="he_normal"),
-                tf.keras.layers.BatchNormalization(momentum=0.9),
+                tf.keras.layers.BatchNormalization(momentum=momentum, renorm=renorm, trainable=not freezebn),
                 tf.keras.layers.Activation('swish'),
             ])
         self.conv2 = [
             tf.keras.layers.Conv2DTranspose(conv_dim, kernel_size=3, strides=2, padding='same', use_bias=False, kernel_initializer="he_normal"),
-            tf.keras.layers.BatchNormalization(momentum=0.9),
+            tf.keras.layers.BatchNormalization(momentum=momentum, renorm=renorm, trainable=not freezebn),
             tf.keras.layers.Activation('swish'),
             tf.keras.layers.Conv2D(conv_dim, kernel_size=3, padding='same', kernel_initializer="he_normal"),
             tf.keras.layers.Activation('swish'),
         ]
 
-        self.convout = tf.keras.layers.Conv2D(out_dim, kernel_size=1, padding='same')
+        self.convout = tf.keras.layers.Conv2D(out_dim, kernel_size=1, padding='same', kernel_initializer="he_normal")
         self.outfloat32 = tf.keras.layers.Activation('linear', dtype='float32')
 
     def call(self, inputs, **kwargs):
@@ -451,12 +514,10 @@ class ClassModuloModel(tf.keras.Model):
     def __init__(self, out_dim=97, **kwarg):
         super().__init__(**kwarg)
         self.dense_layers = [
-            tf.keras.layers.Dense(2048),
-            tf.keras.layers.Activation('swish'),
-            tf.keras.layers.Dense(2048),
+            tf.keras.layers.Dense(4096, kernel_initializer="he_normal"),
             tf.keras.layers.Activation('swish'),
         ]
-        self.dense_out = tf.keras.layers.Dense(out_dim)
+        self.dense_out = tf.keras.layers.Dense(out_dim, kernel_initializer="he_normal")
         self.outfloat32 = tf.keras.layers.Activation('linear', dtype='float32')
 
     def call(self, inputs, **kwargs):
@@ -474,17 +535,19 @@ def freeze_bn(layer):
     if isinstance(layer, tf.keras.layers.BatchNormalization):
         layer.trainable = False
 
-def CenterNetDetectionBlock(freeze=False):
-    backbone = BackboneModel(name='BackBoneNet')
-    if freeze:
+def CenterNetDetectionBlock(pre_weight=True, renorm=False, freezebn=False, freezebackbone=False):
+    backbone = BackboneModel(pre_weight=pre_weight, renorm=renorm, name='BackBoneNet')
+    if freezebn:
         freeze_bn(backbone)
+    if freezebackbone:
+        backbone.trainable = False
 
-    keyheatmap = LeafmapModel(out_dim=1, name='keyheatmap')
-    sizes = LeafmapModel(out_dim=2, name='sizes')
-    offsets = LeafmapModel(out_dim=2, name='offsets')
-    textline = LeafmapModel(out_dim=1, name='textline')
-    sepatator = LeafmapModel(out_dim=1, name='sepatator')
-    feature = LeafmapModel(out_dim=feature_dim, conv_dim=512, name='feature')
+    keyheatmap = LeafmapModel(out_dim=1, name='keyheatmap', freezebn=freezebn, renorm=renorm)
+    sizes = LeafmapModel(out_dim=2, name='sizes', freezebn=freezebn, renorm=renorm)
+    offsets = LeafmapModel(out_dim=2, name='offsets', freezebn=freezebn, renorm=renorm)
+    textline = LeafmapModel(out_dim=1, name='textline', freezebn=freezebn, renorm=renorm)
+    sepatator = LeafmapModel(out_dim=1, name='sepatator', freezebn=freezebn, renorm=renorm)
+    feature = LeafmapModel(out_dim=feature_dim, conv_dim=512, name='feature', freezebn=freezebn, renorm=renorm)
 
     inputs = tf.keras.Input(shape=(height,width,3))
     backbone_out = backbone(inputs)

@@ -28,6 +28,10 @@ jpfont/
 
 取得先の一例)
 
+Google Fonts
+https://fonts.google.com/?subset=japanese
+
+
 IPAexフォント
 https://moji.or.jp/ipafont/ipaex00401/
 ipaexg.ttf

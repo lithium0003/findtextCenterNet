@@ -59,37 +59,12 @@ def calc_predid(*args):
     x = x % mk
     return x
 
-class TextDetector:
-    def __init__(self):
-        self.detector = net.CenterNetDetectionBlock()
+class TextDetectorModel(tf.keras.models.Model):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.detector = net.CenterNetDetectionBlock(pre_weight=False)
         self.decoder = net.SimpleDecoderBlock()
-        self.detector.summary()
-        self.decoder.summary()
-        for i in reversed(range(1,20)):
-            save_dir = 'result/step%d'%i
-            if os.path.exists(os.path.join(save_dir,'checkpoint')):
-                checkpoint_dir = save_dir
-                checkpoint = tf.train.Checkpoint(decoder=self.decoder, detector=self.detector)
-                last = tf.train.latest_checkpoint(checkpoint_dir)
-                checkpoint.restore(last).expect_partial()
-                if not last is None:
-                    print(last)
-                    init_epoch = int(os.path.basename(last).split('-')[1])
-                    print('loaded %d epoch'%init_epoch)
-                    break
-        else:
-            save_dir = 'pretrain'
-            if os.path.exists(os.path.join(save_dir,'checkpoint')):
-                checkpoint_dir = save_dir
-                checkpoint = tf.train.Checkpoint(decoder=self.decoder, detector=self.detector)
-                last = tf.train.latest_checkpoint(checkpoint_dir)
-                checkpoint.restore(last).expect_partial()
-                if not last is None:
-                    print(last)
-                else:
-                    print("no weight found")
-            else:
-                print("no weight found")
 
     def eval(self, ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
         org_img = org_img.numpy()
@@ -248,9 +223,10 @@ class TextDetector:
         
         return  glyphids, glyphprobs
 
-
-textdetector = TextDetector()
-data = dataset.BaseData()
+model = TextDetectorModel()
+last = tf.train.latest_checkpoint('ckpt')
+print(last)
+model.load_weights(last).expect_partial()
 
 stepx = net.width * 2 // 3
 stepy = net.height * 2 // 3
@@ -284,7 +260,7 @@ if twopass and (im0.shape[1] / stepx > 2 or im0.shape[0] / stepy > 2):
     ds1 = ds1.batch(1)
     ds1 = ds1.prefetch(tf.data.AUTOTUNE)
 
-    locations0, glyphfeatures0 = textdetector.eval(ds1, im, cut_off=0.5)
+    locations0, glyphfeatures0 = model.eval(ds1, im, cut_off=0.5)
     locations0[:,1:] = locations0[:,1:] * s
 else:
     locations0, glyphfeatures0 = None, None
@@ -303,9 +279,9 @@ ds0 = ds0.map(lambda x,y: {
 ds0 = ds0.batch(4)
 ds0 = ds0.prefetch(tf.data.AUTOTUNE)
 
-locations, glyphfeatures = textdetector.eval(ds0, im, cut_off=0.5,
+locations, glyphfeatures = model.eval(ds0, im, cut_off=0.5,
         locations0=locations0, glyphfeatures0=glyphfeatures0)
-glyphids, glyphprobs = textdetector.decode(glyphfeatures)
+glyphids, glyphprobs = model.decode(glyphfeatures)
 
 plt.figure()
 plt.imshow(im0)
@@ -328,7 +304,10 @@ for i, loc in enumerate(locations):
     points = np.array(points)
     plt.plot(points[:,0], points[:,1])
 
-    pred_char = data.glyphs.get(cid, None)
+    if cid < 0x10FFFF:
+        pred_char = chr(cid)
+    else:
+        pred_char = None
     if pred_char:
         plt.gca().text(cx, cy, pred_char, fontsize=28, color='blue', family='serif')
     plt.gca().text(cx - w/2, cy + h/2, '%.2f'%(p*100), color='green')

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 import tensorflow as tf
-import coremltools as ct
+import tf2onnx
+import onnx
+from onnxruntime.quantization import quantize_dynamic, QuantType
+import onnxruntime
 import numpy as np
 from PIL import Image
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import os
 import io
-import time
-import glob
 
 import net
 
@@ -31,11 +31,12 @@ def convert1():
 
     #########################################################################
 
-    inputs = tf.keras.Input(shape=(net.height,net.width,3))
+    inputs = tf.keras.Input(shape=(net.height,net.width,3), name='image_input')
     heatmap, feature = model.detector(inputs)
 
     keymap = tf.math.sigmoid(heatmap[...,0])
-    local_peak = tf.nn.max_pool2d(keymap[...,tf.newaxis],5,1,'SAME')
+    keymape = tf.expand_dims(keymap, axis=-1)
+    local_peak = tf.nn.max_pool2d(keymape,5,1,'SAME')
     keep = local_peak[...,0] - keymap < 1e-6
     detectedkey = keymap * tf.cast(keep, tf.float32)
 
@@ -51,34 +52,20 @@ def convert1():
     dy = yoffset * net.scale
 
     outputs = [
-        tf.stack([keymap, detectedkey, w, h, dx, dy, textlines, separator], axis=-1),
-        feature,
+        tf.keras.layers.Lambda(lambda x: x, name='maps', dtype='float32')(tf.stack([keymap, detectedkey, w, h, dx, dy, textlines, separator], axis=-1)),
+        tf.keras.layers.Lambda(lambda x: x, name='feature', dtype='float32')(feature),
     ]
     detector = tf.keras.Model(inputs, outputs, name='CenterNetBlock')
 
-    mlmodel_detector = ct.convert(detector,
-            inputs=[ct.ImageType(shape=(1, net.height, net.width, 3))],
-            convert_to="mlprogram")
-    mlmodel_detector.save("TextDetector.mlpackage")
-    spec = mlmodel_detector.get_spec()
-    inputname = spec.description.input[0].name
-    print(inputname)
-    input_image = Image.fromarray(np.zeros([net.height, net.width, 3], dtype=np.uint8))
-    output = mlmodel_detector.predict({inputname: input_image})
-    output_map = {}
-    for key in output:
-        s = output[key].shape[-1]
-        output_map[s] = key
-    print(output_map)
-    ct.utils.rename_feature(spec, inputname, 'Image')
-    ct.utils.rename_feature(spec, output_map[8], 'Output_heatmap')
-    ct.utils.rename_feature(spec, output_map[net.feature_dim], 'Output_feature')
-    mlmodel_detector_fix = ct.models.MLModel(spec, skip_model_load=True, weights_dir=mlmodel_detector.weights_dir)
-    mlmodel_detector_fix.save("TextDetector.mlpackage")
+    tf2onnx.convert.from_keras(detector, output_path='TextDetector.onnx', opset=11)
+    onnx.checker.check_model('TextDetector.onnx')
+
+    quantize_dynamic('TextDetector.onnx','TextDetector.quant.onnx',weight_type=QuantType.QUInt8)
+    onnx.checker.check_model('TextDetector.quant.onnx')
 
     ############################################################################
 
-    embedded = tf.keras.Input(shape=(net.feature_dim,))
+    embedded = tf.keras.Input(shape=(net.feature_dim,), name='feature_input')
     decoder_outputs = model.decoder(embedded)
     ids = []
     p_id = None
@@ -94,36 +81,13 @@ def convert1():
     ids = tf.stack(ids, axis=-1)
     p_id = tf.exp(p_id / len(decoder_outputs))
     outputs = [
-        tf.cast(ids, tf.float32),
-        p_id,
+        tf.keras.layers.Lambda(lambda x: x, name='ids', dtype='float32')(tf.cast(ids, tf.float32)),
+        tf.keras.layers.Lambda(lambda x: x, name='p_id', dtype='float32')(p_id),
     ]
     decoder = tf.keras.Model(embedded, outputs, name='SimpleDecoderBlock')
 
-    mlmodel_decoder = ct.convert(decoder, convert_to="mlprogram")
-    mlmodel_decoder.save("CodeDecoder.mlpackage")
-    spec = mlmodel_decoder.get_spec()
-    inputname = spec.description.input[0].name
-    print(inputname)
-    output = mlmodel_decoder.predict({inputname: np.zeros([1,net.feature_dim])})
-    output_map = {}
-    for key in output:
-        s = output[key].shape[-1]
-        output_map[s] = key
-    print(output_map)
-    ct.utils.rename_feature(spec, inputname, 'Input')
-    ct.utils.rename_feature(spec, output_map[len(decoder_outputs)], 'Output_id')
-    ct.utils.rename_feature(spec, output_map[1], 'Output_p')
-    mlmodel_decoder_fix = ct.models.MLModel(spec, skip_model_load=True, weights_dir=mlmodel_decoder.weights_dir)
-    mlmodel_decoder_fix.save("CodeDecoder.mlpackage")
-
-    with open('contents', 'w') as f:
-        print(int(time.time()), file=f)
-        for d in glob.glob('*.mlpackage'):
-            for n in glob.glob(os.path.join(d,'**'), recursive=True):
-                if os.path.isfile(n):
-                    print(n, file=f)
-    
-    return last
+    tf2onnx.convert.from_keras(decoder, output_path='CodeDecoder.onnx', opset=11)
+    onnx.checker.check_model('CodeDecoder.onnx')
 
 def calc_predid(*args):
     m = net.modulo_list
@@ -159,7 +123,7 @@ def cos_sim(v1, v2):
     return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
 
 def test_model():
-
+    print('test')
     plt.figure()
     plt.text(0.1,0.9,'test', fontsize=32)
     plt.axis('off')
@@ -171,36 +135,53 @@ def test_model():
     im = np.array(Image.open(buf))
     buf.close()
 
-    im = im[:net.height,:net.width,:]
+    im = im[:net.height,:net.width,:3]
     im = np.pad(im, [[0,net.height-im.shape[0]], [0,net.width-im.shape[1]], [0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
 
-    print('test')
-    input_image = Image.fromarray(im)
+    image_input = im.astype(np.float32)
+    image_input = np.expand_dims(image_input, 0)
+    print(image_input.shape)
 
     print('load')
-    mlmodel_detector = ct.models.MLModel('TextDetector.mlpackage')
-    mlmodel_decoder = ct.models.MLModel('CodeDecoder.mlpackage')
+    onnx_detector = onnxruntime.InferenceSession("TextDetector.onnx")
+    onnx_decoder = onnxruntime.InferenceSession("CodeDecoder.onnx")
 
-    output = mlmodel_detector.predict({'Image': input_image})
-    peakmap = output['Output_heatmap'][0,:,:,1]
+    # print(' [ detector ] ')
+    # print('input:')
+    # for session_input in onnx_detector.get_inputs():
+    #     print(session_input.name, session_input.shape)
+    # print('output:')
+    # for session_output in onnx_detector.get_outputs():
+    #     print(session_output.name, session_output.shape)
+
+    # print(' [ decoder ] ')
+    # print('input:')
+    # for session_input in onnx_decoder.get_inputs():
+    #     print(session_input.name, session_input.shape)
+    # print('output:')
+    # for session_output in onnx_decoder.get_outputs():
+    #     print(session_output.name, session_output.shape)
+
+    maps, feature = onnx_detector.run(['maps','feature'], {'image_input': image_input})
+    peakmap = maps[0,:,:,1]
     idxy, idxx  = np.unravel_index(np.argsort(-peakmap.ravel()), peakmap.shape)
     results_dict = []
     for y, x in zip(idxy, idxx):
         print(x,y,peakmap[y,x])
         if peakmap[y,x] < 0.5:
             break
-        decode_output = mlmodel_decoder.predict({'Input': output['Output_feature'][:,y,x,:]})
-        p = decode_output['Output_p'][0]
-        ids = list(decode_output['Output_id'][0].astype(int))
+        ids, p_id = onnx_decoder.run(['ids','p_id'], {'feature_input': feature[:,y,x,:]})
+        p = p_id[0]
+        ids = list(ids[0,:].astype(int))
         i = calc_predid(*ids)
         if i < 0x10FFFF:
             c = chr(i)
         else:
             c = None
         print(p, i, c)
-        feature = output['Output_feature'][0,y,x,:]
-        print(feature.max(), feature.min())
-        results_dict.append((feature, i, c))
+        feature1 = feature[0,y,x,:]
+        print(feature1.max(), feature1.min())
+        results_dict.append((feature1, i, c))
         print()
 
     for i in range(len(results_dict)):
@@ -210,6 +191,5 @@ def test_model():
             print(s,d, i,j,results_dict[i][1:],results_dict[j][1:])
 
 if __name__ == '__main__':
-    last = convert1()
+    convert1()
     test_model()
-    print(last)
