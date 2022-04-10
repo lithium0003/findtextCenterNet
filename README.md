@@ -81,6 +81,7 @@ Python3でtensorflowを使用します。
 
 ```bash
 pip3 install tensorflow
+pip3 install tensorflow_addons
 pip3 install matplotlib
 pip3 install scikit-image
 ```
@@ -137,6 +138,13 @@ python3 makedata_fortpu.py
 学習
 ```bash
 ./train_tpu.py
+```
+
+## Windowsで学習させる場合
+
+テキストの読み書きを、utf8に強制してください。
+```bash
+python.exe -X utf8 train1.py
 ```
 
 # Test
