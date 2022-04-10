@@ -12,7 +12,7 @@ import os
 from PIL import Image, ImageFilter
 
 from matplotlib import rcParams
-rcParams['font.serif'] = ['IPAexMincho', 'IPAPMincho', 'Hiragino Sans']
+rcParams['font.serif'] = ['IPAexMincho', 'IPAPMincho', 'Hiragino Mincho ProN', 'Yu Mincho']
 
 import matplotlib.pyplot as plt
 
