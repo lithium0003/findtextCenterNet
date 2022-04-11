@@ -5,7 +5,7 @@ os.environ['TF_GPU_ALLOCATOR'] = 'cuda_malloc_async'
 import tensorflow as tf
 tf.keras.mixed_precision.set_global_policy('mixed_float16')
 
-import horovod.tensorflow as hvd
+import horovod.tensorflow.keras as hvd
 hvd.init()
 
 import tensorflow_addons as tfa
