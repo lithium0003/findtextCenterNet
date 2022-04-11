@@ -232,7 +232,7 @@ def EfficientNetV2(
   return model
 
 class BackboneModel(tf.keras.Model):
-    def __init__(self, pre_weight=True, renorm=False, **kwarg):
+    def __init__(self, pre_weight=True, renorm=False, syncbn=False, **kwarg):
         super().__init__(**kwarg)
         blocks_args=[
             {
@@ -323,7 +323,14 @@ class BackboneModel(tf.keras.Model):
         mid_output1 = [layer for layer in outlayers if 'block5' in layer.name][-1]
         self.extract_model = tf.keras.Model(base_model.input, [mid_output3.output, mid_output2.output, mid_output1.output, base_model.output], name='efficientnetv2-xl')
 
-        if renorm:
+        if syncbn:
+            import horovod.tensorflow as hvd
+            model_config = self.extract_model.get_config()
+            for layer, layer_config in zip(self.extract_model.layers, model_config['layers']):
+                if type(layer) == tf.keras.layers.BatchNormalization:
+                    layer_config['class_name'] = 'SyncBatchNormalization'
+            self.extract_model = tf.keras.models.Model.from_config(model_config, custom_objects={'SyncBatchNormalization': hvd.SyncBatchNormalization})
+        elif renorm:
             model_config = self.extract_model.get_config()
             for layer, layer_config in zip(self.extract_model.layers, model_config['layers']):
                 if type(layer) == tf.keras.layers.BatchNormalization:
@@ -436,19 +443,25 @@ class BackboneModel(tf.keras.Model):
         return mid_output3,mid_output2,mid_output,final_output
 
 class LeafmapModel(tf.keras.Model):
-    def __init__(self, out_dim=1, conv_dim=32, renorm=False, freezebn=False, **kwarg):
+    def __init__(self, out_dim=1, conv_dim=32, renorm=False, syncbn=False, **kwarg):
         super().__init__(**kwarg)
+        if syncbn:
+            import horovod.tensorflow as hvd
+            BatchNormalization = hvd.SyncBatchNormalization
+        else:
+            BatchNormalization = tf.keras.layers.BatchNormalization
+
         self.conv1 = []
         momentum = 0.9
         for _ in range(3):
             self.conv1.append([
                 tf.keras.layers.Conv2DTranspose(conv_dim, kernel_size=3, strides=2, padding='same', use_bias=False, kernel_initializer="he_normal"),
-                tf.keras.layers.BatchNormalization(momentum=momentum, renorm=renorm, trainable=not freezebn),
+                BatchNormalization(momentum=momentum, renorm=renorm),
                 tf.keras.layers.Activation('swish'),
             ])
         self.conv2 = [
             tf.keras.layers.Conv2DTranspose(conv_dim, kernel_size=3, strides=2, padding='same', use_bias=False, kernel_initializer="he_normal"),
-            tf.keras.layers.BatchNormalization(momentum=momentum, renorm=renorm, trainable=not freezebn),
+            BatchNormalization(momentum=momentum, renorm=renorm),
             tf.keras.layers.Activation('swish'),
             tf.keras.layers.Conv2D(conv_dim, kernel_size=3, padding='same', kernel_initializer="he_normal"),
             tf.keras.layers.Activation('swish'),
@@ -498,19 +511,15 @@ def freeze_bn(layer):
     if isinstance(layer, tf.keras.layers.BatchNormalization):
         layer.trainable = False
 
-def CenterNetDetectionBlock(pre_weight=True, renorm=False, freezebn=False, freezebackbone=False):
-    backbone = BackboneModel(pre_weight=pre_weight, renorm=renorm, name='BackBoneNet')
-    if freezebn:
-        freeze_bn(backbone)
-    if freezebackbone:
-        backbone.trainable = False
+def CenterNetDetectionBlock(pre_weight=True, renorm=False, syncbn=False):
+    backbone = BackboneModel(pre_weight=pre_weight, renorm=renorm, syncbn=syncbn, name='BackBoneNet')
 
-    keyheatmap = LeafmapModel(out_dim=1, name='keyheatmap', freezebn=freezebn, renorm=renorm)
-    sizes = LeafmapModel(out_dim=2, name='sizes', freezebn=freezebn, renorm=renorm)
-    offsets = LeafmapModel(out_dim=2, name='offsets', freezebn=freezebn, renorm=renorm)
-    textline = LeafmapModel(out_dim=1, name='textline', freezebn=freezebn, renorm=renorm)
-    sepatator = LeafmapModel(out_dim=1, name='sepatator', freezebn=freezebn, renorm=renorm)
-    feature = LeafmapModel(out_dim=feature_dim, conv_dim=512, name='feature', freezebn=freezebn, renorm=renorm)
+    keyheatmap = LeafmapModel(out_dim=1, name='keyheatmap', renorm=renorm, syncbn=syncbn)
+    sizes = LeafmapModel(out_dim=2, name='sizes', renorm=renorm, syncbn=syncbn)
+    offsets = LeafmapModel(out_dim=2, name='offsets', renorm=renorm, syncbn=syncbn)
+    textline = LeafmapModel(out_dim=1, name='textline', renorm=renorm, syncbn=syncbn)
+    sepatator = LeafmapModel(out_dim=1, name='sepatator', renorm=renorm, syncbn=syncbn)
+    feature = LeafmapModel(out_dim=feature_dim, conv_dim=512, name='feature', renorm=renorm, syncbn=syncbn)
 
     inputs = tf.keras.Input(shape=(height,width,3))
     backbone_out = backbone(inputs)

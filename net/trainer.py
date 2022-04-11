@@ -56,6 +56,7 @@ def heatmap_loss(true, logits):
 class TextDetectorModel(tf.keras.models.Model):
     def __init__(self, **kwargs):
         renorm = kwargs.pop('renorm', False)
+        syncbn = kwargs.pop('syncbn', False)
         super().__init__(**kwargs)
 
         self.key_th1 = 0.8
@@ -69,7 +70,7 @@ class TextDetectorModel(tf.keras.models.Model):
         self.id_loss_tracker = tf.keras.metrics.Mean(name='id_loss')
         self.id_acc_tracker = tf.keras.metrics.Accuracy(name='id_acc')
 
-        self.detector = CenterNetDetectionBlock(renorm=renorm)
+        self.detector = CenterNetDetectionBlock(renorm=renorm, syncbn=syncbn)
         self.decoder = SimpleDecoderBlock()
 
         self.mu_loss = {}
