@@ -18,7 +18,10 @@ if gpus:
 import os
 
 save_target = 'result/'
-batchsize = 10
+#batchsize = 10
+#syncBn = True
+batchsize = 14
+syncBn = False
 
 import net
 import dataset
@@ -26,7 +29,7 @@ import dataset
 def train():
     data = dataset.FontData()
 
-    model = net.TextDetectorModel(syncbn=True)
+    model = net.TextDetectorModel(syncbn=syncBn)
     #opt = tf.keras.optimizers.Adam(learning_rate=1e-4)
     scaled_lr = 1e-4 * hvd.size()
     opt = tfa.optimizers.AdamW(learning_rate=scaled_lr, weight_decay=1e-6)
