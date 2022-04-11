@@ -28,8 +28,9 @@ def train():
 
     model = net.TextDetectorModel()
     #opt = tf.keras.optimizers.Adam(learning_rate=1e-4)
-    opt = tfa.optimizers.AdamW(learning_rate=1e-4, weight_decay=1e-6)
-    opt = hvd.DistributedOptimizer(opt)
+    scaled_lr = 1e-4 * hvd.size()
+    opt = tfa.optimizers.AdamW(learning_rate=scaled_lr, weight_decay=1e-6)
+    opt = hvd.DistributedOptimizer(opt, compression=hvd.Compression.fp16)
     model.compile(optimizer=opt)
 
     patience = 20 // hvd.size()
@@ -38,7 +39,9 @@ def train():
 
     callbacks = [
         hvd.callbacks.BroadcastGlobalVariablesCallback(0),
+        hvd.callbacks.MetricAverageCallback(),
         tf.keras.callbacks.TerminateOnNaN(),
+        hvd.callbacks.LearningRateWarmupCallback(initial_lr=scaled_lr, warmup_epochs=5, verbose=1),
         tf.keras.callbacks.ReduceLROnPlateau(
             monitor='val_id_acc',
             factor=0.5,
