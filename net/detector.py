@@ -231,47 +231,6 @@ def EfficientNetV2(
 
   return model
 
-
-def change_bn(backbone):
-    mapping = {} # 元モデルのレイヤー名=>改変モデルでの同じ位置のレイヤーにおける出力
-
-    inpt = backbone.input
-    for i, layer in enumerate(backbone.layers):
-        if i == 0: # 一番底のレイヤ
-            x = layer.output
-            out_name = layer.output.name
-            mapping[layer.output.name] = x  # モデルの上方でこのレイヤと繋がっている場合はこのテンソルを持ってきて入力する
-            continue
-
-        # 元モデルのレイヤーに入力されるテンソルに対応した、改変後モデルにおけるテンソルを持ってくる
-        if type(layer.input) is list: # layer.inputは複数入力のときだけlistになっている
-            input_tensors = list(map(lambda t: mapping[t.name], layer.input))
-        else:
-            input_tensors = mapping[layer.input.name]
-
-        
-        out_name = layer.output.name
-        # ここで差し替え
-        if isinstance(layer, tf.keras.layers.BatchNormalization):
-            newlayer = tf.keras.layers.BatchNormalization(
-                axis=layer.axis,
-                renorm = True,
-                name=layer.name)
-            x = newlayer(input_tensors)
-        else:
-            # 差し替えの必要がないレイヤーは再利用
-            x = layer(input_tensors)
-        mapping[out_name] = x
-
-    # 途中のレイヤーから引き出す
-    mid1 = [mapping[lname] for lname in mapping if lname.startswith('block5')][-1]
-    mid2 = [mapping[lname] for lname in mapping if lname.startswith('block3')][-1]
-    mid3 = [mapping[lname] for lname in mapping if lname.startswith('block2')][-1]
-
-    outputs = [mid3, mid2, mid1, x]    
-    newmodel = tf.keras.Model(inpt, outputs, name=backbone.name)
-    return newmodel
-
 class BackboneModel(tf.keras.Model):
     def __init__(self, pre_weight=True, renorm=False, **kwarg):
         super().__init__(**kwarg)
@@ -358,14 +317,19 @@ class BackboneModel(tf.keras.Model):
             )
 
 
+        outlayers = [layer for layer in base_model.layers if layer.name.endswith('_add')]
+        mid_output3 = [layer for layer in outlayers if 'block2' in layer.name][-1]
+        mid_output2 = [layer for layer in outlayers if 'block3' in layer.name][-1]
+        mid_output1 = [layer for layer in outlayers if 'block5' in layer.name][-1]
+        self.extract_model = tf.keras.Model(base_model.input, [mid_output3.output, mid_output2.output, mid_output1.output, base_model.output], name='efficientnetv2-xl')
+
         if renorm:
-            self.extract_model = change_bn(base_model)
-        else:
-            outlayers = [layer for layer in base_model.layers if layer.name.endswith('_add')]
-            mid_output3 = [layer for layer in outlayers if 'block2' in layer.name][-1]
-            mid_output2 = [layer for layer in outlayers if 'block3' in layer.name][-1]
-            mid_output1 = [layer for layer in outlayers if 'block5' in layer.name][-1]
-            self.extract_model = tf.keras.Model(base_model.input, [mid_output3.output, mid_output2.output, mid_output1.output, base_model.output], name='efficientnetv2-xl')
+            model_config = self.extract_model.get_config()
+            print(model_config)
+            for layer, layer_config in zip(self.extract_model.layers, model_config['layers']):
+                if type(layer) == tf.keras.layers.BatchNormalization:
+                    layer_config['config']['renorm'] = True
+            self.extract_model = tf.keras.models.Model.from_config(model_config)
 
         if pre_weight:
             path_to_downloaded_file = tf.keras.utils.get_file(
@@ -476,7 +440,7 @@ class LeafmapModel(tf.keras.Model):
     def __init__(self, out_dim=1, conv_dim=32, renorm=False, freezebn=False, **kwarg):
         super().__init__(**kwarg)
         self.conv1 = []
-        momentum = 0.99 if renorm else 0.9
+        momentum = 0.9
         for _ in range(3):
             self.conv1.append([
                 tf.keras.layers.Conv2DTranspose(conv_dim, kernel_size=3, strides=2, padding='same', use_bias=False, kernel_initializer="he_normal"),
