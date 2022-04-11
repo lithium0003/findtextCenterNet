@@ -325,7 +325,6 @@ class BackboneModel(tf.keras.Model):
 
         if renorm:
             model_config = self.extract_model.get_config()
-            print(model_config)
             for layer, layer_config in zip(self.extract_model.layers, model_config['layers']):
                 if type(layer) == tf.keras.layers.BatchNormalization:
                     layer_config['config']['renorm'] = True
