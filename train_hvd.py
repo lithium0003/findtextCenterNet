@@ -43,7 +43,6 @@ def train():
     callbacks = [
         hvd.callbacks.BroadcastGlobalVariablesCallback(0),
         hvd.callbacks.MetricAverageCallback(),
-        tf.keras.callbacks.TerminateOnNaN(),
         hvd.callbacks.LearningRateWarmupCallback(initial_lr=scaled_lr, warmup_epochs=5, verbose=1),
         tf.keras.callbacks.ReduceLROnPlateau(
             monitor='val_id_acc',

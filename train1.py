@@ -16,7 +16,7 @@ def train():
 
     model = net.TextDetectorModel(renorm=True)
     #opt = tf.keras.optimizers.Adam(learning_rate=1e-4)
-    opt = tfa.optimizers.AdamW(learning_rate=4e-5, weight_decay=1e-6)
+    opt = tfa.optimizers.AdamW(learning_rate=2e-5, weight_decay=1e-6)
     model.compile(optimizer=opt)
 
     save_dir = os.path.join(save_target,'ckpt','ckpt')
@@ -28,7 +28,6 @@ def train():
         monitor='val_id_acc',
         save_best_only=True)
     backup_callback = tf.keras.callbacks.BackupAndRestore(backup_dir)
-    nan_callback = tf.keras.callbacks.TerminateOnNaN()
     tb_callcack = tf.keras.callbacks.TensorBoard(
         log_dir=tb_dir,
         histogram_freq=1,
@@ -43,7 +42,7 @@ def train():
     model.fit(
         data.train_data(batchsize), epochs=4000, steps_per_epoch=1000,
         validation_data=data.test_data(batchsize), validation_steps=200,
-        callbacks=[cp_callback, backup_callback, nan_callback, tb_callcack, reduce_callback, csv_callback])
+        callbacks=[cp_callback, backup_callback, tb_callcack, reduce_callback, csv_callback])
 
 if __name__ == '__main__':
     train()

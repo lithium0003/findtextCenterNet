@@ -38,7 +38,6 @@ def train():
         monitor='val_id_acc',
         save_best_only=True)
     backup_callback = tf.keras.callbacks.BackupAndRestore(backup_dir)
-    nan_callback = tf.keras.callbacks.TerminateOnNaN()
     tb_callcack = tf.keras.callbacks.TensorBoard(
         log_dir=tb_dir,
         histogram_freq=1,
@@ -53,7 +52,7 @@ def train():
     model.fit(
         ds1, epochs=4000 // batchsize, steps_per_epoch=1000,
         validation_data=ds2, validation_steps=200,
-        callbacks=[cp_callback, backup_callback, nan_callback, tb_callcack, reduce_callback, csv_callback])
+        callbacks=[cp_callback, backup_callback, tb_callcack, reduce_callback, csv_callback])
 
 if __name__ == '__main__':
     train()
