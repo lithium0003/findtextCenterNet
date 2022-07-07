@@ -349,7 +349,7 @@ class FontData(BaseData):
         self.train_keys = self.get_train_keys()
 
         #                  0    1    2    3    4    5    6    7    8    9   10   11
-        self.prob_map = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.1, 1.0]
+        self.prob_map = [2.0, 2.0, 2.0, 2.0, 1.5, 1.0, 1.0, 1.0, 1.0, 1.0, 0.1, 1.0]
         self.prob_map = [p/t for p,t in zip(self.prob_map, type_count)]
         self.random_probs_train = [self.prob_map[self.glyph_type[self.glyph_id[key[1]]]] for key in self.train_keys]
         self.random_probs_test = [self.prob_map[self.glyph_type[self.glyph_id[key[1]]]] for key in self.test_keys]
@@ -360,23 +360,17 @@ class FontData(BaseData):
         self.kanji_probs_train = [self.prob_map_kanji[self.glyph_type[self.glyph_id[key[1]]]] for key in self.train_keys]
         self.kanji_probs_test = [self.prob_map_kanji[self.glyph_type[self.glyph_id[key[1]]]] for key in self.test_keys]
 
-        #                      0  1  2  3  4  5  6  7  8  9 10 11
-        self.prob_map_num = [1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        self.prob_map_num = [p/t for p,t in zip(self.prob_map_num, type_count)]
-        self.num_probs_train = [self.prob_map_num[self.glyph_type[self.glyph_id[key[1]]]] for key in self.train_keys]
-        self.num_probs_test = [self.prob_map_num[self.glyph_type[self.glyph_id[key[1]]]] for key in self.test_keys]
+        #                     0  1  2    3    4  5  6  7  8  9 10 11
+        self.prob_map_hira = [0, 0, 0, 1.0, 1.0, 0, 0, 0, 0, 0, 0, 0]
+        self.prob_map_hira = [p/t for p,t in zip(self.prob_map_hira, type_count)]
+        self.hira_probs_train = [self.prob_map_hira[self.glyph_type[self.glyph_id[key[1]]]] for key in self.train_keys]
+        self.hira_probs_test = [self.prob_map_hira[self.glyph_type[self.glyph_id[key[1]]]] for key in self.test_keys]
 
-        #                      0    1    2  3  4  5  6  7  8  9 10 11
+        #                      0   1    2   3  4  5  6  7  8  9 10 11
         self.prob_map_alpha = [0, 1.0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         self.prob_map_alpha = [p/t for p,t in zip(self.prob_map_alpha, type_count)]
         self.alpha_probs_train = [self.prob_map_alpha[self.glyph_type[self.glyph_id[key[1]]]] for key in self.train_keys]
         self.alpha_probs_test = [self.prob_map_alpha[self.glyph_type[self.glyph_id[key[1]]]] for key in self.test_keys]
-
-        #                     0  1  2    3  4  5  6  7  8  9 10 11
-        self.prob_map_hira = [0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0]
-        self.prob_map_hira = [p/t for p,t in zip(self.prob_map_hira, type_count)]
-        self.hira_probs_train = [self.prob_map_hira[self.glyph_type[self.glyph_id[key[1]]]] for key in self.train_keys]
-        self.hira_probs_test = [self.prob_map_hira[self.glyph_type[self.glyph_id[key[1]]]] for key in self.test_keys]
 
 
         self.train_keys_num = [x for x in self.train_keys if self.glyph_type[self.glyph_id[x[1]]] == 0]
@@ -409,15 +403,6 @@ class FontData(BaseData):
         p_sum = sum([0 if '.' in f else 1 for f in self.test_jp_fonts])
         self.test_jp_fonts_p = [1. if '.' in f else 1/p_sum for f in self.test_jp_fonts]
 
-        self.train_keys_hira = [x for x in self.train_keys if self.glyph_type[self.glyph_id[x[1]]] in [3,4]]
-        self.test_keys_hira = [x for x in self.test_keys if self.glyph_type[self.glyph_id[x[1]]] in [3,4]]
-        self.train_hira_fonts = list(set([key[0] for key in self.train_keys_hira]))
-        p_sum = sum([0 if '.' in f else 1 for f in self.train_hira_fonts])
-        self.train_hira_fonts_p = [1. if '.' in f else 1/p_sum for f in self.train_hira_fonts]
-        self.test_hira_fonts = list(set([key[0] for key in self.test_keys_hira]))
-        p_sum = sum([0 if '.' in f else 1 for f in self.test_hira_fonts])
-        self.test_hira_fonts_p = [1. if '.' in f else 1/p_sum for f in self.test_hira_fonts]
-
         self.train_keys_jpnum = [x for x in self.train_keys if (self.glyph_type[self.glyph_id[x[1]]] in [0,3,4,5,7]) and (x[0] in self.train_jp_fonts)]
         self.test_keys_jpnum  = [x for x in self.test_keys if (self.glyph_type[self.glyph_id[x[1]]] in [0,3,4,5,7]) and (x[0] in self.test_jp_fonts)]
         self.train_jpnum_fonts = list(set([key[0] for key in self.train_keys_jpnum]))
@@ -432,7 +417,7 @@ class FontData(BaseData):
                 gtype_count[3] / type_count[3],
                 gtype_count[4] / type_count[4],
                 gtype_count[5] / type_count[5],
-                gtype_count[6] / type_count[6],
+                0.,
                 0.,
                 0.,
                 0.,
@@ -508,7 +493,7 @@ class FontData(BaseData):
         max_count = 256
         angle_max = 15.0
 
-        min_pixel = 16
+        min_pixel = 20
         max_pixel = 100
         text_size = random.randint(min_pixel, max_pixel)
 
@@ -535,8 +520,12 @@ class FontData(BaseData):
         probs2 = [1. if is_Font_match(key[0], select_font) and self.glyph_type[self.glyph_id[key[1]]] == 0 else 0. for key in keys]
         selection2 = [key for key in random.choices(keys, k=max_count*2, weights=probs2)]
 
+        aspects = np.clip(np.random.normal() * 0.1 + 1.0, 0.75, 1.25)
+        if random.random() < 0.5:
+            aspects = 1.0 / aspects
+
         base_line = width - text_size // 2
-        line_space = int(text_size * random.uniform(1.05, 2.0))
+        line_space = int(text_size * random.uniform(1.05, 1.5))
         line_start = 0
         line_end = 0
         isnum = -1
@@ -554,9 +543,11 @@ class FontData(BaseData):
                     continue
                 w = item['width'] / 128 * text_size
                 h = item['rows'] / 128 * text_size
-                vertBearingX = item['vertBearingX'] / 128 * text_size
-                vertBearingY = item['vertBearingY'] / 128 * text_size
-                vertAdvance = item['vertAdvance'] / 128 * text_size
+                w *= aspects
+                h /= aspects
+                vertBearingX = item['vertBearingX'] / 128 * text_size * aspects
+                vertBearingY = item['vertBearingY'] / 128 * text_size / aspects
+                vertAdvance = item['vertAdvance'] / 128 * text_size / aspects
                 horiBearingX = 0
             else:
                 item = self.img_cache[key]['vertical']
@@ -569,17 +560,21 @@ class FontData(BaseData):
                     continue
                 w = item['width'] / 128 * text_size
                 h = item['rows'] / 128 * text_size
-                horiBearingY = item['horiBearingY'] / 128 * text_size
-                horiBearingX = item['horiBearingX'] / 128 * text_size
-                vertBearingX = -text_size * 0.5
+                w *= aspects
+                h /= aspects
+                horiBearingY = item['horiBearingY'] / 128 * text_size / aspects
+                horiBearingX = item['horiBearingX'] / 128 * text_size * aspects
+                vertBearingX = -text_size * 0.5 * aspects
                 vertBearingY = 0
-                vertAdvance = text_size
+                vertAdvance = text_size / aspects
 
             if line_end + vertAdvance >= height:
-                draw.line(((base_line // scale, line_start // scale), 
-                    (base_line // scale, line_end // scale)), fill=255, width=3)
+                draw.line((((base_line - text_size // 2) // scale, line_start // scale), 
+                    ((base_line - text_size // 2) // scale, line_end // scale)), fill=255, width=3)
 
                 base_line -= line_space
+                if np.random.uniform() < 0.01:
+                    base_line -= line_space
                 if base_line - text_size / 2 < 0:
                     break
                 line_start = 0
@@ -649,8 +644,8 @@ class FontData(BaseData):
                 id_char = self.glyph_id[key[1]]
                 ids[size_ymin:size_ymax, size_xmin:size_xmax] = np.where(size_map, id_char, ids[size_ymin:size_ymax, size_xmin:size_xmax])
 
-                w = max(int(item['width'] / 128 * text_size), 1)
-                h = max(int(item['rows'] / 128 * text_size), 1)
+                w = max(int(item['width'] / 128 * text_size * aspects), 1)
+                h = max(int(item['rows'] / 128 * text_size / aspects), 1)
                 if isnum > 0:
                     l = int(np.clip(base_line + horiBearingX, 0, width - w))
                 else:
@@ -688,20 +683,20 @@ class FontData(BaseData):
 
         images = apply_random_filter(images)
 
-        return self.sub_constructimage(images, labels, ids, False)
+        return self.sub_constructimage(images, labels, ids, len(self.random_background) > 0)
 
     def yoko_images(self, keys, fonts, font_p):
         max_count = 256
         angle_max = 15.0
 
-        min_pixel = 16
+        min_pixel = 20
         max_pixel = 100
         text_size = random.randint(min_pixel, max_pixel)
 
-        line_space = int(text_size * random.uniform(1.05, 2.0))
+        line_space = int(text_size * random.uniform(1.05, 1.5))
         block_count = 2
         line_break = int(random.uniform(0.3,0.7) * width)
-        break_space = text_size * random.uniform(0.6, 1.5)
+        break_space = text_size * random.uniform(0.1, 1.5)
 
         images = np.zeros([height, width], dtype=np.float32)
         keymap = np.zeros([height // scale, width // scale], dtype=np.float32)
@@ -724,6 +719,10 @@ class FontData(BaseData):
         probs = [1. if is_Font_match(key[0], select_font) else 0. for key in keys]
         selection = [key for key in random.choices(keys, k=max_count, weights=probs)]
 
+        aspects = np.clip(np.random.normal() * 0.1 + 1.0, 0.75, 1.25)
+        if random.random() < 0.5:
+            aspects = 1.0 / aspects
+
         base_line = line_space
         block_no = 0
         line_start = int(max(0, 0 if block_count == 1 or block_no == 0 else line_break + break_space))
@@ -739,9 +738,11 @@ class FontData(BaseData):
 
             w = item['width'] / 128 * text_size
             h = item['rows'] / 128 * text_size
-            horiBearingX = item['horiBearingX'] / 128 * text_size
-            horiBearingY = item['horiBearingY'] / 128 * text_size
-            horiAdvance = item['horiAdvance'] / 128 * text_size
+            w *= aspects
+            h /= aspects
+            horiBearingX = item['horiBearingX'] / 128 * text_size * aspects
+            horiBearingY = item['horiBearingY'] / 128 * text_size / aspects
+            horiAdvance = item['horiAdvance'] / 128 * text_size * aspects
 
             if temp_lineend + horiAdvance < line_end:
                 linebuf.append((key, item))
@@ -755,14 +756,16 @@ class FontData(BaseData):
                     draw.line(((line_start // scale, base_line // scale), 
                         (line_end // scale, base_line // scale)), fill=255, width=3)
 
-                text_count[block_no] += len(linebuf)
+                text_count[block_no] = max(text_count[block_no], len(linebuf))
 
                 for key, item in linebuf:
                     w = item['width'] / 128 * text_size
                     h = item['rows'] / 128 * text_size
-                    horiBearingX = item['horiBearingX'] / 128 * text_size
-                    horiBearingY = item['horiBearingY'] / 128 * text_size
-                    horiAdvance = item['horiAdvance'] / 128 * text_size
+                    w *= aspects
+                    h /= aspects
+                    horiBearingX = item['horiBearingX'] / 128 * text_size * aspects
+                    horiBearingY = item['horiBearingY'] / 128 * text_size / aspects
+                    horiAdvance = item['horiAdvance'] / 128 * text_size * aspects
 
                     l = (line_start + horiBearingX) / width
                     t = (base_line - horiBearingY) / height
@@ -822,8 +825,8 @@ class FontData(BaseData):
                         id_char = self.glyph_id[key[1]]
                         ids[size_ymin:size_ymax, size_xmin:size_xmax] = np.where(size_map, id_char, ids[size_ymin:size_ymax, size_xmin:size_xmax])
 
-                        w = max(int(item['width'] / 128 * text_size), 1)
-                        h = max(int(item['rows'] / 128 * text_size), 1)
+                        w = max(int(item['width'] / 128 * text_size * aspects), 1)
+                        h = max(int(item['rows'] / 128 * text_size / aspects), 1)
                         top = int(np.clip(base_line - horiBearingY, 0, height - h))
                         left = int(np.clip(line_start + horiBearingX, 0, width - w))
                         im = np.asarray(Image.fromarray(item['image']).resize((w,h)))
@@ -834,6 +837,8 @@ class FontData(BaseData):
                     line_start += int(horiAdvance)
 
                 base_line += line_space
+                if np.random.uniform() < 0.01:
+                    base_line += line_space
                 if base_line + text_size >= height:
                     if block_no == 0:
                         sep_end = base_line - line_space
@@ -851,6 +856,8 @@ class FontData(BaseData):
             t = line_space // 2 // scale
             b = sep_end // scale
             seps[t:b, l-1:l+2] = 1
+            if break_space < text_size / 2:
+                images[line_space//2:sep_end, line_break-2:line_break+5] = 255
 
         im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x, pad_y))
         lines = lines.rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
@@ -870,20 +877,20 @@ class FontData(BaseData):
 
         images = apply_random_filter(images)
 
-        return self.sub_constructimage(images, labels, ids, False)
+        return self.sub_constructimage(images, labels, ids, len(self.random_background) > 0)
 
     def tate_images(self, keys, fonts, font_p):
         max_count = 256
         angle_max = 15.0
 
-        min_pixel = 16
+        min_pixel = 20
         max_pixel = 100
         text_size = random.randint(min_pixel, max_pixel)
 
-        line_space = int(text_size * random.uniform(1.05, 2.0))
+        line_space = int(text_size * random.uniform(1.05, 1.5))
         block_count = 2
         line_break = int(random.uniform(0.3,0.7) * height)
-        break_space = text_size * random.uniform(0.6, 1.0)
+        break_space = text_size * random.uniform(0.1, 1.0)
 
         images = np.zeros([height, width], dtype=np.float32)
         keymap = np.zeros([height // scale, width // scale], dtype=np.float32)
@@ -906,6 +913,10 @@ class FontData(BaseData):
         probs = [1. if is_Font_match(key[0], select_font) else 0. for key in keys]
         selection = [key for key in random.choices(keys, k=max_count, weights=probs)]
 
+        aspects = np.clip(np.random.normal() * 0.1 + 1.0, 0.75, 1.25)
+        if random.random() < 0.5:
+            aspects = 1.0 / aspects
+
         base_line = width - line_space + text_size // 2
         block_no = 0
         line_start = int(max(0, 0 if block_count == 1 or block_no == 0 else line_break + break_space))
@@ -921,9 +932,11 @@ class FontData(BaseData):
 
             w = item['width'] / 128 * text_size
             h = item['rows'] / 128 * text_size
-            vertBearingX = item['vertBearingX'] / 128 * text_size
-            vertBearingY = item['vertBearingY'] / 128 * text_size
-            vertAdvance = item['vertAdvance'] / 128 * text_size
+            w *= aspects
+            h /= aspects
+            vertBearingX = item['vertBearingX'] / 128 * text_size * aspects
+            vertBearingY = item['vertBearingY'] / 128 * text_size / aspects
+            vertAdvance = item['vertAdvance'] / 128 * text_size / aspects
 
             if temp_lineend + vertAdvance < line_end:
                 linebuf.append((key,item))
@@ -934,17 +947,19 @@ class FontData(BaseData):
                     line_start += remain
 
                 if len(linebuf) > 1:
-                    draw.line(((base_line // scale, line_start // scale), 
-                        (base_line // scale, line_end // scale)), fill=255, width=3)
+                    draw.line((((base_line - text_size // 2) // scale, line_start // scale), 
+                        ((base_line - text_size // 2) // scale, line_end // scale)), fill=255, width=3)
 
-                text_count[block_no] += len(linebuf)
+                text_count[block_no] = max(text_count[block_no], len(linebuf))
 
                 for key, item in linebuf:
                     w = item['width'] / 128 * text_size
                     h = item['rows'] / 128 * text_size
-                    vertBearingX = item['vertBearingX'] / 128 * text_size
-                    vertBearingY = item['vertBearingY'] / 128 * text_size
-                    vertAdvance = item['vertAdvance'] / 128 * text_size
+                    w *= aspects
+                    h /= aspects
+                    vertBearingX = item['vertBearingX'] / 128 * text_size * aspects
+                    vertBearingY = item['vertBearingY'] / 128 * text_size / aspects
+                    vertAdvance = item['vertAdvance'] / 128 * text_size / aspects
 
                     l = (base_line + vertBearingX) / width
                     t = (line_start + vertBearingY) / height
@@ -1004,8 +1019,8 @@ class FontData(BaseData):
                         id_char = self.glyph_id[key[1]]
                         ids[size_ymin:size_ymax, size_xmin:size_xmax] = np.where(size_map, id_char, ids[size_ymin:size_ymax, size_xmin:size_xmax])
 
-                        w = max(int(item['width'] / 128 * text_size), 1)
-                        h = max(int(item['rows'] / 128 * text_size), 1)
+                        w = max(int(item['width'] / 128 * text_size * aspects), 1)
+                        h = max(int(item['rows'] / 128 * text_size / aspects), 1)
                         l = int(np.clip(base_line + vertBearingX, 0, width - w))
                         t = int(np.clip(line_start + vertBearingY, 0, height - h))
                         im = np.asarray(Image.fromarray(item['image']).resize((w,h)))
@@ -1016,6 +1031,8 @@ class FontData(BaseData):
                     line_start += int(vertAdvance)
 
                 base_line -= line_space
+                if np.random.uniform() < 0.01:
+                    base_line -= line_space
                 if base_line - text_size / 2 < 0:
                     if block_no == 0:
                         sep_end = base_line + line_space
@@ -1033,6 +1050,8 @@ class FontData(BaseData):
             right = (width - line_space + text_size // 2) // scale
             left = sep_end // scale
             seps[l-1:l+2, left:right] = 1
+            if break_space < text_size / 2:
+                images[line_break-2:line_break+5, left*scale:right*scale] = 255
 
         im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x, pad_y))
         lines = lines.rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
@@ -1052,21 +1071,21 @@ class FontData(BaseData):
 
         images = apply_random_filter(images)
 
-        return self.sub_constructimage(images, labels, ids, False)
+        return self.sub_constructimage(images, labels, ids, len(self.random_background) > 0)
 
     def tatefurigana_images(self, keys, fonts, font_p):
         max_count = 256
         angle_max = 15.0
 
-        min_pixel = 12
+        min_pixel = 14
         max_pixel = 50
         text_size = random.randint(min_pixel, max_pixel)
-        text_size2 = text_size * 2
+        text_size2 = int(text_size * random.uniform(1.7, 2.6))
 
-        line_space = int(text_size2 * random.uniform(1.45, 1.7))
+        line_space = int(text_size2 * random.uniform(0.9, 1.25) + text_size)
         block_count = 2
         line_break = int(random.uniform(0.3,0.7) * height)
-        break_space = text_size2 * random.uniform(0.6, 1.0)
+        break_space = text_size2 * random.uniform(0.1, 1.0)
 
         images = np.zeros([height, width], dtype=np.float32)
         keymap = np.zeros([height // scale, width // scale], dtype=np.float32)
@@ -1088,7 +1107,11 @@ class FontData(BaseData):
         select_font = random.choices(fonts, k=1, weights=font_p)[0]
         probs = [1. if is_Font_match(key[0], select_font) else 0. for key in keys]
         selection = [key for key in random.choices(keys, k=max_count, weights=probs)]
-        probs2 = [1. if is_Font_match(key[0], select_font) and self.glyph_type[self.glyph_id[key[1]]] in [3,4] else 0. for key in keys]
+        if np.random.normal() < 0.6:
+            class1 = [3]
+        else: 
+            class1 = [4]
+        probs2 = [1. if is_Font_match(key[0], select_font) and self.glyph_type[self.glyph_id[key[1]]] in class1 else 0. for key in keys]
         selection2 = iter([key for key in random.choices(keys, k=max_count*2, weights=probs2)])
 
         base_line = width - line_space + text_size2 // 2
@@ -1119,10 +1142,10 @@ class FontData(BaseData):
                     line_start += remain
 
                 if len(linebuf) > 1:
-                    draw.line(((base_line // scale, line_start // scale), 
-                        (base_line // scale, line_end // scale)), fill=255, width=3)
+                    draw.line((((base_line - text_size2 // 2) // scale, line_start // scale), 
+                        ((base_line - text_size2 // 2) // scale, line_end // scale)), fill=255, width=3)
 
-                text_count[block_no] += len(linebuf)
+                text_count[block_no] = max(text_count[block_no], len(linebuf))
 
                 for key, item in linebuf:
                     w = item['width'] / 128 * text_size2
@@ -1222,11 +1245,11 @@ class FontData(BaseData):
                     vertBearingY = item['vertBearingY'] / 128 * text_size
                     vertAdvance = item['vertAdvance'] / 128 * text_size
 
-                    if np.random.uniform() < 0.2:
+                    if np.random.uniform() < 0.25:
                         # ここは空ける
                         if line_start2 != line_start2p:
-                            draw.line(((base_line2 // scale, line_start2p // scale), 
-                                (base_line2 // scale, line_start2 // scale)), fill=255, width=3)
+                            draw.line((((base_line2 - text_size // 2) // scale, line_start2p // scale), 
+                                ((base_line2 - text_size // 2) // scale, line_start2 // scale)), fill=255, width=3)
                         
                         line_start2 += int(vertAdvance)
                         line_start2p = line_start2
@@ -1288,7 +1311,7 @@ class FontData(BaseData):
                         xsizes[size_ymin:size_ymax, size_xmin:size_xmax] = np.where(size_map, fixw, xsizes[size_ymin:size_ymax, size_xmin:size_xmax])
                         ysizes[size_ymin:size_ymax, size_xmin:size_xmax] = np.where(size_map, fixh, ysizes[size_ymin:size_ymax, size_xmin:size_xmax])
 
-                        id_char = self.glyph_id[key[1]]
+                        id_char = self.glyph_id[key2[1]]
                         ids[size_ymin:size_ymax, size_xmin:size_xmax] = np.where(size_map, id_char, ids[size_ymin:size_ymax, size_xmin:size_xmax])
 
                         w = max(int(item['width'] / 128 * text_size), 1)
@@ -1303,10 +1326,12 @@ class FontData(BaseData):
                     line_start2 += int(vertAdvance)
 
                 if line_start2 != line_start2p:
-                    draw.line(((base_line2 // scale, line_start2p // scale), 
-                        (base_line2 // scale, line_start2 // scale)), fill=255, width=3)
+                    draw.line((((base_line2 - text_size // 2) // scale, line_start2p // scale), 
+                        ((base_line2 - text_size // 2) // scale, line_start2 // scale)), fill=255, width=3)
 
                 base_line -= line_space
+                if np.random.uniform() < 0.01:
+                    base_line -= line_space
                 if base_line - text_size2 / 2 < 0:
                     if block_no == 0:
                         sep_end = base_line + line_space
@@ -1324,6 +1349,8 @@ class FontData(BaseData):
             right = (width - line_space + text_size2 // 2) // scale
             left = sep_end // scale
             seps[l-1:l+2, left:right] = 1
+            if break_space < text_size2 / 2:
+                images[line_break-2:line_break+5, left*scale:right*scale] = 255
 
         im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x, pad_y))
         lines = lines.rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
@@ -1343,21 +1370,21 @@ class FontData(BaseData):
 
         images = apply_random_filter(images)
 
-        return self.sub_constructimage(images, labels, ids, False)
+        return self.sub_constructimage(images, labels, ids, len(self.random_background) > 0)
 
     def yokofurigana_images(self, keys, fonts, font_p):
         max_count = 256
         angle_max = 15.0
 
-        min_pixel = 12
+        min_pixel = 14
         max_pixel = 50
         text_size = random.randint(min_pixel, max_pixel)
-        text_size2 = text_size * 2
+        text_size2 = int(text_size * random.uniform(1.7, 2.6))
 
-        line_space = int(text_size2 * random.uniform(1.45, 1.7))
+        line_space = int(text_size2 * random.uniform(0.9, 1.25) + text_size)
         block_count = 2
         line_break = int(random.uniform(0.3,0.7) * width)
-        break_space = text_size2 * random.uniform(0.6, 1.5)
+        break_space = text_size2 * random.uniform(0.1, 1.5)
 
         images = np.zeros([height, width], dtype=np.float32)
         keymap = np.zeros([height // scale, width // scale], dtype=np.float32)
@@ -1379,7 +1406,11 @@ class FontData(BaseData):
         select_font = random.choices(fonts, k=1, weights=font_p)[0]
         probs = [1. if is_Font_match(key[0], select_font) else 0. for key in keys]
         selection = [key for key in random.choices(keys, k=max_count, weights=probs)]
-        probs2 = [1. if is_Font_match(key[0], select_font) and self.glyph_type[self.glyph_id[key[1]]] in [3,4] else 0. for key in keys]
+        if np.random.normal() < 0.6:
+            class1 = [3]
+        else: 
+            class1 = [4]
+        probs2 = [1. if is_Font_match(key[0], select_font) and self.glyph_type[self.glyph_id[key[1]]] in class1 else 0. for key in keys]
         selection2 = iter([key for key in random.choices(keys, k=max_count*2, weights=probs2)])
 
         base_line = line_space
@@ -1413,7 +1444,7 @@ class FontData(BaseData):
                     draw.line(((line_start // scale, base_line // scale), 
                         (line_end // scale, base_line // scale)), fill=255, width=3)
 
-                text_count[block_no] += len(linebuf)
+                text_count[block_no] = max(text_count[block_no], len(linebuf))
 
                 for key, item in linebuf:
                     w = item['width'] / 128 * text_size2
@@ -1492,7 +1523,7 @@ class FontData(BaseData):
                     line_start += int(horiAdvance)
 
                 # ふりがな処理
-                base_line2 = base_line - text_size2
+                base_line2 = base_line - int(text_size2 * 0.9)
                 line_start2 = int(max(0, 0 if block_count == 1 or block_no == 0 else line_break + break_space))
                 if block_no == 0:
                     line_start2 += remain
@@ -1513,11 +1544,11 @@ class FontData(BaseData):
                     horiBearingY = item['horiBearingY'] / 128 * text_size
                     horiAdvance = item['horiAdvance'] / 128 * text_size
 
-                    if np.random.uniform() < 0.2:
+                    if np.random.uniform() < 0.25:
                         # ここは空ける
                         if line_start2 != line_start2p:
-                            draw.line(((line_start2p // scale, base_line // scale), 
-                                (line_start // scale, base_line // scale)), fill=255, width=3)
+                            draw.line(((line_start2p // scale, base_line2 // scale), 
+                                (line_start2 // scale, base_line2 // scale)), fill=255, width=3)
                         
                         line_start2 += int(horiAdvance)
                         line_start2p = line_start2
@@ -1579,7 +1610,7 @@ class FontData(BaseData):
                         xsizes[size_ymin:size_ymax, size_xmin:size_xmax] = np.where(size_map, fixw, xsizes[size_ymin:size_ymax, size_xmin:size_xmax])
                         ysizes[size_ymin:size_ymax, size_xmin:size_xmax] = np.where(size_map, fixh, ysizes[size_ymin:size_ymax, size_xmin:size_xmax])
 
-                        id_char = self.glyph_id[key[1]]
+                        id_char = self.glyph_id[key2[1]]
                         ids[size_ymin:size_ymax, size_xmin:size_xmax] = np.where(size_map, id_char, ids[size_ymin:size_ymax, size_xmin:size_xmax])
 
                         w = max(int(item['width'] / 128 * text_size), 1)
@@ -1594,10 +1625,12 @@ class FontData(BaseData):
                     line_start2 += int(horiAdvance)
 
                 if line_start2 != line_start2p:
-                    draw.line(((line_start2p // scale, base_line // scale), 
-                        (line_start // scale, base_line // scale)), fill=255, width=3)
+                    draw.line(((line_start2p // scale, base_line2 // scale), 
+                        (line_start2 // scale, base_line2 // scale)), fill=255, width=3)
 
                 base_line += line_space
+                if np.random.uniform() < 0.01:
+                    base_line += line_space
                 if base_line + text_size2 >= height:
                     if block_no == 0:
                         sep_end = base_line - line_space
@@ -1615,6 +1648,8 @@ class FontData(BaseData):
             t = line_space // 2 // scale
             b = sep_end // scale
             seps[t:b, l-1:l+2] = 1
+            if break_space < text_size2 / 2:
+                images[line_space//2:sep_end, line_break-2:line_break+5] = 255
 
         im = Image.fromarray(images).rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x, pad_y))
         lines = lines.rotate(angle / np.pi * 180, resample=Image.Resampling.BILINEAR, translate=(pad_x / scale, pad_y / scale))
@@ -1634,7 +1669,7 @@ class FontData(BaseData):
 
         images = apply_random_filter(images)
 
-        return self.sub_constructimage(images, labels, ids, False)
+        return self.sub_constructimage(images, labels, ids, len(self.random_background) > 0)
 
     def null_images(self):
         images = np.zeros([height, width], dtype=np.float32)
@@ -1896,7 +1931,7 @@ class FontData(BaseData):
         max_count = 64
         angle_max = 15.0
 
-        min_pixel = 24
+        min_pixel = 20
         max_pixel = 200
         if random.random() < 0.5:
             tile_size = random.randint(min_pixel, max_pixel)
@@ -2176,7 +2211,7 @@ class FontData(BaseData):
 
 
     def load_images_randomline(self, keys, probs):
-        max_count = 64
+        max_count = 128
         angle_max = 15.0
 
         min_pixel = 20
@@ -2652,8 +2687,8 @@ class FontData(BaseData):
                     continue
 
                 if prev < 0:
-                    draw.line((prev_center, (tile_base // scale, cy * height // scale)), fill=255, width=3)
-                prev_center = (tile_base // scale, cy * height // scale)
+                    draw.line((prev_center, ((tile_base - tile_size // 2) // scale, cy * height // scale)), fill=255, width=3)
+                prev_center = ((tile_base - tile_size // 2) // scale, cy * height // scale)
 
                 kernel_size = max(self.min_ker, int(max(w, h) / (2 * scale) * width))
                 std_x = min(self.max_std, max(self.min_ker, w / (2 * scale) * width) / 3)
@@ -2879,6 +2914,12 @@ class FontData(BaseData):
         def random_kanji_func():
             return self.load_images_random(self.train_keys, self.kanji_probs_train)
 
+        def random_hira_func():
+            return self.load_images_random(self.train_keys, self.hira_probs_train)
+
+        def random_alpha_func():
+            return self.load_images_random(self.train_keys, self.alpha_probs_train)
+
         def renderling_func():
             if np.random.uniform() < 0.5:
                 return self.tate_images(self.train_keys_jp, self.train_jp_fonts, self.train_jp_fonts_p)
@@ -2905,7 +2946,8 @@ class FontData(BaseData):
 
         funcs = [
             num_func, capital_func, small_func, alpha_func, randomline_func,
-            random_func, random_kanji_func, renderling_func, renderling_furigana_func, renderling2_func,
+            random_func, random_kanji_func, random_hira_func, random_alpha_func, 
+            renderling_func, renderling_furigana_func, renderling2_func,
             line_func, null_func,
         ]
         
@@ -2929,6 +2971,12 @@ class FontData(BaseData):
 
         def random_kanji_func():
             return self.load_images_random(self.test_keys, self.kanji_probs_test)
+
+        def random_hira_func():
+            return self.load_images_random(self.test_keys, self.hira_probs_test)
+
+        def random_alpha_func():
+            return self.load_images_random(self.test_keys, self.alpha_probs_test)
 
         def renderling_func():
             if np.random.uniform() < 0.5:
@@ -2956,7 +3004,8 @@ class FontData(BaseData):
 
         funcs = [
             num_func, capital_func, small_func, alpha_func, randomline_func,
-            random_func, random_kanji_func, renderling_func, renderling_furigana_func, renderling2_func,
+            random_func, random_kanji_func, random_hira_func, random_alpha_func, 
+            renderling_func, renderling_furigana_func, renderling2_func,
             line_func, null_func,
         ]
         
@@ -3015,12 +3064,13 @@ class FontData(BaseData):
             ids = tf.ensure_shape(ids, [height // scale, width // scale])
             return images, labels, ids
 
-        # 0 num_func, 1 capital_func, 2 small_func, 3 alpha_func, 4 randomline_func,
-        # 5 random_func, 6 random_kanji_func, 7 renderling_func, 8 renderling_furigana_func, 9 renderling2_func,
-        # 10 line_func, 11 null_func,
+        #   0 num_func, 1 capital_func, 2 small_func, 3 alpha_func, 4 randomline_func,
+        #   5 random_func, 6 random_kanji_func, 7 random_hira_func, 8 random_alpha_func, 
+        #   9 renderling_func, 10 renderling_furigana_func, 11 renderling2_func,
+        #   12 line_func, 13 null_func,
 
-        #                      0   1   2   3   4   5   6   7   8   9   10   11
-        prob = tf.math.log([[1.0,1.0,1.0,1.0,3.5,3.5,1.5,1.0,1.0,1.0,0.01,0.01]])
+        #                      0   1   2   3   4   5   6   7   8   9  10  11  12  13
+        prob = tf.math.log([[1.0,1.0,1.0,1.0,4.0,1.0,1.0,1.0,1.0,2.0,2.0,1.0,0.3,0.3]])
 
         ds = tf.data.Dataset.range(1)
         ds = ds.repeat()

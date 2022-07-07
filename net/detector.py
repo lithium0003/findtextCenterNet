@@ -9,13 +9,103 @@ from keras.engine import training
 from keras.utils import layer_utils
 from keras.applications.efficientnet_v2 import round_filters, CONV_KERNEL_INITIALIZER, DENSE_KERNEL_INITIALIZER, MBConvBlock, FusedMBConvBlock, round_repeats
 
+from keras.layers.normalization.batch_normalization import BatchNormalizationBase
+
 width = 512
 height = 512
 scale = 2
 
-feature_dim = 384
+feature_dim = 128
 
-modulo_list = [37,41,43,47,53]
+modulo_list = [1091,1093,1097]
+
+class AverageBatchNormalization(BatchNormalizationBase):
+    def __init__(self,
+                axis=-1,
+                momentum=0.99,
+                average=1,
+                epsilon=1e-3,
+                center=True,
+                scale=True,
+                beta_initializer='zeros',
+                gamma_initializer='ones',
+                moving_mean_initializer='zeros',
+                moving_variance_initializer='ones',
+                beta_regularizer=None,
+                gamma_regularizer=None,
+                beta_constraint=None,
+                gamma_constraint=None,
+                **kwargs):
+        kwargs.pop('fused', None)
+        self.average = average
+        super().__init__(
+            axis=axis,
+            momentum=momentum,
+            epsilon=epsilon,
+            center=center,
+            scale=scale,
+            beta_initializer=beta_initializer,
+            gamma_initializer=gamma_initializer,
+            moving_mean_initializer=moving_mean_initializer,
+            moving_variance_initializer=moving_variance_initializer,
+            beta_regularizer=beta_regularizer,
+            gamma_regularizer=gamma_regularizer,
+            beta_constraint=beta_constraint,
+            gamma_constraint=gamma_constraint,
+            fused=False,
+            **kwargs)    
+
+    def get_config(self):
+        config = super().get_config()
+        config['average'] = self.average
+        return config
+
+    def build(self, input_shape):
+        super().build(input_shape)
+
+        self.averaged_mean = tf.Variable(self.moving_mean, trainable=False, name='averaged_mean', dtype=self._param_dtype)
+        self.averaged_squared_mean = tf.Variable(self.moving_variance + tf.square(self.moving_mean), trainable=False, name='averaged_squared_mean', dtype=self._param_dtype)
+
+        self.backbuf_idx = 0
+        self.backbuf_mean = [tf.Variable(self.moving_mean, trainable=False, dtype=self._param_dtype) for _ in range(self.average)]
+        self.backbuf_squared_mean = [tf.Variable(self.moving_variance + tf.square(self.moving_mean), trainable=False, dtype=self._param_dtype) for _ in range(self.average)]
+
+    def finalize_state(self):
+        self.averaged_mean.assign(self.moving_mean)
+        self.averaged_squared_mean.assign(self.moving_variance + tf.square(self.moving_mean))
+
+        self.backbuf_idx = 0
+        for i in range(self.average):
+            self.backbuf_mean[i].assign(self.moving_mean)
+            self.backbuf_squared_mean[i].assign(self.moving_variance + tf.square(self.moving_mean))
+
+    def _calculate_mean_and_var(self, x, axes, keep_dims):
+        # The dynamic range of fp16 is too limited to support the collection of
+        # sufficient statistics. As a workaround we simply perform the operations
+        # on 32-bit floats before converting the mean and variance back to fp16
+        y = tf.cast(x, tf.float32) if x.dtype == tf.float16 else x
+        local_mean = tf.reduce_mean(y, axis=axes)
+        prev_mean = self.backbuf_mean[self.backbuf_idx]
+        self.averaged_mean.assign_sub(prev_mean / self.average)
+        self.averaged_mean.assign_add(local_mean / self.average)
+        self.backbuf_mean[self.backbuf_idx].assign(local_mean)
+        local_squared_mean = tf.reduce_mean(tf.square(y), axis=axes)
+        prev_squared_mean = self.backbuf_squared_mean[self.backbuf_idx]
+        self.averaged_squared_mean.assign_sub(prev_squared_mean / self.average)
+        self.averaged_squared_mean.assign_add(local_squared_mean / self.average)
+        self.backbuf_squared_mean[self.backbuf_idx].assign(local_squared_mean)
+        self.backbuf_idx += 1
+        if self.backbuf_idx >= self.average:
+            self.backbuf_idx = 0
+
+        mean = self.averaged_mean
+        variance = self.averaged_squared_mean - tf.square(mean)
+
+        if x.dtype == tf.float16:
+            return (tf.cast(mean, tf.float16),
+                    tf.cast(variance, tf.float16))
+        else:
+            return (mean, variance)
 
 def EfficientNetV2(
     width_coefficient,
@@ -232,7 +322,7 @@ def EfficientNetV2(
   return model
 
 class BackboneModel(tf.keras.Model):
-    def __init__(self, pre_weight=True, renorm=False, syncbn=False, **kwarg):
+    def __init__(self, pre_weight=True, average=1, syncbn=False, **kwarg):
         super().__init__(**kwarg)
         blocks_args=[
             {
@@ -321,21 +411,27 @@ class BackboneModel(tf.keras.Model):
         mid_output3 = [layer for layer in outlayers if 'block2' in layer.name][-1]
         mid_output2 = [layer for layer in outlayers if 'block3' in layer.name][-1]
         mid_output1 = [layer for layer in outlayers if 'block5' in layer.name][-1]
-        self.extract_model = tf.keras.Model(base_model.input, [mid_output3.output, mid_output2.output, mid_output1.output, base_model.output], name='efficientnetv2-xl')
+        mid_output0 = [layer for layer in outlayers if 'block7' in layer.name][-1]
+        self.extract_model = tf.keras.Model(base_model.input, [mid_output3.output, mid_output2.output, mid_output1.output, mid_output0.output], name='efficientnetv2-xl')
 
+        mbn = False
         if syncbn:
             import horovod.tensorflow as hvd
             model_config = self.extract_model.get_config()
             for layer, layer_config in zip(self.extract_model.layers, model_config['layers']):
-                if type(layer) == tf.keras.layers.BatchNormalization:
+                if isinstance(layer, tf.keras.layers.BatchNormalization):
                     layer_config['class_name'] = 'SyncBatchNormalization'
+            del self.extract_model
             self.extract_model = tf.keras.models.Model.from_config(model_config, custom_objects={'SyncBatchNormalization': hvd.SyncBatchNormalization})
-        elif renorm:
+        elif average > 1:
             model_config = self.extract_model.get_config()
             for layer, layer_config in zip(self.extract_model.layers, model_config['layers']):
-                if type(layer) == tf.keras.layers.BatchNormalization:
-                    layer_config['config']['renorm'] = True
-            self.extract_model = tf.keras.models.Model.from_config(model_config)
+                if isinstance(layer, tf.keras.layers.BatchNormalization):
+                    layer_config['class_name'] = 'AverageBatchNormalization'
+                    layer_config['config']['average'] = average
+            del self.extract_model
+            self.extract_model = tf.keras.models.Model.from_config(model_config, custom_objects={'AverageBatchNormalization': AverageBatchNormalization})
+            mbn = True
 
         if pre_weight:
             path_to_downloaded_file = tf.keras.utils.get_file(
@@ -413,20 +509,19 @@ class BackboneModel(tf.keras.Model):
                 for l, n in blocknames[bname]:
                     if lname == l:
                         k = destname.split('/')[-1]
-                        if renorm and k == 'moving_stddev':
-                            key = n+'/'+'moving_variance'
-                            tensor = reader.get_tensor(key)
-                            tensor = tf.sqrt(tensor)
-                            v.assign(tensor)
-                        elif renorm and k == 'renorm_mean':
+                        if mbn and k == 'averaged_mean':
                             key = n+'/'+'moving_mean'
                             tensor = reader.get_tensor(key)
                             v.assign(tensor)
-                        elif renorm and k == 'renorm_stddev':
-                            key = n+'/'+'moving_variance'
-                            tensor = reader.get_tensor(key)
-                            tensor = tf.sqrt(tensor)
+                        elif mbn and k == 'averaged_squared_mean':
+                            key1 = n+'/'+'moving_variance'
+                            tensor1 = reader.get_tensor(key1)
+                            key2 = n+'/'+'moving_mean'
+                            tensor2 = reader.get_tensor(key2)
+                            tensor = tensor1 + tf.square(tensor2)
                             v.assign(tensor)
+                        elif mbn and k == 'Variable':
+                            pass
                         else:
                             key = n+'/'+k
                             #print(key, variable_map[key])
@@ -434,7 +529,13 @@ class BackboneModel(tf.keras.Model):
                             tensor = reader.get_tensor(key)
                             v.assign(tensor)
 
+            self.finalize_state()
+
         #print([layer.weights for layer in self.extract_model.layers])
+
+    def finalize_state(self):
+        for layer in self.extract_model.layers:
+            layer.finalize_state()
 
     def call(self, inputs, **kwargs):
         x = inputs
@@ -443,95 +544,86 @@ class BackboneModel(tf.keras.Model):
         return mid_output3,mid_output2,mid_output,final_output
 
 class LeafmapModel(tf.keras.Model):
-    def __init__(self, out_dim=1, conv_dim=32, renorm=False, syncbn=False, **kwarg):
+    def __init__(self, out_dim=1, conv_dim=8, **kwarg):
         super().__init__(**kwarg)
-        if syncbn:
-            import horovod.tensorflow as hvd
-            BatchNormalization = hvd.SyncBatchNormalization
-        else:
-            BatchNormalization = tf.keras.layers.BatchNormalization
 
-        self.conv1 = []
-        momentum = 0.9
-        for _ in range(3):
-            self.conv1.append([
-                tf.keras.layers.Conv2DTranspose(conv_dim, kernel_size=3, strides=2, padding='same', use_bias=False, kernel_initializer="he_normal"),
-                BatchNormalization(momentum=momentum, renorm=renorm),
-                tf.keras.layers.Activation('swish'),
-            ])
-        self.conv2 = [
-            tf.keras.layers.Conv2DTranspose(conv_dim, kernel_size=3, strides=2, padding='same', use_bias=False, kernel_initializer="he_normal"),
-            BatchNormalization(momentum=momentum, renorm=renorm),
-            tf.keras.layers.Activation('swish'),
-            tf.keras.layers.Conv2D(conv_dim, kernel_size=3, padding='same', kernel_initializer="he_normal"),
-            tf.keras.layers.Activation('swish'),
+        self.topconv = [
+            tf.keras.layers.Conv2D(conv_dim, kernel_size=1, padding='same', activation='swish', kernel_initializer=tf.keras.initializers.VarianceScaling(scale=1.0, mode='fan_avg', distribution='truncated_normal'), name=self.name+'_top_conv'),
         ]
 
-        self.convout = tf.keras.layers.Conv2D(out_dim, kernel_size=1, padding='same', kernel_initializer="he_normal")
+        self.conv1 = []
+        #conv_dims = [64,96,256,640]
+        conv_dims = [8,12,32,80]
+        for i in range(4):
+            self.conv1.append([
+                tf.keras.layers.Conv2D(conv_dims[i], kernel_size=1, padding='same', activation='swish', kernel_initializer=tf.keras.initializers.VarianceScaling(scale=1.0, mode='fan_avg', distribution='truncated_normal'), name=self.name+'_%s_conv'%('abcd'[i])),
+                tf.keras.layers.UpSampling2D(size=2**(i+1), interpolation='bilinear', name=self.name+'_%s_up'%('abcd'[i]))
+            ])
+        
+        self.convout = tf.keras.layers.Conv2D(out_dim, kernel_size=1, padding='same', kernel_initializer=tf.keras.initializers.VarianceScaling(scale=1.0, mode='fan_in', distribution='truncated_normal'), name=self.name+'_out_conv')
         self.outfloat32 = tf.keras.layers.Activation('linear', dtype='float32')
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs, **kwarg):
         P2_in,P3_in,P4_in,P5_in = inputs
-        x = P5_in
-        for x_in, conv1 in zip([P4_in,P3_in,P2_in], self.conv1):
-            for layer in conv1:
-                x = layer(x, **kwargs)
+        x = []
+        for x_in, conv in zip([P2_in,P3_in,P4_in,P5_in], self.conv1):
+            x1 = x_in
+            for layer in conv:
+                x1 = layer(x1, **kwarg)
+            x.append(x1)
+        x = tf.concat(x, axis=-1)
+        for layer in self.topconv:
+            x = layer(x, **kwarg)
 
-            x = tf.concat([x_in, x], axis=-1)
-
-        for layer in self.conv2:
-            x = layer(x, **kwargs)
-        
-        x = self.convout(x, **kwargs)
-        x = self.outfloat32(x, **kwargs)
+        x = self.convout(x)
+        x = self.outfloat32(x)
         return x
 
 class ClassModuloModel(tf.keras.Model):
     def __init__(self, out_dim=97, **kwarg):
         super().__init__(**kwarg)
         self.dense_layers = [
-            tf.keras.layers.Dense(4096, kernel_initializer="he_normal"),
-            tf.keras.layers.Activation('swish'),
+            tf.keras.layers.Dense(1024, name=self.name+'dense_1', activation='swish', kernel_initializer=tf.keras.initializers.VarianceScaling(scale=1.0, mode='fan_avg', distribution='truncated_normal')),
         ]
-        self.dense_out = tf.keras.layers.Dense(out_dim, kernel_initializer="he_normal")
+        self.dense_out = tf.keras.layers.Dense(out_dim, name=self.name+'dense_out', kernel_initializer=tf.keras.initializers.VarianceScaling(scale=1.0, mode='fan_in', distribution='truncated_normal'))
         self.outfloat32 = tf.keras.layers.Activation('linear', dtype='float32')
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs):
         x = inputs
         for layer in self.dense_layers:
-            x = layer(x, **kwargs)
-        x = self.dense_out(x, **kwargs)
-        x = self.outfloat32(x, **kwargs)
+            x = layer(x)
+        x = self.dense_out(x)
+        x = self.outfloat32(x)
         return x
 
-def freeze_bn(layer):
-    if hasattr(layer, 'layers'):
-        for layer in layer.layers:
-            freeze_bn(layer)    
-    if isinstance(layer, tf.keras.layers.BatchNormalization):
-        layer.trainable = False
+class CenterNetDetectionModel(tf.keras.Model):
+    def __init__(self, pre_weight=True, average=1, syncbn=False, lockBase=False, **kwarg):
+        super().__init__(**kwarg)
+        self.backbone = BackboneModel(pre_weight=pre_weight, average=average, syncbn=syncbn, name='BackBoneNet')
 
-def CenterNetDetectionBlock(pre_weight=True, renorm=False, syncbn=False):
-    backbone = BackboneModel(pre_weight=pre_weight, renorm=renorm, syncbn=syncbn, name='BackBoneNet')
+        if lockBase:
+            self.backbone.trainable = False
 
-    keyheatmap = LeafmapModel(out_dim=1, name='keyheatmap', renorm=renorm, syncbn=syncbn)
-    sizes = LeafmapModel(out_dim=2, name='sizes', renorm=renorm, syncbn=syncbn)
-    offsets = LeafmapModel(out_dim=2, name='offsets', renorm=renorm, syncbn=syncbn)
-    textline = LeafmapModel(out_dim=1, name='textline', renorm=renorm, syncbn=syncbn)
-    sepatator = LeafmapModel(out_dim=1, name='sepatator', renorm=renorm, syncbn=syncbn)
-    feature = LeafmapModel(out_dim=feature_dim, conv_dim=512, name='feature', renorm=renorm, syncbn=syncbn)
+        self.keyheatmap = LeafmapModel(out_dim=1, name='keyheatmap')
+        self.sizes = LeafmapModel(out_dim=2, name='sizes')
+        self.offsets = LeafmapModel(out_dim=2, name='offsets')
+        self.textline = LeafmapModel(out_dim=1, name='textline')
+        self.sepatator = LeafmapModel(out_dim=1, name='sepatator')
+        self.feature = LeafmapModel(out_dim=feature_dim, conv_dim=256, name='feature')
 
-    inputs = tf.keras.Input(shape=(height,width,3))
-    backbone_out = backbone(inputs)
-    maps = tf.keras.layers.Concatenate(dtype='float32')([
-        keyheatmap(backbone_out), 
-        sizes(backbone_out), 
-        offsets(backbone_out), 
-        textline(backbone_out), 
-        sepatator(backbone_out),
-    ])
-    outputs = [maps, feature(backbone_out)]
-    return tf.keras.Model(inputs, outputs, name='CenterNetBlock')
+    def call(self, inputs):
+        backbone_out = self.backbone(inputs)
+        maps = tf.keras.layers.Concatenate(dtype='float32')([
+            self.keyheatmap(backbone_out), 
+            self.sizes(backbone_out), 
+            self.offsets(backbone_out), 
+            self.textline(backbone_out), 
+            self.sepatator(backbone_out),
+        ])
+        return maps, self.feature(backbone_out)
+
+def CenterNetDetectionBlock(pre_weight=True, average=1, syncbn=False, lockBase=False):
+    return CenterNetDetectionModel(pre_weight=pre_weight, average=average, syncbn=syncbn, lockBase=lockBase, name='CenterNetBlock')
 
 def SimpleDecoderBlock():
     embedded = tf.keras.Input(shape=(feature_dim,))
@@ -545,6 +637,8 @@ def SimpleDecoderBlock():
 
 if __name__ == '__main__':
     model = CenterNetDetectionBlock()
+    inputs = tf.keras.Input(shape=(height,width,3))
+    outputs = model(inputs)
     model.summary()
 
     decoder = SimpleDecoderBlock()

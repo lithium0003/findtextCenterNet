@@ -1,5 +1,8 @@
 import tensorflow as tf
+import numpy as np
+import os
 
+from .detector import width, height
 from .detector import modulo_list, CenterNetDetectionBlock, SimpleDecoderBlock
 
 def calc_predid(*args):
@@ -53,15 +56,20 @@ def heatmap_loss(true, logits):
 
     return loss
 
+
 class TextDetectorModel(tf.keras.models.Model):
     def __init__(self, **kwargs):
-        renorm = kwargs.pop('renorm', False)
+        lockBase = kwargs.pop('lockBase', False) 
+        average = kwargs.pop('average', 1)
         syncbn = kwargs.pop('syncbn', False)
+        logdir = kwargs.pop('logdir', None)
+        pre_weight = kwargs.pop('pre_weight', True)
         super().__init__(**kwargs)
 
         self.key_th1 = 0.8
 
         self.loss_tracker = tf.keras.metrics.Mean(name='loss')
+        self.regloss_tracker = tf.keras.metrics.Mean(name='regloss')
         self.keymap_loss_tracker = tf.keras.metrics.Mean(name='keymap_loss')
         self.size_loss_tracker = tf.keras.metrics.Mean(name='size_loss')
         self.offset_loss_tracker = tf.keras.metrics.Mean(name='offset_loss')
@@ -70,21 +78,38 @@ class TextDetectorModel(tf.keras.models.Model):
         self.id_loss_tracker = tf.keras.metrics.Mean(name='id_loss')
         self.id_acc_tracker = tf.keras.metrics.Accuracy(name='id_acc')
 
-        self.detector = CenterNetDetectionBlock(renorm=renorm, syncbn=syncbn)
+        self.detector = CenterNetDetectionBlock(pre_weight=pre_weight, average=average, syncbn=syncbn, lockBase=lockBase)
         self.decoder = SimpleDecoderBlock()
 
-        self.mu_loss = {}
-        self.mu_lt = {}
-        self.M_lt = {}
-        for key in ['keymap','size','offset','textline','separator','id']:
-            self.mu_loss[key] = self.add_weight(name=key+'_mu_loss', initializer="zeros", dtype=tf.float32, trainable=False)
-            self.mu_lt[key] = self.add_weight(name=key+'_mu_lt', initializer="zeros", dtype=tf.float32, trainable=False)
-            self.M_lt[key] = self.add_weight(name=key+'_M_lt', initializer="zeros", dtype=tf.float32, trainable=False)
+        inputs = tf.keras.Input(shape=(height,width,3))
+        self.detector(inputs)
+
+        if logdir:
+            self.train_writer = tf.summary.create_file_writer(os.path.join(logdir,'train'))
+            self.test_writer = tf.summary.create_file_writer(os.path.join(logdir,'validation'))
+        else:
+            self.train_writer = None
+            self.test_writer = None
+
+        if average > 1:
+            self.average = tf.constant(average, dtype=tf.float32)
+            self.n_gradients = tf.constant(average, dtype=tf.int32)
+            self.n_acum_step = tf.Variable(0, dtype=tf.int32, trainable=False)
+            self.detector_gradient_accumulation = [tf.Variable(tf.zeros_like(v, dtype=tf.float32), trainable=False) for v in self.detector.trainable_variables]
+            self.train_step = self.train_step2
+        else:
+            self.train_step = self.train_step1
+
+    def compile(self, detector_optimizer, decoder_optimizer, **kwargs):
+        super().compile(**kwargs)
+        self.optimizer = self._get_optimizer(detector_optimizer)
+        self.decoder_optimizer = self._get_optimizer(decoder_optimizer)
 
     @property
     def metrics(self):
         return [
             self.loss_tracker,
+            self.regloss_tracker,
             self.keymap_loss_tracker,
             self.size_loss_tracker,
             self.offset_loss_tracker,
@@ -94,23 +119,31 @@ class TextDetectorModel(tf.keras.models.Model):
             self.id_acc_tracker,
             ]
 
-    def train_step(self, data):
+    def train_step1(self, data):
         image, labels, ids = data
 
-        with tf.GradientTape() as tape:
+        with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
             maps, feature = self.detector(image, training=True)
             mask1 = labels[...,0] > self.key_th1
-            random_mask = tf.random.uniform(tf.shape(ids)) < 0.1
+            random_mask = tf.random.uniform(tf.shape(ids)) < 0.01
             mask1 = tf.where(tf.reduce_sum(tf.cast(mask1, tf.float32)) > 0, mask1, random_mask)
+            raw_feature = feature
             feature = tf.boolean_mask(feature, mask1)
             decoder_outputs = self.decoder(feature, training=True)
-            loss = self.loss_func(labels, ids, maps, decoder_outputs, mask1, training=True)
-            loss /= self.distribute_strategy.num_replicas_in_sync
+            main_loss, decoder_loss = self.loss_func(labels, ids, maps, raw_feature, decoder_outputs, mask1, training=True)
 
-        self.optimizer.minimize(loss, self.trainable_variables, tape=tape)
+        self.optimizer.minimize(main_loss, self.detector.trainable_variables, tape=tape1)
+        self.decoder_optimizer.minimize(decoder_loss, self.decoder.trainable_variables, tape=tape2)
+
+        if self.train_writer is not None:
+            step = self._train_counter
+            with tf.summary.record_if(tf.equal(step % 1000, 0)):
+                with self.train_writer.as_default(step=step):
+                    tf.summary.histogram("feature", raw_feature)
 
         return {
             "loss": self.loss_tracker.result(),
+            "regloss": self.regloss_tracker.result(),
             "id_acc": self.id_acc_tracker.result(),
             "id_loss": self.id_loss_tracker.result(),
             "keymap_loss": self.keymap_loss_tracker.result(),
@@ -119,20 +152,81 @@ class TextDetectorModel(tf.keras.models.Model):
             "textline_loss": self.textline_loss_tracker.result(),
             "separator_loss": self.separator_loss_tracker.result(),
         }
+
+    def train_step2(self, data):
+        self.n_acum_step.assign_add(1)
+        image, labels, ids = data
+
+        with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
+            maps, feature = self.detector(image, training=True)
+            mask1 = labels[...,0] > self.key_th1
+            random_mask = tf.random.uniform(tf.shape(ids)) < 0.01
+            mask1 = tf.where(tf.reduce_sum(tf.cast(mask1, tf.float32)) > 0, mask1, random_mask)
+            raw_feature = feature
+            feature = tf.boolean_mask(feature, mask1)
+            decoder_outputs = self.decoder(feature, training=True)
+            main_loss, decoder_loss = self.loss_func(labels, ids, maps, raw_feature, decoder_outputs, mask1, training=True)
+
+        self.decoder_optimizer.minimize(decoder_loss, self.decoder.trainable_variables, tape=tape2)
+
+        # Calculate batch gradients
+        detector_gradients = tape1.gradient(main_loss, self.detector.trainable_variables)
+
+        # Accumulate batch gradients
+        for i in range(len(self.detector_gradient_accumulation)):
+            self.detector_gradient_accumulation[i].assign_add(detector_gradients[i] / self.average)
+
+        # If n_acum_step reach the n_gradients then we apply accumulated gradients to update the variables otherwise do nothing
+        tf.cond(tf.equal(self.n_acum_step, self.n_gradients), self.apply_accu_gradients, lambda: None)
+
+        if self.train_writer is not None:
+            step = self._train_counter
+            with tf.summary.record_if(tf.equal(step % 1000, 0)):
+                with self.train_writer.as_default(step=step):
+                    tf.summary.histogram("feature", raw_feature)
+
+        return {
+            "loss": self.loss_tracker.result(),
+            "regloss": self.regloss_tracker.result(),
+            "id_acc": self.id_acc_tracker.result(),
+            "id_loss": self.id_loss_tracker.result(),
+            "keymap_loss": self.keymap_loss_tracker.result(),
+            "size_loss": self.size_loss_tracker.result(),
+            "offset_loss": self.offset_loss_tracker.result(),
+            "textline_loss": self.textline_loss_tracker.result(),
+            "separator_loss": self.separator_loss_tracker.result(),
+        }
+
+    def apply_accu_gradients(self):
+        # apply accumulated gradients
+        self.optimizer.apply_gradients(zip(self.detector_gradient_accumulation, self.detector.trainable_variables))
+
+        # reset
+        self.n_acum_step.assign(0)
+        for i in range(len(self.detector_gradient_accumulation)):
+            self.detector_gradient_accumulation[i].assign(tf.zeros_like(self.detector.trainable_variables[i], dtype=tf.float32))
 
     def test_step(self, data):
         image, labels, ids = data
 
         maps, feature = self.detector(image)
         mask1 = labels[...,0] > self.key_th1
-        random_mask = tf.random.uniform(tf.shape(ids)) < 0.1
+        random_mask = tf.random.uniform(tf.shape(ids)) < 0.01
         mask1 = tf.where(tf.reduce_sum(tf.cast(mask1, tf.float32)) > 0, mask1, random_mask)
+        raw_feature = feature
         feature = tf.boolean_mask(feature, mask1)
         decoder_outputs = self.decoder(feature)
-        self.loss_func(labels, ids, maps, decoder_outputs, mask1, training=False)
+        self.loss_func(labels, ids, maps, raw_feature, decoder_outputs, mask1, training=False)
+
+        if self.test_writer is not None:
+            step = self._train_counter + self._test_counter
+            with tf.summary.record_if(tf.equal(step % 1000, 0)):
+                with self.test_writer.as_default(step=step):
+                    tf.summary.histogram("feature", raw_feature)
 
         return {
             "loss": self.loss_tracker.result(),
+            "regloss": self.regloss_tracker.result(),
             "id_acc": self.id_acc_tracker.result(),
             "id_loss": self.id_loss_tracker.result(),
             "keymap_loss": self.keymap_loss_tracker.result(),
@@ -142,30 +236,7 @@ class TextDetectorModel(tf.keras.models.Model):
             "separator_loss": self.separator_loss_tracker.result(),
         }
 
-    def CoV_Weight(self, training=True, **kwarg):
-        t = 20
-        a = {}
-        for key in kwarg:
-            if training:
-                self.mu_loss[key].assign((1 - 1/t) * self.mu_loss[key] + 1/t * kwarg[key])
-                l_t = kwarg[key] / self.mu_loss[key]
-                mu_lt_1 = self.mu_lt[key]
-                self.mu_lt[key].assign((1 - 1/t) * mu_lt_1 + 1/t * l_t)
-                self.M_lt[key].assign((1 - 1/t) * self.M_lt[key] + 1/t * (l_t - mu_lt_1) * (l_t - self.mu_lt[key]))
-            sigma_lt = tf.sqrt(self.M_lt[key])
-            mu_lt = self.mu_lt[key]
-            a[key] = sigma_lt / mu_lt
-
-        z = 0.
-        for key in kwarg:
-            z = z + a[key]
-        
-        for key in kwarg:
-            a[key] = a[key] / z
-
-        return a
-
-    def loss_func(self, labels, target_id, maps, decoder_outputs, mask1, training=False):
+    def loss_func(self, labels, target_id, maps, feature, decoder_outputs, mask1, training=False):
         mask3 = tf.boolean_mask(labels[...,0], mask1) > 0.99
 
         keymap_loss = heatmap_loss(true=labels[...,0], logits=maps[...,0])
@@ -215,6 +286,9 @@ class TextDetectorModel(tf.keras.models.Model):
         target_id = tf.boolean_mask(target_id, mask1)
         target_id = tf.boolean_mask(target_id, mask3)
 
+        feature_loss = tf.math.reduce_mean(tf.maximum(tf.square(feature) - 100., 0.))
+
+        self.regloss_tracker.update_state(feature_loss)
         self.keymap_loss_tracker.update_state(keymap_loss)
         self.size_loss_tracker.update_state(size_loss)
         self.offset_loss_tracker.update_state(offset_loss)
@@ -223,19 +297,9 @@ class TextDetectorModel(tf.keras.models.Model):
         self.id_loss_tracker.update_state(id_loss)
         self.id_acc_tracker.update_state(target_id, pred_id)
 
-        alpha = self.CoV_Weight(training=training,
-            keymap=keymap_loss, size=size_loss, offset=offset_loss, 
-            textline=textline_loss, separator=separator_loss,
-            id=id_loss)
-        
-        keymap_loss *= alpha['keymap']
-        size_loss *= alpha['size']
-        offset_loss *= alpha['offset']
-        textline_loss *= alpha['textline']
-        separator_loss *= alpha['separator']
-        id_loss *= alpha['id']
+        decoder_loss = id_loss
 
-        loss = keymap_loss + size_loss + offset_loss + textline_loss + separator_loss + id_loss
-        self.loss_tracker.update_state(loss)
+        main_loss = feature_loss + offset_loss + id_loss + keymap_loss + size_loss + textline_loss + separator_loss
+        self.loss_tracker.update_state(main_loss)
 
-        return loss
+        return main_loss, decoder_loss

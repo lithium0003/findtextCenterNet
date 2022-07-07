@@ -20,9 +20,15 @@ class TextDetectorModel(tf.keras.models.Model):
         self.detector = net.CenterNetDetectionBlock(pre_weight=False)
         self.decoder = net.SimpleDecoderBlock()
 
-def convert1():
+        inputs = tf.keras.Input(shape=(net.height,net.width,3))
+        self.detector(inputs)
+
+def convert1(file_idx):
     model = TextDetectorModel()
-    last = tf.train.latest_checkpoint('ckpt')
+    if file_idx:
+        last = os.path.join('ckpt','ckpt-%02d'%file_idx)
+    else:
+        last = tf.train.latest_checkpoint('ckpt')
     print(last)
     model.load_weights(last).expect_partial()
 
@@ -210,6 +216,11 @@ def test_model():
             print(s,d, i,j,results_dict[i][1:],results_dict[j][1:])
 
 if __name__ == '__main__':
-    last = convert1()
+    import sys
+
+    if len(sys.argv) > 1:
+        file_idx = int(sys.argv[1])
+    else:
+        file_idx = None
+    convert1(file_idx)
     test_model()
-    print(last)

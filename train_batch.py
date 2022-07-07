@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 import os
+
 os.environ['TF_GPU_ALLOCATOR'] = 'cuda_malloc_async'
 
 import tensorflow as tf
+tf.keras.mixed_precision.set_global_policy('mixed_float16')
 import tensorflow_addons as tfa
+
+save_target = 'result'
+batchsize = 16
 
 import net
 import dataset
-
-save_target = 'result'
-batchsize = 1
 
 class SimpleTextDetectorModel(tf.keras.models.Model):
     def __init__(self, **kwargs):
@@ -44,11 +46,10 @@ def load_weights(model, path):
     copy_layers(src=model1.detector.layers, dest=model.detector.layers)
     copy_layers(src=model1.decoder.layers, dest=model.decoder.layers)
 
-
-def train1(pretrain=None):
+def train(pretrain=None):
     data = dataset.FontData()
 
-    model = net.TextDetectorModel(average=20, logdir=os.path.join(save_target,'log'))
+    model = net.TextDetectorModel(logdir=os.path.join(save_target,'log'))
     #opt1 = tf.keras.optimizers.Adam(learning_rate=1e-4)
     opt1 = tfa.optimizers.AdamW(learning_rate=1e-4, weight_decay=1e-6, exclude_from_weight_decay=['_bn/','/bias'])
     opt2 = tf.keras.optimizers.Adam(learning_rate=1e-4)
@@ -70,9 +71,13 @@ def train1(pretrain=None):
     ]
 
     model.fit(
-        data.train_data(batchsize), epochs=4000, steps_per_epoch=1000,
-        validation_data=data.test_data(batchsize), validation_steps=200,
+        data.train_data(batchsize), epochs=1000, steps_per_epoch=1000,
+        validation_data=data.test_data(batchsize), validation_steps=50,
         callbacks=callbacks)
 
 if __name__ == '__main__':
-    train1()
+    import sys
+
+    if len(sys.argv) > 1:
+        batchsize = int(sys.argv[1])
+    train()

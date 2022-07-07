@@ -12,12 +12,11 @@ import os
 from PIL import Image, ImageFilter
 
 from matplotlib import rcParams
-rcParams['font.serif'] = ['IPAexMincho', 'IPAPMincho', 'Hiragino Mincho ProN', 'Yu Mincho']
+rcParams['font.serif'] = ['IPAexMincho', 'IPAPMincho', 'Hiragino Mincho ProN']
 
 import matplotlib.pyplot as plt
 
 import net
-import dataset
 
 if len(sys.argv) < 2:
     print(sys.argv[0],'target.png','(twopass)')
