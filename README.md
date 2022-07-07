@@ -38,12 +38,15 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
         block6-->block7;
         block7-->top;
       end;
-      top --> P5_in[16x16x1280];
+      block7 --> P5_in[16x16x640];
       block5 --> P4_in[32x32x256];
       block3 --> P3_in[64x64x96];
       block2 --> P2_in[128x128x64];
       subgraph LeafMap;
-        P5_in -- Conv2DTranspose k3s2 --> P5;
+        P5_in -- Conv2D k1 --> P5[16x16x80] -- UpSampling2D x16 --> P5_out[256x256x80];
+        P4_in -- Conv2D k1 --> P4[32x32x32] -- UpSampling2D x8 --> P4_out[256x256x32];
+        P3_in -- Conv2D k1 --> P3[64x64x12] -- UpSampling2D x4 --> P3_out[256x256x12];
+        P2_in -- Conv2D k1 --> P2[128x128x8] -- UpSampling2D x2 --> P2_out[256x256x8];
         P5 & P4_in --> P4_concat;
         P4_concat -- Conv2DTranspose k3s2 --> P4;
         P4 & P3_in --> P3_concat;
@@ -51,27 +54,25 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
         P3 & P2_in --> P2_concat;
         P2_concat -- Conv2DTranspose k3s2 --> P2;
         P2 -- Conv2D k3 --> P2_out;
-        P2_out -- Conv2D k1 --> LeafOut[256x256xN];
+        P5_out & P4_out & P3_out & P2_out -- Conv2D k1 --> top_out[256x256x(8 or 256)] -- Conv2D k1 --> LeafOut[256x256xN];
       end;
 
 ```
 
 モデルの出力は、中心位置のヒートマップ(keyheatmap)x1、ボックスサイズ(sizes)x2、オフセット(offsets)x2、
 文字の連続ライン(textline)x1、文字ブロックの分離線(sepatator)ｘ1の 256x256x7のマップと、
-文字の384次元特徴ベクトル 256x256x384のマップが出力されます。
+文字の128次元特徴ベクトル 256x256x128のマップが出力されます。
 
 文字の特徴ベクトルの事前学習として、文字の特徴ベクトルを1文字ずつ文字コードに変換するモデルを後段に付けて学習を行います。
 
 ```mermaid
   flowchart TD;
-    Input[Feature 384]-- Dense --> Output37[modulo 37];
-    Input[Feature 384]-- Dense --> Output41[modulo 41];
-    Input[Feature 384]-- Dense --> Output43[modulo 43];
-    Input[Feature 384]-- Dense --> Output47[modulo 47];
-    Input[Feature 384]-- Dense --> Output53[modulo 53];
+    Input[Feature 128]-- Dense --> Output1091[modulo 1091];
+    Input[Feature 128]-- Dense --> Output1093[modulo 1093];
+    Input[Feature 128]-- Dense --> Output1097[modulo 1097];
 ```
 
-文字は、UTF32で1つのコードポイントとして表されるとして、37,41,43,47,53での剰余を学習させて、[Chinese remainder theorem](https://ja.wikipedia.org/wiki/%E4%B8%AD%E5%9B%BD%E3%81%AE%E5%89%B0%E4%BD%99%E5%AE%9A%E7%90%86)
+文字は、UTF32で1つのコードポイントとして表されるとして、1091,1093,1097での剰余を学習させて、[Chinese remainder theorem](https://ja.wikipedia.org/wiki/%E4%B8%AD%E5%9B%BD%E3%81%AE%E5%89%B0%E4%BD%99%E5%AE%9A%E7%90%86)
 により算出した値のうち、0x10FFFFより小さいものが得られた場合に有効としています。
 
 最終的には、この後段は使用せず、文字の特徴ベクトルの連続をTransformerに入力して、文字コードの列を得る予定です。
@@ -119,25 +120,13 @@ resource_list.txtを参照して、適宜フォントデータを配置してく
 ## 1枚のA100で学習する場合
 
 ```bash
-./train14.py
+./train_batch.py 14
 ```
 
 ## 1枚の1080Tiで学習する場合(うまくいかない可能性があります)
 
 ```bash
 ./train1.py
-```
-
-## TPU v3-8で学習させる場合
-
-学習データをクラウドに保存
-```bash
-python3 makedata_fortpu.py
-```
-
-学習
-```bash
-./train_tpu.py
 ```
 
 ## Windowsで学習させる場合
