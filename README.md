@@ -47,7 +47,7 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
         P4_in -- Conv2D k1 --> P4[32x32x32] -- UpSampling2D x8 --> P4_out[256x256x32];
         P3_in -- Conv2D k1 --> P3[64x64x12] -- UpSampling2D x4 --> P3_out[256x256x12];
         P2_in -- Conv2D k1 --> P2[128x128x8] -- UpSampling2D x2 --> P2_out[256x256x8];
-        P5_out & P4_out & P3_out & P2_out -- Conv2D k1 --> top_out[256x256xM] -- Conv2D k1 --> LeafOut[256x256xN];
+        P5_out & P4_out & P3_out & P2_out -- Concat --> top_out[256x256xM] -- Conv2D k1 --> LeafOut[256x256xN];
       end;
 
 ```
