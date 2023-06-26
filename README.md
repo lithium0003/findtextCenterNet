@@ -61,9 +61,9 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
 
 ```mermaid
   flowchart TD;
-    Input[Feature 128]-- Dense --> Output1091[modulo 1091];
-    Input[Feature 128]-- Dense --> Output1093[modulo 1093];
-    Input[Feature 128]-- Dense --> Output1097[modulo 1097];
+    Input[Feature 64]-- Dense --> Output1091[modulo 1091];
+    Input[Feature 64]-- Dense --> Output1093[modulo 1093];
+    Input[Feature 64]-- Dense --> Output1097[modulo 1097];
 ```
 
 文字は、UTF32で1つのコードポイントとして表されるとして、1091,1093,1097での剰余を学習させて、[Chinese remainder theorem](https://ja.wikipedia.org/wiki/%E4%B8%AD%E5%9B%BD%E3%81%AE%E5%89%B0%E4%BD%99%E5%AE%9A%E7%90%86)
