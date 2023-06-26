@@ -1,6 +1,6 @@
 フォルダ構成
     enfont/          英語用フォントフォルダ
-    jpfont/          日本語用フォントフォルダ
+    jpfont/　　　　　　日本語用フォントフォルダ
     handwritten/     手書き文字画像フォルダ
     background/      背景画像フォルダ(自然画像等の文字が画像中に含まれていないものを使用する)
     load_font/       fontのビットマップを取得するプログラム
@@ -45,3 +45,15 @@ load_font/load_font
 fontのビットマップを得る
 Usage: load_font/load_font font_path size unicode
 
+英語フォントリスト.txt
+enfont/ フォルダに配置すべきフォントの取得方法の一例を示す
+
+日本語フォントリスト.txt
+jpfont/ フォルダに配置すべきフォントの取得方法の一例を示す
+
+wordlist.txt
+http://www17408ui.sakura.ne.jp/tatsum/database.html
+http://www17408ui.sakura.ne.jp/tatsum/database/VDRJ_Ver1_1_Research_Top60894.xlsx
+
+en_wordlist.txt
+http://www.mieliestronk.com/corncob_lowercase.txt

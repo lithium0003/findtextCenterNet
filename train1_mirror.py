@@ -12,8 +12,11 @@ except:
     # Invalid device or cannot modify virtual devices once initialized.
     pass
 
+strategy = tf.distribute.MirroredStrategy()
+
 save_target = 'result1'
-batchsize = 8
+nodes = strategy.num_replicas_in_sync
+batchsize = 8 * nodes
 
 import net
 from dataset import data_detector
@@ -107,14 +110,15 @@ class LearningRateReducer(tf.keras.callbacks.Callback):
             self.wait = 0
         else:
             self.wait += 1
-
+        
 
 def train(pretrain=None):
-    model = net.TextDetectorModel(pre_weight=not pretrain)
-    opt1 = tf.keras.optimizers.Adam(learning_rate=3e-4)
-    opt2 = tf.keras.optimizers.Adam(learning_rate=1e-4)
-    opt3 = tf.keras.optimizers.Adam(learning_rate=4e-4)
-    model.compile(optimizer=opt1, backbone_optimizer=opt2, decoder_optimizer=opt3)
+    with strategy.scope():
+        model = net.TextDetectorModel(pre_weight=not pretrain)
+        opt1 = tf.keras.optimizers.Adam(learning_rate=3e-4)
+        opt2 = tf.keras.optimizers.Adam(learning_rate=1e-4)
+        opt3 = tf.keras.optimizers.Adam(learning_rate=4e-4)
+        model.compile(optimizer=opt1, backbone_optimizer=opt2, decoder_optimizer=opt3)
 
     if pretrain:
         load_weights(model, pretrain)
@@ -122,7 +126,7 @@ def train(pretrain=None):
     callbacks = [
         tf.keras.callbacks.TerminateOnNaN(),
         tf.keras.callbacks.ModelCheckpoint(
-            os.path.join(save_target,'ckpt1','ckpt'), 
+            os.path.join(save_target,'ckpt1','ckpt'),
             save_best_only=True,
             save_weights_only=True),
         tf.keras.callbacks.BackupAndRestore(os.path.join(save_target,'backup')),
@@ -140,24 +144,19 @@ def train(pretrain=None):
         tf.keras.callbacks.TensorBoard(
             log_dir=os.path.join(save_target,'log'),
             write_graph=False),
-        tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=250),
+        tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20),
     ]
 
     model.fit(
         data_detector.train_data(batchsize),
-        epochs=1000,
+        epochs=100,
         steps_per_epoch=1000,
         validation_data=data_detector.test_data(batchsize),
-        validation_steps=200,
+        validation_steps=50,
         callbacks=callbacks,
         )
 
 if __name__ == '__main__':
-    import sys
-
-    if len(sys.argv) > 1:
-        batchsize = int(sys.argv[1])
-
     if os.path.exists('pretrain'):
         train(pretrain='pretrain')
     else:
