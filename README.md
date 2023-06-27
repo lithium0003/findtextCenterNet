@@ -44,10 +44,10 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
       block2 -- BatchNormalization --> P2_in[128x128x64];
       subgraph LeafMap;
         P5_in -- Conv2D k5x5 --> P5[16x16x32] -- UpSampling2D x16 --> P5_out[256x256x32];
-        P4_in -- Conv2D k5x5 --> P4[32x32x16] -- UpSampling2D x8 --> P4_out[256x256x15];
+        P4_in -- Conv2D k5x5 --> P4[32x32x16] -- UpSampling2D x8 --> P4_out[256x256x16];
         P3_in -- Conv2D k5x5 --> P3[64x64x8] -- UpSampling2D x4 --> P3_out[256x256x8];
         P2_in -- Conv2D k5x5 --> P2[128x128x8] -- UpSampling2D x2 --> P2_out[256x256x8];
-        P5_out & P4_out & P3_out & P2_out -- Concat --> top_1[256x256xM1] -- Conv2D k3x3 --> top_2[256x256xM2] -- Conv2D k3x3 --> LeafOut[256x256xN];
+        P5_out & P4_out & P3_out & P2_out -- Concat --> top_1[256x256x64] -- Conv2D k3x3 --> top_2[256x256xM2] -- Conv2D k3x3 --> LeafOut[256x256xN];
       end;
 
 ```
