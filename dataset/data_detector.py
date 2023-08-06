@@ -764,7 +764,7 @@ class LoadImageDataset:
         fg_c = tf.where(
             bk_c > 0.5, 
             tf.random.uniform([3], tf.clip_by_value(bk_c - bk_std * 2 - min_delta, -float('inf'), -1), bk_c - bk_std * 2 - min_delta),
-            tf.random.uniform([3], tf.clip_by_value(bk_c + bk_std * 2 + min_delta, 1, -float('inf')), bk_c + bk_std * 2 + min_delta))
+            tf.random.uniform([3], bk_c + bk_std * 2 + min_delta, tf.clip_by_value(bk_c + bk_std * 2 + min_delta, 1, float('inf'))))
         bk_alpha = tf.maximum(tf.reduce_max(tf.abs(fg_c)), 1)
         bkimg /= bk_alpha
         fg_c /= bk_alpha
@@ -832,7 +832,6 @@ class LoadImageDataset:
         fs = tf.data.Dataset.from_tensor_slices(filelist)
         if shuffle:
             fs = fs.shuffle(len(filelist), reshuffle_each_iteration=True)
-            fs = fs.repeat()
         ds = tf.data.TFRecordDataset(filenames=fs, num_parallel_reads=tf.data.AUTOTUNE)
         if shuffle:
             ds.shuffle(1000, reshuffle_each_iteration=True)

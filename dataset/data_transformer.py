@@ -1,117 +1,183 @@
 import tensorflow as tf
+import numpy as np
 
 from net.const import feature_dim
 from const import encoder_add_dim, max_decoderlen, max_encoderlen, decoder_SOT, decoder_EOT
-from const import samples_per_file
 
 encoder_dim = feature_dim + encoder_add_dim
 
 tfdata_path = 'train_data2'
 
-def deserialize_composite(serialized, type_spec):
-    serialized = tf.io.parse_tensor(serialized, tf.string)
-    component_specs = tf.nest.flatten(type_spec, expand_composites=True)
-    components = [
-        tf.io.parse_tensor(serialized[i], spec.dtype)
-        for i, spec in enumerate(component_specs)
-    ]
-    return tf.nest.pack_sequence_as(type_spec, components, expand_composites=True)
+npz_file = np.load('charparam.npz')
+features = []
+feature_idx = []
+idx = 0
+features.append(np.zeros([1,feature_dim], np.float32))
+feature_idx.append([0,0,0,1])
+idx = 1
+for varname in npz_file.files:
+    features.append(npz_file[varname])
+    feature_idx.append([int(varname[:-1]),0 if varname[-1] == 'n' else 1,idx,idx+npz_file[varname].shape[0]])
+    idx += npz_file[varname].shape[0]
+rng = np.random.default_rng()
+del npz_file
+
+with tf.device('cpu'):
+    features = tf.concat(features, axis=0)
+    feature_idx = tf.constant(feature_idx, tf.int64)
 
 def parse(serialized):
     return tf.io.parse_example(serialized, features={ 
-        "strcode": tf.io.FixedLenFeature([], dtype=tf.string), 
-        "features": tf.io.FixedLenFeature([], dtype=tf.string),
-        "length": tf.io.FixedLenFeature([], dtype=tf.int64),
+        "str": tf.io.FixedLenFeature([], dtype=tf.string), 
+        "code": tf.io.FixedLenFeature([], dtype=tf.string),
+        "codelen": tf.io.FixedLenFeature([], dtype=tf.int64),
+        "strlen": tf.io.FixedLenFeature([], dtype=tf.int64),
     })
 
-def deserialize_data(data):
-    rt_spec1 = tf.RaggedTensorSpec(shape=[None, None], dtype=tf.int32, ragged_rank=1, row_splits_dtype=tf.int32)
-    rt_spec2 = tf.RaggedTensorSpec(shape=[None, None, encoder_dim], dtype=tf.float32, ragged_rank=1)
-    deserialized1 = deserialize_composite(data['strcode'], rt_spec1)
-    deserialized2 = deserialize_composite(data['features'], rt_spec2)
-    return {
-        'strcode': deserialized1,
-        'features': deserialized2,
-        'length': tf.cast(data['length'], tf.int32),
-    }
+def generate_feature(code_vec):
+    @tf.function
+    def subfun_n(v):
+        sample = tf.zeros([feature_dim])
+        v0 = tf.cast(v[0], tf.int64)
+        if v0 > 0:
+            idx = tf.where(tf.logical_and(feature_idx[:,0] == v0,feature_idx[:,1] == 0))
+            if tf.size(idx) > 0:
+                idx = tf.squeeze(idx)
+                st = feature_idx[idx,2]
+                ed = feature_idx[idx,3]
+            else:
+                st = tf.constant(0, tf.int64)
+                ed = tf.constant(1, tf.int64)
+            index = tf.random.uniform([], minval=st, maxval=ed, dtype=tf.int64)
+            sample = features[index,:]
+        return tf.concat([sample, tf.cast(v[1:], tf.float32)], axis=0)
 
-def trim_data(data):
-    want_declen = tf.random.uniform([], 1, max_decoderlen - 1, dtype=tf.int32)
-    strcode = data['strcode']
-    features = data['features']
-    f = tf.zeros([0,encoder_dim])
-    s = tf.zeros([0,], dtype=tf.int32)
-    f1 = f
-    s1 = s
-    if data['length'] > 2:
-        st = tf.random.uniform([], 0, data['length'] - 1, dtype=tf.int32)
+    @tf.function
+    def subfun_t(v):
+        sample = tf.zeros([feature_dim])
+        v0 = tf.cast(v[0], tf.int64)
+        if v0 > 0:
+            idx = tf.where(tf.logical_and(feature_idx[:,0] == v0,feature_idx[:,1] == 1))
+            if tf.size(idx) > 0:
+                idx = tf.squeeze(idx)
+                st = feature_idx[idx,2]
+                ed = feature_idx[idx,3]
+            else:
+                idx2 = tf.where(tf.logical_and(feature_idx[:,0] == v0,feature_idx[:,1] == 0))
+                if tf.size(idx2) > 0:
+                    idx2 = tf.squeeze(idx2)
+                    st = feature_idx[idx2,2]
+                    ed = feature_idx[idx2,3]
+                else:
+                    st = tf.constant(0, tf.int64)
+                    ed = tf.constant(1, tf.int64)
+            index = tf.random.uniform([], minval=st, maxval=ed, dtype=tf.int64)
+            sample = features[index,:]
+        return tf.concat([sample, tf.cast(v[1:], tf.float32)], axis=0)
+
+    if tf.random.uniform([]) < 0.25:
+        return tf.map_fn(subfun_t, code_vec, fn_output_signature=tf.float32)
     else:
-        st = 0
-    for i in tf.range(st, data['length']):
-        tf.autograph.experimental.set_loop_options(
-            shape_invariants=[
-                (f, tf.TensorShape([None,encoder_dim])),
-                (f1, tf.TensorShape([None,encoder_dim])),
-                (s, tf.TensorShape([None,])),
-                (s1, tf.TensorShape([None,])),
-            ]
-        )
-        s1 = tf.concat([s, strcode[i]], axis=0)
-        f1 = tf.concat([f, features[i]], axis=0)
-        if tf.shape(s1)[0] < max_decoderlen - 1 and tf.shape(f1)[0] < max_encoderlen:
-            s = s1
-            f = f1
-            if tf.shape(s)[0] >= want_declen:
-                break
+        return tf.map_fn(subfun_n, code_vec, fn_output_signature=tf.float32)
+
+def process_data(data):
+    batch = 8
+    str_data = data['str']
+    code = data['code']
+    strlen_data = data['strlen']
+    codelen_data = data['codelen']
+    max_len = tf.random.uniform([], 1, max_encoderlen, dtype=tf.int64)
+    pad_ln = tf.random.uniform([batch])
+
+    result_strlen = tf.constant(0, dtype=tf.int64)
+    result_codelen = tf.constant(0, dtype=tf.int64)
+    j = tf.constant(0, tf.int64)
+    while j < batch:
+        if result_strlen + strlen_data[j] < max_decoderlen - 2 and result_codelen < max_len and result_codelen + codelen_data[j] < max_encoderlen:
+            result_strlen += strlen_data[j]
+            result_codelen += codelen_data[j]
+            if pad_ln[j] < 0.1:
+                result_strlen += 1
+                result_codelen += 1
         else:
             break
-    return {
-        'strcode': s,
-        'features': f,
-    }
+        j += 1
+    if j == 0:
+        j = tf.constant(1, tf.int64)
+        
+    def loop1(result,i):
+        result = tf.concat([result, tf.io.parse_tensor(code[i], tf.int32)], axis=0)
+        if pad_ln[i] < 0.1:
+            result = tf.concat([result, tf.constant([[0,0,0,0,1]], tf.int32)], axis=0)
+        return result, i+1
 
-def encode(data):
-    strcode = data['strcode']
-    features = data['features']
+    result_code,_ = tf.while_loop(lambda r,i: i < j, loop1, 
+                                  loop_vars=[tf.zeros([0,5], tf.int32), tf.constant(0,tf.int64)],
+                                  shape_invariants=[tf.TensorShape([None,5]),tf.TensorShape([])])
 
-    decoder_len = tf.shape(strcode)[0]
-    encoder_len = tf.shape(features)[0]
+    def loop2(result,i):
+        result = tf.strings.join([result, str_data[i]])
+        if pad_ln[i] < 0.1:
+            result = tf.strings.join([result, tf.constant("\n")])
+        return result, i+1
 
-    true_str = tf.pad(strcode, [[0, max_decoderlen - decoder_len]])
+    result_str,_ = tf.while_loop(lambda r,i: i < j, loop2, loop_vars=[tf.constant(""), tf.constant(0,tf.int64)])
 
-    strcode = tf.concat([
+    if tf.random.uniform([]) < 0.5:
+        result_str = tf.strings.substr(result_str, 0, tf.strings.length(result_str)-1)
+        result_code = result_code[:-1,:]
+
+    if tf.shape(result_code, out_type=tf.int64)[0] > max_encoderlen:
+        return {
+            'text': tf.constant(""),
+            'decoder_true': tf.zeros([max_decoderlen], dtype=tf.int32),
+            'decoder_task': tf.zeros([max_decoderlen], dtype=tf.int32),
+            'encoder_inputs': tf.zeros([max_encoderlen, encoder_dim]),
+        }
+
+    decoder_code = tf.strings.unicode_decode(result_str, input_encoding='UTF-8')
+    if tf.shape(decoder_code, out_type=tf.int64)[0] > max_decoderlen - 2:
+        return {
+            'text': tf.constant(""),
+            'decoder_true': tf.zeros([max_decoderlen], dtype=tf.int32),
+            'decoder_task': tf.zeros([max_decoderlen], dtype=tf.int32),
+            'encoder_inputs': tf.zeros([max_encoderlen, encoder_dim]),
+        }
+
+    decoder_code = tf.concat([
         tf.cast([decoder_SOT], dtype=tf.int32),
-        strcode,
+        decoder_code,
         tf.cast([decoder_EOT], dtype=tf.int32),
     ], axis=0)
+    encoder_input = generate_feature(result_code)
+    decoder_len = tf.shape(decoder_code)[0]
+    encoder_len = tf.shape(encoder_input)[0]
 
+    decoder_true = decoder_code[1:]
+    decoder_task = decoder_code[:-1]
+    decoder_len = tf.shape(decoder_true)[0]
 
-    decoder_true = strcode[1:]
-    decoder_task = strcode[:-1]
     decoder_true = tf.pad(decoder_true, [[0, max_decoderlen - decoder_len]])
     decoder_task = tf.pad(decoder_task, [[0, max_decoderlen - decoder_len]])
-
-    encoder_inputs = tf.pad(features,[[0, max_encoderlen - encoder_len], [0, 0]])
+    encoder_inputs = tf.pad(encoder_input, [[0, max_encoderlen - encoder_len], [0, 0]])
 
     return {
-        'text': true_str,
+        'text': result_str,
         'decoder_true': decoder_true,
         'decoder_task': decoder_task,
         'encoder_inputs': encoder_inputs,
     }
 
+
 def create_dataset(batch_size, filelist):
-    files = tf.data.Dataset.from_tensor_slices(filelist)
-    files = files.shuffle(len(filelist))
-    ds = files.interleave(lambda x: tf.data.TFRecordDataset(x, 'ZLIB'),
-                            num_parallel_calls=tf.data.AUTOTUNE,
-                            deterministic=False)
-    ds = ds.apply(tf.data.experimental.assert_cardinality(len(filelist)*samples_per_file))
-    ds = ds.shuffle(1000)
+    fs = tf.data.Dataset.from_tensor_slices(filelist)
+    fs = fs.shuffle(len(filelist), reshuffle_each_iteration=True)
+    ds = tf.data.TFRecordDataset(filenames=fs)
     ds = ds.map(parse, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
-    ds = ds.map(deserialize_data, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
-    ds = ds.map(trim_data, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
-    ds = ds.map(encode, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
+    ds = ds.batch(8, drop_remainder=True)
+    ds = ds.map(process_data, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
+    ds = ds.shuffle(10000)
+    ds = ds.repeat()
     ds = ds.batch(batch_size, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE, deterministic=False)
     ds = ds.prefetch(tf.data.AUTOTUNE)
     return ds
@@ -130,5 +196,5 @@ def generate_data(data_path=''):
     return create_dataset(1, test_files)
 
 if __name__=='__main__':
-    for d in test_data(4):
-        print(d)
+    for d in generate_data().take(10):
+        print([b.decode() for b in d['text'].numpy()])
