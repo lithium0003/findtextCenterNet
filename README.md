@@ -223,6 +223,7 @@ test_image1.pyを実行すると推論できます。
 # Make train dataset for step2
 step1の文字検出器が学習できたら、後段のTransformerの学習データを作成します。
 
+## 文字特徴量のサンプリング
 make_chardata.pyを用いて、文字の画像データから、文字検出器が出力する各文字ごとの特徴量を収集します。
 ```bash
 ./make_chardata.py
@@ -236,12 +237,24 @@ convert_chardata.pyを用いて、charparam.npzを生成します。
 ./convert_chardata.py
 ```
 
+事前学習のckpt1のパラメータを使って作成した文字特徴量charparam.npzは、以下からダウンロード可能です。
+https://bucket.lithium03.info/dataset20230807/charparam.npz
+
+## step2の学習データtrain_data2の作成
 最後に、make_traindata2.pyを実行して、ランダムな文字列、日本語および英語の文章(wikipediaおよび青空文庫)から
 Transformer用の学習データをtrain_data2　フォルダに作成します。
 ```bash
-./make_traindata2.py　5 200
+./make_traindata2.py　10 200
 ```
-この例では、test=5, train=200ファイルを作成します。
+この例では、test=10, train=200ファイルを作成します。
+
+事前学習のckpt1のパラメータを使って作成した学習用データセットは、https://bucket.lithium03.info/dataset20230807/train_data2/ 以下にあります。
+ダウンロードするには以下のようにします。
+```bash
+mkdir train_data2 && cd train_data2
+curl -O "https://bucket.lithium03.info/dataset20230807/train_data2/test0000000[0-9].tfrecords"
+curl -O "https://bucket.lithium03.info/dataset20230807/train_data2/train00000[000-199].tfrecords"
+```
 
 # Train for step2
 ```bash
