@@ -104,7 +104,7 @@ lineend_forbid = '（［｛([｛〔〈《「『【〘〖〝‘“｟«'
 
 
 class Canvas:
-    def __init__(self, fontfile, fontsize=96.0, horizontal=True, bold=False, italic=False):
+    def __init__(self, fontfile, fontsize=96.0, horizontal=True, bold=False, italic=False, turn=True):
         self.fontfile = fontfile
         self.fontsize = fontsize
         self.bold = bold
@@ -120,6 +120,7 @@ class Canvas:
         self.linecount = 0
         self.linecount_max = 0
         self.is_horizontal = horizontal
+        self.turn = turn
 
         self.section_count = 0
         self.current_section = 0
@@ -529,13 +530,13 @@ class Canvas:
                     right = left + image.shape[1]
                     bottom = top + image.shape[0]
 
-                    if self.canvas_image.shape[1] < right:
-                        self.canvas_image = np.pad(self.canvas_image, [[0, 0],[0, right-self.canvas_image.shape[1]]])
-                        self.textline_image = np.pad(self.textline_image, [[0, 0],[0, right-self.textline_image.shape[1]]])
+                    if self.canvas_image.shape[1] <= right:
+                        self.canvas_image = np.pad(self.canvas_image, [[0, 0],[0, right-self.canvas_image.shape[1]+1]])
+                        self.textline_image = np.pad(self.textline_image, [[0, 0],[0, right-self.textline_image.shape[1]+1]])
 
-                    if self.canvas_image.shape[0] < bottom:
-                        self.canvas_image = np.pad(self.canvas_image, [[0, bottom-self.canvas_image.shape[0]],[0, 0]])
-                        self.textline_image = np.pad(self.textline_image, [[0, bottom-self.textline_image.shape[0]],[0, 0]])
+                    if self.canvas_image.shape[0] <= bottom:
+                        self.canvas_image = np.pad(self.canvas_image, [[0, bottom-self.canvas_image.shape[0]+1],[0, 0]])
+                        self.textline_image = np.pad(self.textline_image, [[0, bottom-self.textline_image.shape[0]+1],[0, 0]])
 
                     self.canvas_image[top:bottom, left:right] = np.maximum(self.canvas_image[top:bottom, left:right], image)
 
@@ -1685,7 +1686,7 @@ class Canvas:
                 ascii_count += 1
             else:
                 nonascii_count += 1
-        if ascii_count == 0:
+        if ascii_count == 0 or not self.turn:
             # jp mode
             return jp_word_sep(text, line_length=line_length, pad_space=pad_space)
         elif nonascii_count == 0:

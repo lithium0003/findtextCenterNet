@@ -34,6 +34,12 @@ with open(os.path.join('data','id_map.csv'),'r') as f:
         jp_type_list[int(row[3])].append(code)
 jp_char_list = list(jp_char_list)
 
+ascii_list = [chr(c) for c in range(0x20,0x7F)]
+
+#基本ラテン文字
+for c in range(0x21,0x7F):
+    glyphs[c] = chr(c)
+
 #ラテン1補助
 for c in range(0xA1,0x100):
     if c in [0xA8, 0xAA, 0xAD, 0xAF, 0xB2, 0xB3, 0xB4, 0xB8, 0xB9, 0xBA]:
@@ -134,8 +140,24 @@ for c in range(0x3280, 0x3300):
 for c in range(0x3300, 0x3400):
     glyphs[c] = chr(c)
 
+#Halfwidth and Fullwidth Forms
+for c in range(0xFF01, 0xFF9E):
+    glyphs[c] = chr(c)
 
-glyphs_list = list(glyphs.values())
+#Hangul Syllables
+for c in range(0xAC00, 0xD7A4):
+    glyphs[c] = chr(c)
+
+#Geometric Shapes
+for c in range(0x25A0, 0x2600):
+    glyphs[c] = chr(c)
+
+#Supplemental Arrows-A
+for c in range(0x27F0, 0x2800):
+    glyphs[c] = chr(c)
+
+for c in ['•','◦','●','○','◎','◉','▲','△','﹅','﹆','〰']:
+    glyphs[ord(c)] = c
 
 sim_glyphs_list = '''
 高橋髙橋高槗髙槗
@@ -206,6 +228,10 @@ sim_glyphs_list = '''
 '''
 sim_glyphs_list = list(sim_glyphs_list.replace('\n',''))
 
+for c in set(sim_glyphs_list):
+    glyphs[ord(c)] = c
+
+glyphs_list = list(glyphs.values())
 
 jpfontlist = glob.glob(os.path.join('data','jpfont','*'))
 enfontlist = glob.glob(os.path.join('data','enfont','*'))
@@ -432,6 +458,50 @@ def get_random_furigana(rng):
         d['font'] = font
 
     return d        
+
+def get_random_char(rng, turn=False):
+    p = rng.random()
+    if turn:
+        en = True
+    else:
+        if p < 0.5:
+            en = True
+        else:
+            en = False
+
+    current_fontlist = enfontlist if en else jpfontlist
+    if turn or rng.random() < 0.01:
+        max_text = 1024
+        txt = ''
+        while len(txt) < max_text:
+            txt += ''.join(rng.choice(ascii_list, size=rng.integers(1,20))) + (' ' if rng.random() < 0.5 else '\n')
+    else:
+        max_text = 8*1024
+        txt = ''.join(rng.choice(glyphs_list, size=max_text))
+
+    font = rng.choice(current_fontlist)
+
+    if en:
+        size = int(np.exp(rng.uniform(np.log(30), np.log(128))))
+    else:
+        size = int(np.exp(rng.uniform(np.log(18), np.log(128))))
+    line_charcount = rng.integers(20, 40)
+    sc_w = np.minimum(line_charcount * size, 2000)
+    line_count = len(txt) // (line_charcount)
+    sc_h = min(int(2000 / size), line_count)
+
+    horizontal = rng.uniform() < 0.5
+
+    italic = rng.random() < 0.1
+    bold = rng.random() < 0.2
+    with Canvas(font, size, horizontal=horizontal, bold=bold, italic=italic, turn=turn) as canvas:
+        canvas.set_linewidth(sc_w)
+        canvas.set_linemax(sc_h)
+        canvas.line_space_ratio = rng.uniform(1.0,2.0)
+        d = canvas.draw(txt)
+        d['font'] = font
+    
+    return d
 
 def get_random_textline(rng, single=False):
     max_text = 32*1024
@@ -719,12 +789,6 @@ def get_random_text(rng):
     else:
         return get_random_hendwrite(rng)
 
-def get_random_text2(rng):
-    p = rng.random()
-    if p < 0.2:
-        return get_random_wari(rng)
-    return get_random_furigana(rng)
-
 if __name__ == '__main__':
     from matplotlib import rcParams
     rcParams['font.serif'] = ['IPAexMincho', 'IPAPMincho', 'Hiragino Mincho ProN']
@@ -734,7 +798,7 @@ if __name__ == '__main__':
     rng = np.random.default_rng()
 
     while True:
-        d = get_random_text(rng)
+        d = get_random_char(rng, turn=True)
         #d = get_random_textline(rng)
         #d = get_random_il(rng)
         #d = get_random_furigana(rng)

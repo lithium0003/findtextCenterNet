@@ -2,12 +2,10 @@ import tensorflow as tf
 
 import copy
 
-from keras import backend
-from keras import layers
-from keras.applications import imagenet_utils
-from keras.engine import training
-from keras.utils import layer_utils
-from keras.applications.efficientnet_v2 import round_filters, CONV_KERNEL_INITIALIZER, DENSE_KERNEL_INITIALIZER, MBConvBlock, FusedMBConvBlock, round_repeats
+from tensorflow.python.keras import backend
+from keras.src.applications import imagenet_utils
+from tensorflow.python.keras.utils import layer_utils
+from keras.src.applications.efficientnet_v2 import round_filters, CONV_KERNEL_INITIALIZER, DENSE_KERNEL_INITIALIZER, MBConvBlock, FusedMBConvBlock, round_repeats
 
 def EfficientNetV2(
     width_coefficient,
@@ -84,10 +82,10 @@ def EfficientNetV2(
       weights=weights)
 
   if input_tensor is None:
-    img_input = layers.Input(shape=input_shape)
+    img_input = tf.keras.layers.Input(shape=input_shape)
   else:
     if not backend.is_keras_tensor(input_tensor):
-      img_input = layers.Input(tensor=input_tensor, shape=input_shape)
+      img_input = tf.keras.layers.Input(tensor=input_tensor, shape=input_shape)
     else:
       img_input = input_tensor
 
@@ -100,14 +98,14 @@ def EfficientNetV2(
     # if number of channels allows it
     num_channels = input_shape[bn_axis - 1]
     if model_name.split("-")[-1].startswith("b") and num_channels == 3:
-      x = layers.Rescaling(scale=1. / 255)(x)
-      x = layers.Normalization(
+      x = tf.keras.layers.Rescaling(scale=1. / 255)(x)
+      x = tf.keras.layers.Normalization(
           mean=[0.485, 0.456, 0.406],
           variance=[0.229**2, 0.224**2, 0.225**2],
           axis=bn_axis,
       )(x)
     else:
-      x = layers.Rescaling(scale=1. / 128.0, offset=-1)(x)
+      x = tf.keras.layers.Rescaling(scale=1. / 128.0, offset=-1)(x)
 
   # Build stem
   stem_filters = round_filters(
@@ -116,7 +114,7 @@ def EfficientNetV2(
       min_depth=min_depth,
       depth_divisor=depth_divisor,
   )
-  x = layers.Conv2D(
+  x = tf.keras.layers.Conv2D(
       filters=stem_filters,
       kernel_size=3,
       strides=2,
@@ -125,12 +123,12 @@ def EfficientNetV2(
       use_bias=False,
       name="stem_conv",
   )(x)
-  x = layers.BatchNormalization(
+  x = tf.keras.layers.BatchNormalization(
       axis=bn_axis,
       momentum=bn_momentum,
       name="stem_bn",
   )(x)
-  x = layers.Activation(activation, name="stem_activation")(x)
+  x = tf.keras.layers.Activation(activation, name="stem_activation")(x)
 
   # Build blocks
   blocks_args = copy.deepcopy(blocks_args)
@@ -177,7 +175,7 @@ def EfficientNetV2(
       width_coefficient=width_coefficient,
       min_depth=min_depth,
       depth_divisor=depth_divisor)
-  x = layers.Conv2D(
+  x = tf.keras.layers.Conv2D(
       filters=top_filters,
       kernel_size=1,
       strides=1,
@@ -187,19 +185,19 @@ def EfficientNetV2(
       use_bias=False,
       name="top_conv",
   )(x)
-  x = layers.BatchNormalization(
+  x = tf.keras.layers.BatchNormalization(
       axis=bn_axis,
       momentum=bn_momentum,
       name="top_bn",
   )(x)
-  x = layers.Activation(activation=activation, name="top_activation")(x)
+  x = tf.keras.layers.Activation(activation=activation, name="top_activation")(x)
 
   if include_top:
-    x = layers.GlobalAveragePooling2D(name="avg_pool")(x)
+    x = tf.keras.layers.GlobalAveragePooling2D(name="avg_pool")(x)
     if dropout_rate > 0:
-      x = layers.Dropout(dropout_rate, name="top_dropout")(x)
+      x = tf.keras.layers.Dropout(dropout_rate, name="top_dropout")(x)
     imagenet_utils.validate_activation(classifier_activation, weights)
-    x = layers.Dense(
+    x = tf.keras.layers.Dense(
         classes,
         activation=classifier_activation,
         kernel_initializer=DENSE_KERNEL_INITIALIZER,
@@ -207,9 +205,9 @@ def EfficientNetV2(
         name="predictions")(x)
   else:
     if pooling == "avg":
-      x = layers.GlobalAveragePooling2D(name="avg_pool")(x)
+      x = tf.keras.layers.GlobalAveragePooling2D(name="avg_pool")(x)
     elif pooling == "max":
-      x = layers.GlobalMaxPooling2D(name="max_pool")(x)
+      x = tf.keras.layers.GlobalMaxPooling2D(name="max_pool")(x)
 
   # Ensure that the model takes into account
   # any potential predecessors of `input_tensor`.
@@ -219,7 +217,7 @@ def EfficientNetV2(
     inputs = img_input
 
   # Create model.
-  model = training.Model(inputs, x, name=model_name)
+  model = tf.keras.Model(inputs, x, name=model_name)
 
   return model
 

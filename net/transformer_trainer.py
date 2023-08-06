@@ -3,7 +3,7 @@ import numpy as np
 import struct
 
 from .transformer import TextTransformer
-from dataset.data_transformer import encoder_add_dim, max_decoderlen, decoder_SOT, decoder_EOT
+from dataset.data_transformer import encoder_add_dim, max_decoderlen, max_encoderlen, decoder_SOT, decoder_EOT
 from .detector_trainer import calc_predid
 from .const import modulo_list, feature_dim
 
@@ -50,8 +50,8 @@ class TransformerDecoderModel(tf.keras.models.Model):
         super().__init__(**kwargs)
 
         self.transformer = TextTransformer()
-        embedded = tf.keras.Input(shape=(None,encoder_dim))
-        decoderinput = tf.keras.Input(shape=(None,))
+        embedded = tf.keras.Input(shape=(max_encoderlen,encoder_dim))
+        decoderinput = tf.keras.Input(shape=(max_decoderlen,))
         self.transformer((embedded, decoderinput))
 
         self.transformer.summary()
@@ -93,6 +93,7 @@ class TransformerDecoderModel(tf.keras.models.Model):
         illegal_count = tf.cast(failed_idx, dtype=tf.int64)
         illegal_count = tf.where(inputs['decoder_task'] > 0, illegal_count, 0)
         text_count = tf.cast(inputs['decoder_task'] > 0, dtype=tf.int64)
+        text_count = tf.where(text_count > 0, text_count, 1)
         illegal_count = tf.math.reduce_sum(illegal_count, axis=1) / tf.math.reduce_sum(text_count, axis=1)
         illegal_count = tf.math.reduce_mean(illegal_count)
         self.illegal_tracker.update_state(illegal_count)
@@ -137,50 +138,49 @@ class TransformerDecoderModel(tf.keras.models.Model):
 
     def generate(self, ds):
         @tf.function(input_signature=[
-            tf.TensorSpec(shape=(1,1), dtype=tf.int64),
+            tf.TensorSpec(shape=(1,None), dtype=tf.int64),
             tf.TensorSpec(shape=[], dtype=tf.int32),
             tf.TensorSpec(shape=[None], dtype=tf.float32),
-            tf.TensorSpec(shape=[None], dtype=tf.int64),
+            tf.TensorSpec(shape=(1,None,None), dtype=tf.float32),
+            tf.TensorSpec(shape=(1,None,None), dtype=tf.float32),
             ])
-        def call_loop(new_input, i, result, score):
-            #tf.print(i)
-            decoder_output = self.transformer.decoder([new_input, i])
+        def call_loop(decoder_input, i, score, encoder_output, encoder_input):
+            decoder_output = self.transformer.decoder([decoder_input, encoder_output, encoder_input])
 
             out1091, out1093, out1097 = decoder_output
-            p1091 = tf.math.softmax(out1091)
-            p1093 = tf.math.softmax(out1093)
-            p1097 = tf.math.softmax(out1097)
-            i1091 = tf.reshape(tf.argmax(p1091, axis=-1),[-1])
-            i1093 = tf.reshape(tf.argmax(p1093, axis=-1),[-1])
-            i1097 = tf.reshape(tf.argmax(p1097, axis=-1),[-1])
+            p1091 = tf.math.softmax(out1091[0,i])
+            p1093 = tf.math.softmax(out1093[0,i])
+            p1097 = tf.math.softmax(out1097[0,i])
+            i1091 = tf.argmax(p1091, axis=-1)
+            i1093 = tf.argmax(p1093, axis=-1)
+            i1097 = tf.argmax(p1097, axis=-1)
             code = calc_predid(i1091,i1093,i1097)
             p = tf.reduce_mean([tf.math.log(p1091[i1091]), tf.math.log(p1093[i1093]), tf.math.log(p1097[i1097])])
-            return code[None,:], i+1, tf.concat([result, code], axis=-1), tf.concat([score, p], axis=-1)
+            return tf.where(tf.range(max_decoderlen) == i+1, code, decoder_input), i+1, tf.concat([score, [p]], axis=-1), encoder_output, encoder_input
 
         with open('generate.log','a') as f:
             result_text = tf.constant([['true','p','predict']])
-            for j, inputs in enumerate(ds):
+            for j, inputs in enumerate(ds.take(4)):
                 print(j, flush=True)
                 print(j, flush=True, file=f)
-                if j >= 4:
-                    break
+                encoder_input = inputs['encoder_inputs']
                 encoder_output = self.transformer.encoder(inputs['encoder_inputs'])
-                self.transformer.decoder.create_cache(encoder_output)
-                decoder_input = tf.constant([[decoder_SOT]], dtype=tf.int32),
+                decoder_input = tf.constant([decoder_SOT], dtype=tf.int64)
+                decoder_input = tf.pad(decoder_input, [[0, max_decoderlen - 1]])
+                decoder_input = tf.expand_dims(decoder_input, 0)
                 i0 = tf.constant(0)
-                result = tf.zeros([0], dtype=tf.int64)
                 score = tf.zeros([0])
-                c = lambda n, i, r, s: tf.logical_and(i < max_decoderlen, r[-1] != decoder_EOT)
-                with tf.device('cpu'):
-                    _,_,output,score = tf.while_loop(
-                        c, call_loop, loop_vars=[decoder_input, i0, result, score],
-                        shape_invariants=[decoder_input.get_shape(), i0.get_shape(), tf.TensorShape([None,]), tf.TensorShape([None,])])
+                c = lambda n, i, s, eo, ei: tf.logical_and(i < max_decoderlen-1, n[0,i] != decoder_EOT)
+                output,i1,score,_,_ = tf.while_loop(
+                    c, call_loop, loop_vars=[decoder_input, i0, score, encoder_output, encoder_input],
+                    shape_invariants=[tf.TensorShape([1,None]), i0.shape, tf.TensorShape([None,]), encoder_output.shape, encoder_input.shape])
 
+                output = output[0,1:i1].numpy()
                 score = tf.math.exp(tf.reduce_mean(score))
-                pred_bytes = b''.join([i.to_bytes(4, 'little') for i in output])
-                input_bytes = b''.join([int(i).to_bytes(4, 'little') for i in inputs['text'][0].numpy() if i > 0])
+                pred_bytes = b''.join([int(i).to_bytes(4, 'little') for i in output])
+                input_bytes = inputs['text'].numpy()[0]
                 pred_text = pred_bytes.decode("utf-32le", "backslashreplace")
-                input_text = input_bytes.decode("utf-32le", "backslashreplace")
+                input_text = input_bytes.decode()
                 pred_int = output
                 input_int = input_text.encode('utf-32le')
                 input_int = struct.unpack('I' * (len(input_int)//4), input_int)

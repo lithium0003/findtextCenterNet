@@ -32,13 +32,10 @@ def set_url_extract(pageid):
 
 #ランダムな記事IDを取得
 def get_random_wordid(en=False):
-    try:
-        request_url = (WIKI_URL_EN if en else WIKI_URL_JP) + urllib.parse.urlencode(set_url_random())
-        html = urllib.request.urlopen(request_url, timeout=10)
-        html_json = json.loads(html.read().decode('utf-8'))
-        pageid = (html_json['query']['random'][0])['id']
-    except Exception as e:
-        print ("get_random_word: Exception Error: ", e)
+    request_url = (WIKI_URL_EN if en else WIKI_URL_JP) + urllib.parse.urlencode(set_url_random())
+    html = urllib.request.urlopen(request_url, timeout=10)
+    html_json = json.loads(html.read().decode('utf-8'))
+    pageid = (html_json['query']['random'][0])['id']
     return pageid
 
 def get_word_content(pageid, en=False):
