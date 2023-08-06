@@ -209,7 +209,7 @@ resource_list.txtを参照して、適宜フォントデータを配置してく
 ```
 
 # Test for step1
-学習データを、ckpt1/　に置いた状態で、
+学習済みパラメータを、ckpt1/　に置いた状態で、
 test_image1.pyを実行すると推論できます。
 
 ```bash
@@ -217,7 +217,40 @@ test_image1.pyを実行すると推論できます。
 ```
 
 # Make train dataset for step2
+step1の文字検出器が学習できたら、後段のTransformerの学習データを作成します。
 
+make_chardata.pyを用いて、文字の画像データから、文字検出器が出力する各文字ごとの特徴量を収集します。
+```bash
+./make_chardata.py
+```
+
+chardata_fontフォルダ以下に、各文字の文字コードごとにファイルができます。
+次に、1つのファイルにまとめます。
+
+convert_chardata.pyを用いて、charparam.npzを生成します。
+```bash
+./convert_chardata.py
+```
+
+最後に、make_traindata2.pyを実行して、ランダムな文字列、日本語および英語の文章(wikipediaおよび青空文庫)から
+Transformer用の学習データをtrain_data2　フォルダに作成します。
+```bash
+./make_traindata2.py　5 200
+```
+この例では、test=5, train=200ファイルを作成します。
+
+# Train for step2
+```bash
+./train2.py
+```
+
+# Test for step2
+学習済みパラメータを、ckpt1/　, ckpt2/に置いた状態で、
+test_image2.pyを実行すると推論できます。
+
+```bash
+./test_image2.py img/test1.png
+```
 
 # Reference 
 - Objects as Points
