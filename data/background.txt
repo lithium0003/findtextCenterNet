@@ -1,0 +1,6 @@
+Open Images Dataset
+https://github.com/cvdfoundation/open-images-dataset
+目視で文字が入っていない画像のみを適当に選択して採用する
+
+紙の質感のテクスチャが取得できるサイト
+https://free-paper-texture.com/

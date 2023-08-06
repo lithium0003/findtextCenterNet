@@ -38,31 +38,32 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
         block6-->block7;
         block7-->top;
       end;
-      block7 --> P5_in[16x16x640];
-      block5 --> P4_in[32x32x256];
-      block3 --> P3_in[64x64x96];
-      block2 --> P2_in[128x128x64];
+      block7 -- BatchNormalization --> P5_in[16x16x640];
+      block5 -- BatchNormalization --> P4_in[32x32x256];
+      block3 -- BatchNormalization --> P3_in[64x64x96];
+      block2 -- BatchNormalization --> P2_in[128x128x64];
       subgraph LeafMap;
-        P5_in -- Conv2D k1 --> P5[16x16x80] -- UpSampling2D x16 --> P5_out[256x256x80];
-        P4_in -- Conv2D k1 --> P4[32x32x32] -- UpSampling2D x8 --> P4_out[256x256x32];
-        P3_in -- Conv2D k1 --> P3[64x64x12] -- UpSampling2D x4 --> P3_out[256x256x12];
-        P2_in -- Conv2D k1 --> P2[128x128x8] -- UpSampling2D x2 --> P2_out[256x256x8];
-        P5_out & P4_out & P3_out & P2_out -- Concat --> top_out[256x256xM] -- Conv2D k1 --> LeafOut[256x256xN];
+        P5_in -- Conv2D k5x5 --> P5[16x16x32] -- UpSampling2D x16 --> P5_out[256x256x32];
+        P4_in -- Conv2D k5x5 --> P4[32x32x16] -- UpSampling2D x8 --> P4_out[256x256x16];
+        P3_in -- Conv2D k5x5 --> P3[64x64x8] -- UpSampling2D x4 --> P3_out[256x256x8];
+        P2_in -- Conv2D k5x5 --> P2[128x128x8] -- UpSampling2D x2 --> P2_out[256x256x8];
+        P5_out & P4_out & P3_out & P2_out -- Concat --> top_1[256x256x64] -- Conv2D k3x3 --> top_2[256x256xM2] -- Conv2D k3x3 --> LeafOut[256x256xN];
       end;
 
 ```
 
 モデルの出力は、中心位置のヒートマップ(keyheatmap)x1、ボックスサイズ(sizes)x2、オフセット(offsets)x2、
-文字の連続ライン(textline)x1、文字ブロックの分離線(sepatator)ｘ1の 256x256x7のマップと、
-文字の128次元特徴ベクトル 256x256x128のマップが出力されます。
+文字の連続ライン(textline)x1、文字ブロックの分離線(sepatator)ｘ1、ルビである文字(code1_ruby)x1、
+ルビの親文字(code2_rubybase)x1、圏点(code4_emphasis)x1、空白の次文字(code8_space)x1の 256x256x11のマップと、
+文字の64次元特徴ベクトル 256x256x64のマップが出力されます。
 
 文字の特徴ベクトルの事前学習として、文字の特徴ベクトルを1文字ずつ文字コードに変換するモデルを後段に付けて学習を行います。
 
 ```mermaid
   flowchart TD;
-    Input[Feature 128]-- Dense --> Output1091[modulo 1091];
-    Input[Feature 128]-- Dense --> Output1093[modulo 1093];
-    Input[Feature 128]-- Dense --> Output1097[modulo 1097];
+    Input[Feature 64]-- Dense --> Output1091[modulo 1091];
+    Input[Feature 64]-- Dense --> Output1093[modulo 1093];
+    Input[Feature 64]-- Dense --> Output1097[modulo 1097];
 ```
 
 文字は、UTF32で1つのコードポイントとして表されるとして、1091,1093,1097での剰余を学習させて、[Chinese remainder theorem](https://ja.wikipedia.org/wiki/%E4%B8%AD%E5%9B%BD%E3%81%AE%E5%89%B0%E4%BD%99%E5%AE%9A%E7%90%86)
@@ -75,66 +76,52 @@ Python3でtensorflowを使用します。
 
 ```bash
 pip3 install tensorflow
-pip3 install tensorflow_addons
 pip3 install matplotlib
 pip3 install scikit-image
 ```
 
-学習の際に、horovodを使用する場合は、インストールします。
-
-```bash
-pip3 install --no-cache-dir horovod
-```
-
-学習時に使用するload_fontをコンパイルするのに、libfreetype6-devが必要です
+学習データを作成するのに使用する、render_fontをコンパイルするのに、libfreetype6-devが必要です
 
 ```bash
 sudo apt install libfreetype6-dev
 ```
 
-学習前に、load_fontをコンパイルしておく必要があります。
+学習データを作成する前に、load_fontをコンパイルしておく必要があります。
 ```bash
-cd data/load_font
-make
+make -C render_font
 ```
 
-学習には、フォントデータが必要です。
+# Make train dataset
+学習用データセットは、https://bucket.lithium03.info/dataset20230627/train_data1/ 以下にあります。
+ダウンロードするには以下のようにします。
+```bash
+mkdir train_data1 && cd train_data1
+curl -O "https://bucket.lithium03.info/dataset20230627/train_data1/test0000000[0-4].tfrecords"
+curl -O "https://bucket.lithium03.info/dataset20230627/train_data1/train00000[000-299].tfrecords"
+```
+
+自身で学習データを作成するには、フォントデータが必要です。
 resource_list.txtを参照して、適宜フォントデータを配置してください。
-著作権法30条の4の規定により、機械学習の学習を目的とする場合はデータをお渡しすることができます。
-筆者と同じデータで学習を希望する方は、[メール](<mailto:contact@lithium03.info>)を送ってください。
+著作権法30条の4の規定により、機械学習の学習を目的とする場合はこれらのデータをお渡しすることができます。
+希望する方は、[メール](<mailto:contact@lithium03.info>)を送ってください。
+
+以下のコマンドで、train_data1 フォルダに学習用データセットを準備します。
+```bash
+./make_traindata1.py　5 300
+```
+この例では、test=5, train=300ファイルを作成します。
 
 # Train
-## horovodを使用して、A100の8並列で学習する場合
-
-```bash
-./run_hvd.sh
-```
-
-## 1枚のA100で学習する場合
-
-```bash
-./train_batch.py 14
-```
-
-## 1枚の1080Tiで学習する場合(うまくいかない可能性があります)
-
 ```bash
 ./train1.py
 ```
 
-## Windowsで学習させる場合
-
-テキストの読み書きを、utf8に強制してください。
-```bash
-python.exe -X utf8 train1.py
-```
-
 # Test
-学習データを、ckpt/　に置いた状態で、
-test_image.pyを実行すると推論できます。
+学習データを、ckpt1/　に置いた状態で、
+test_image1.pyを実行すると推論できます。
 
 ```bash
-./test_image.py img/test1.png
+./test_image1.py img/test1.png
 ```
 
 # Reference 
