@@ -185,7 +185,7 @@ make -C textline_detect
 
 # Make train dataset for step1
 学習用データセットは、https://bucket.lithium03.info/dataset20230627/train_data1/ 以下にあります。
-ダウンロードするには以下のようにします。
+ダウンロードするに次のようにします。
 ```bash
 mkdir train_data1 && cd train_data1
 curl -O "https://bucket.lithium03.info/dataset20230627/train_data1/test0000000[0-4].tfrecords"
@@ -249,7 +249,7 @@ Transformer用の学習データをtrain_data2　フォルダに作成します�
 この例では、test=10, train=200ファイルを作成します。
 
 事前学習のckpt1のパラメータを使って作成した学習用データセットは、https://bucket.lithium03.info/dataset20230807/train_data2/ 以下にあります。
-ダウンロードするには以下のようにします。
+ダウンロードするには次のようにします。
 ```bash
 mkdir train_data2 && cd train_data2
 curl -O "https://bucket.lithium03.info/dataset20230807/train_data2/test0000000[0-9].tfrecords"
