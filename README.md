@@ -6,8 +6,7 @@ CenterNet　https://github.com/xingyizhou/CenterNet
 Backbone networkに EfficientNetV2 https://github.com/google/automl/tree/master/efficientnetv2
 を使用しています。
 
-現在、OCRの前段まで完成しております。後段は、各文字の特徴量ベクトルを文として入力して、Transformerにより
-文字コードとして文章を出力する予定です。
+後段は、各文字の特徴量ベクトルを文として入力して、Transformerにより文字コードとして文章を出力します。
 
 # Example
 ## 手書き文字
@@ -19,6 +18,7 @@ Backbone networkに EfficientNetV2 https://github.com/google/automl/tree/master/
 ![フォントサンプル2出力](https://github.com/lithium0003/findtextCenterNet/blob/main/img/test2_result.png "出力2")
 
 # Details 
+## detector(step1)
 
 入力画像は 512x512x3
 
@@ -53,7 +53,7 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
 ```
 
 モデルの出力は、中心位置のヒートマップ(keyheatmap)x1、ボックスサイズ(sizes)x2、オフセット(offsets)x2、
-文字の連続ライン(textline)x1、文字ブロックの分離線(sepatator)ｘ1、ルビである文字(code1_ruby)x1、
+文字の連続ライン(textline)x1、文字ブロックの分離線(separator)ｘ1、ルビである文字(code1_ruby)x1、
 ルビの親文字(code2_rubybase)x1、圏点(code4_emphasis)x1、空白の次文字(code8_space)x1の 256x256x11のマップと、
 文字の64次元特徴ベクトル 256x256x64のマップが出力されます。
 
@@ -71,11 +71,97 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
 
 最終的には、この後段は使用せず、文字の特徴ベクトルの連続をTransformerに入力して、文字コードの列を得る予定です。
 
-# Prepare 
+## result image
+
+例に挙げた画像では、モデルの出力は以下のようになります。
+
+| 項目 | image |
+| --- | ------ |
+| 元画像 | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1.png" width="400"> |
+| 中心位置のヒートマップ(keyheatmap) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1_keymap.png" width="400"> |
+| 文字の連続ライン(textline) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1_textline.png" width="400"> |
+| 文字ブロックの分離線(separator) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1_separator.png" width="400"> |
+| 空白の次文字(code8_space) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1_code8.png" width="400"> |
+
+中心位置のヒートマップ(keyheatmap)のピーク位置から、文字位置を特定します。文字位置のボックスを、文字の連続ライン(textline)に沿って並べて、文字列の並びを得ます。
+このとき、文字ブロックの分離線(separator)で認識したブロック境界を越えないように文章列を分離します。
+
+また、この例では空白の次文字(code8_space)のみが検出されていますが、ふりがな、ふりがなの親文字についても同様に検出し、マークしておき、後段のTransformerに入れるときに
+追加して入れます。
+
+## transformer(step2)
+
+step1により、入力画像は、64次元特徴ベクトルの列に変換されます。
+各文字には、空白の次の文字であるかのフラグ、ふりがなであるかどうかのフラグ、ふりがなの親文字であるかのフラグ、改行フラグの4次元を付加します。
+こうして得られた68次元のベクトル列を、Transformerにより文字コードに変換します。
+
+Transformerのエンコーダは最大128文字、デコーダーは最大128文字としました。
+Encoder、Decoder共に、hidden_dim=512, head_num=16, hopping_num=4とし、PositionalEncodingはランダム初期化の学習ありです。
+Decoderの出力は、1091,1093,1097での剰余により符号化します。
+
+```mermaid
+  flowchart TD;
+  EncoderInput[EncoderInput 68x128]-- input_dense --> encoder_embedding[Encoder InputEmbedding 512x128];
+  PositionalEncoding1[PositionalEncoding] & encoder_embedding --> encoder_input1[512x128];
+
+  subgraph Encoder1;
+    encoder_input1 --> MultiHeadAttention1[MultiHeadAttention];
+    encoder_input1 & MultiHeadAttention1 --> add1[Add];
+    add1 --> LayerNorm1[LayerNorm];
+    LayerNorm1 --> FFN1[FFN];
+    encoder_input1 & LayerNorm1 & FFN1 --> add2[Add];
+    add2 --> LayerNorm2[LayerNorm];
+  end;
+  subgraph Encoder2;
+    LayerNorm2 --> encoder2[EncoderBlock];
+  end;
+  subgraph Encoder3;
+    encoder2 --> encoder3[EncoderBlock];
+  end;
+  subgraph Encoder4;
+    encoder3 --> encoder4[EncoderBlock];
+  end;
+
+  DecoderInput[DecoderInput 68x128]-- Embedding --> decoder_embedding[Decoder InputEmbedding 512x128];
+  PositionalEncoding2[PositionalEncoding] & decoder_embedding --> decoder_input1[512x128];
+  subgraph Decoder1;
+    decoder_input1 --> SelfAttention1[MultiHead SelfAttention];
+    decoder_input1 & SelfAttention1 --> add3[Add];
+    add3 --> LayerNorm3[LayerNorm];
+    LayerNorm3 & encoder4 --> CrossAttention1[MultiHead CrossAttention];
+    LayerNorm3 & CrossAttention1 --> add4[Add];
+    add4 --> LayerNorm4[LayerNorm];
+    LayerNorm4 --> FFN2[FFN];
+    decoder_input1 & LayerNorm4 & FFN2 --> add5[Add];
+    add5 --> LayerNorm5[LayerNorm];
+  end;
+  subgraph Decoder2;
+    LayerNorm5 & encoder4 --> decoder2[DecoderBlock];
+  end;
+  subgraph Decoder3;
+    decoder2 & encoder4 --> decoder3[DecoderBlock];
+  end;
+  subgraph Decoder4;
+    decoder3 & encoder4 --> decoder4[DecoderBlock];
+  end;
+
+  subgraph modulo;
+    decoder4 -- Dense --> Output1091[modulo 1091x128];
+    decoder4 -- Dense --> Output1093[modulo 1093x128];
+    decoder4 -- Dense --> Output1097[modulo 1097x128];
+  end;
+
+  Output1091 & Output1093 & Output1097 --> ChineseRemainderTheorem --> output[Unicode Textoutput x128];
+```
+
+Decoderは、SOT=1で開始し、EOT=2で終了するまでの数値をUnicodeコードポイントとして学習させます。
+
+
+# Prepare
 Python3でtensorflowを使用します。
 
 ```bash
-pip3 install tensorflow
+pip3 istall tensorflow
 pip3 install matplotlib
 pip3 install scikit-image
 ```
@@ -91,7 +177,13 @@ sudo apt install libfreetype6-dev
 make -C render_font
 ```
 
-# Make train dataset
+後段のTransformerに入れるために、検出した文字ボックスを整列させる必要があります。
+このためのプログラムlinedetectはcppで記述しています。
+```bash
+make -C textline_detect
+```
+
+# Make train dataset for step1
 学習用データセットは、https://bucket.lithium03.info/dataset20230627/train_data1/ 以下にあります。
 ダウンロードするには以下のようにします。
 ```bash
@@ -111,18 +203,21 @@ resource_list.txtを参照して、適宜フォントデータを配置してく
 ```
 この例では、test=5, train=300ファイルを作成します。
 
-# Train
+# Train for step1
 ```bash
 ./train1.py
 ```
 
-# Test
+# Test for step1
 学習データを、ckpt1/　に置いた状態で、
 test_image1.pyを実行すると推論できます。
 
 ```bash
 ./test_image1.py img/test1.png
 ```
+
+# Make train dataset for step2
+
 
 # Reference 
 - Objects as Points
@@ -131,5 +226,8 @@ https://arxiv.org/abs/1904.07850
 https://arxiv.org/abs/2104.00298
 - PyTorchではじめるAI開発　(p.256-)
 https://www.amazon.co.jp/dp/B096WWVFJN
+- B2T Connection: Serving Stability and Performance in Deep Transformers
+https://arxiv.org/abs/2206.00330
+
 
 
