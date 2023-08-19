@@ -25,41 +25,7 @@ if len(sys.argv) > 2:
 mlmodel_detector = ct.models.MLModel('TextDetector.mlpackage')
 mlmodel_decoder = ct.models.MLModel('CodeDecoder.mlpackage')
 
-modulo_list = [1091,1093,1097]
-width = 512
-height = 512
-scale = 2
-feature_dim = 64
-
-def calc_predid(*args):
-    m = modulo_list
-    b = args
-    assert(len(m) == len(b))
-    t = []
-
-    for k in range(len(m)):
-        u = 0
-        for j in range(k):
-            w = t[j]
-            for i in range(j):
-                w *= m[i]
-            u += w
-        tk = b[k] - u
-        for j in range(k):
-            tk *= pow(m[j], m[k]-2, m[k])
-        tk = tk % m[k]
-        t.append(tk)
-    x = 0
-    for k in range(len(t)):
-        w = t[k]
-        for i in range(k):
-            w *= m[i]
-        x += w
-    mk = 1
-    for k in range(len(m)):
-        mk *= m[k]
-    x = x % mk
-    return x
+from util_funcs import calc_predid, width, height, scale, feature_dim
 
 def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
     print(org_img.shape)

@@ -3,6 +3,8 @@
 import onnxruntime
 
 import numpy as np
+from numpy.lib.stride_tricks import as_strided
+from scipy.ndimage import gaussian_filter
 import sys
 import os
 from PIL import Image, ImageFilter
@@ -22,48 +24,34 @@ if len(sys.argv) > 2:
     if sys.argv[2] == 'twopass':
         twopass = True
 
+quantized_filter = False
 if os.path.exists("TextDetector.quant.onnx"):
     print('quantized')
     onnx_detector = onnxruntime.InferenceSession("TextDetector.quant.onnx")
+    quantized_filter = True
+elif os.path.exists("TextDetector.infer.onnx"):
+    print('infer')
+    onnx_detector = onnxruntime.InferenceSession("TextDetector.infer.onnx")
 else:
     onnx_detector = onnxruntime.InferenceSession("TextDetector.onnx")
 onnx_decoder = onnxruntime.InferenceSession("CodeDecoder.onnx")
 
-modulo_list = [1091,1093,1097]
-width = 512
-height = 512
-scale = 2
-feature_dim = 64
+from util_funcs import calc_predid, width, height, scale, feature_dim
 
-def calc_predid(*args):
-    m = modulo_list
-    b = args
-    assert(len(m) == len(b))
-    t = []
+def maxpool2d(input_matrix, kernel_size):
+    # Padding
+    pad_size = kernel_size // 2
+    pad = (pad_size, pad_size)
+    input_matrix = np.pad(input_matrix, [pad]*len(input_matrix.shape), constant_values=-np.inf)
 
-    for k in range(len(m)):
-        u = 0
-        for j in range(k):
-            w = t[j]
-            for i in range(j):
-                w *= m[i]
-            u += w
-        tk = b[k] - u
-        for j in range(k):
-            tk *= pow(m[j], m[k]-2, m[k])
-        tk = tk % m[k]
-        t.append(tk)
-    x = 0
-    for k in range(len(t)):
-        w = t[k]
-        for i in range(k):
-            w *= m[i]
-        x += w
-    mk = 1
-    for k in range(len(m)):
-        mk *= m[k]
-    x = x % mk
-    return x
+    # Window view of input_matrix
+    output_shape = (input_matrix.shape[0] - kernel_size + 1,
+                    input_matrix.shape[1] - kernel_size + 1)
+    kernel_size = (kernel_size, kernel_size)
+    input_matrix_w = as_strided(input_matrix, shape = output_shape + kernel_size,
+                        strides = input_matrix.strides + input_matrix.strides)
+    input_matrix_w = input_matrix_w.reshape(-1, *kernel_size)
+    return input_matrix_w.max(axis=(1,2)).reshape(output_shape)
 
 def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
     print(org_img.shape)
@@ -98,11 +86,11 @@ def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
         mask[y_min:y_max, x_min:x_max] = True
 
         keymap_p = 1/(1 + np.exp(-maps[0,:,:,0]))
-        line_p = 1/(1 + np.exp(-maps[0,:,:,6]))
-        seps_p = 1/(1 + np.exp(-maps[0,:,:,7]))
+        line_p = 1/(1 + np.exp(-maps[0,:,:,5]))
+        seps_p = 1/(1 + np.exp(-maps[0,:,:,6]))
         code_p = []
         for k in range(4):
-            code_p.append(1/(1 + np.exp(-maps[0,:,:,8+k])))
+            code_p.append(1/(1 + np.exp(-maps[0,:,:,7+k])))
 
         keymap_all[y_is:y_is+y_s,x_is:x_is+x_s] = np.maximum(keymap_p * mask, keymap_all[y_is:y_is+y_s,x_is:x_is+x_s])
         lines_all[y_is:y_is+y_s,x_is:x_is+x_s] = np.maximum(line_p * mask, lines_all[y_is:y_is+y_s,x_is:x_is+x_s])
@@ -110,16 +98,19 @@ def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
         for k in range(4):
             code_all[k][y_is:y_is+y_s,x_is:x_is+x_s] = np.maximum(code_p[k] * mask, code_all[k][y_is:y_is+y_s,x_is:x_is+x_s])
 
-        peak = np.where(maps[0,:,:,0] == maps[0,:,:,1], keymap_p * mask, 0.)
+        keypeak = maps[0,:,:,0]
+        if quantized_filter:
+            keypeak = gaussian_filter(keypeak, sigma=1)
+        peak = np.where(maxpool2d(keypeak, 5) == keypeak, keymap_p * mask, 0.)
         idxy, idxx  = np.unravel_index(np.argsort(-peak.ravel()), peak.shape)
 
         for y, x in zip(idxy, idxx):
             if peak[y,x] < cut_off:
                 break
-            w = np.exp(maps[0,y,x,2] - 3) * 1024
-            h = np.exp(maps[0,y,x,3] - 3) * 1024
-            dx = maps[0,y,x,4] * scale
-            dy = maps[0,y,x,5] * scale
+            w = np.exp(maps[0,y,x,1] - 3) * 1024
+            h = np.exp(maps[0,y,x,2] - 3) * 1024
+            dx = maps[0,y,x,3] * scale
+            dy = maps[0,y,x,4] * scale
             if w * h <= 0:
                 continue
             ix = x * scale + dx + x_i

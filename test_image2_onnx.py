@@ -8,7 +8,6 @@ from scipy.ndimage import gaussian_filter
 import sys
 import os
 from PIL import Image, ImageFilter
-from PIL.Image import Resampling
 import sys
 import os
 import subprocess
@@ -311,12 +310,12 @@ features = np.array(features, np.float32)
 i = 0
 result_txt = ''
 while i < features.shape[0]:
-    j = i + (max_encoderlen * 3 // 4)
+    j = i + (max_encoderlen - 10)
     if j < features.shape[0]-1:
         while features[j,-1] == 0:
             j -= 1
             if j <= i:
-                j = min(features.shape[0]-1, i + (max_encoderlen * 3 // 4))
+                j = min(features.shape[0]-1, i + (max_encoderlen - 10))
                 break
     else:
         j = features.shape[0]-1
@@ -349,4 +348,5 @@ while i < features.shape[0]:
     result_txt += str_text
     i = j+1
 
+print("---------------------")
 print(decode_ruby(result_txt))

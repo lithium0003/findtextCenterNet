@@ -17,15 +17,13 @@ import numpy as np
 from PIL import Image
 from PIL.Image import Resampling
 import sys
-import os
 import subprocess
 
 from net.detector import CenterNetDetectionBlock, SimpleDecoderBlock
 from net.const import width, height, scale, feature_dim
 from net.transformer import TextTransformer 
-from net.transformer_trainer import encoder_dim
-
-from dataset.data_transformer import max_encoderlen, max_decoderlen, decoder_SOT, decoder_EOT
+from const import max_encoderlen, max_decoderlen, decoder_SOT, decoder_EOT, encoder_add_dim
+encoder_dim = feature_dim + encoder_add_dim
 from util_funcs import calcHist, calc_predid, decode_ruby
 
 if len(sys.argv) < 2:
@@ -366,12 +364,15 @@ def call_loop(decoder_input, i, encoder_output, encoder_input):
 i = 0
 result_txt = ''
 while i < features.shape[0]:
-    j = min(features.shape[0] - 1, i + (max_decoderlen - 10))
-    while features[j,-1] == 0:
-        j -= 1
-        if j <= i:
-            j = min(features.shape[0], i + (max_decoderlen - 10))
-            break
+    j = i + (max_encoderlen - 10)
+    if j < features.shape[0]-1:
+        while features[j,-1] == 0:
+            j -= 1
+            if j <= i:
+                j = min(features.shape[0]-1, i + (max_encoderlen - 10))
+                break
+    else:
+        j = features.shape[0]-1
     print(i,j)
     encoder_input = tf.constant(features[i:j+1,:], tf.int32)
     encoder_len = tf.shape(encoder_input)[0]

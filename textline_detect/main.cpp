@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <vector>
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <algorithm>
 #include <numeric>
@@ -10,6 +11,11 @@
 
 #include <fstream>
 #include <iostream>
+
+#ifdef _WIN64
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 const double ruby_cutoff = 0.5;
 const double rubybase_cutoff = 0.4;
@@ -3948,14 +3954,20 @@ void space_chack(std::vector<charbox> &boxes)
     }
 }
 
-int main(int argn, char **argv) {
+int main(int argn, char **argv) 
+{
+#ifdef _WIN64
+    _setmode(_fileno(stdin), _O_BINARY);
+    _setmode(_fileno(stdout), _O_BINARY);
+#else
     freopen(NULL, "rb", stdin);
     freopen(NULL, "wb", stdout);
+#endif
 
-    fread(&run_mode, sizeof(u_int32_t), 1, stdin);
+    fread(&run_mode, sizeof(uint32_t), 1, stdin);
 
-    fread(&width, sizeof(u_int32_t), 1, stdin);
-    fread(&height, sizeof(u_int32_t), 1, stdin);
+    fread(&width, sizeof(uint32_t), 1, stdin);
+    fread(&height, sizeof(uint32_t), 1, stdin);
 
     std::vector<float> lineimage(width*height);
     fread(lineimage.data(), sizeof(float), width*height, stdin);
@@ -3963,7 +3975,7 @@ int main(int argn, char **argv) {
     fread(sepimage.data(), sizeof(float), width*height, stdin);
 
     int boxcount = 0;
-    fread(&boxcount, sizeof(u_int32_t), 1, stdin);
+    fread(&boxcount, sizeof(uint32_t), 1, stdin);
 
     std::cerr << boxcount << std::endl;
 
@@ -4001,14 +4013,14 @@ int main(int argn, char **argv) {
         //     boxes[i].code1, boxes[i].code2, boxes[i].code4, boxes[i].code8);
     }
 
-    fread(&org_width, sizeof(u_int32_t), 1, stdin);
-    fread(&org_height, sizeof(u_int32_t), 1, stdin);
+    fread(&org_width, sizeof(uint32_t), 1, stdin);
+    fread(&org_height, sizeof(uint32_t), 1, stdin);
     
     hough_linefind(lineimage, sepimage, boxes);
 
     space_chack(boxes);
 
-    u_int32_t count = boxes.size();
+    uint32_t count = boxes.size();
     fwrite(&count, sizeof(int32_t), 1, stdout);
 
     for(int i = 0; i < boxes.size(); i++) {

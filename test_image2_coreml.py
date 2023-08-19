@@ -4,9 +4,7 @@ import coremltools as ct
 
 import numpy as np
 from PIL import Image
-from PIL.Image import Resampling
 import sys
-import os
 import subprocess
 
 from const import max_encoderlen, max_decoderlen, decoder_SOT, decoder_EOT
@@ -319,4 +317,5 @@ while i < features.shape[0]:
     result_txt += str_text
     i = j+1
 
+print("---------------------")
 print(decode_ruby(result_txt))

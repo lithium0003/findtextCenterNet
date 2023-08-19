@@ -24,7 +24,8 @@ rcParams['font.serif'] = ['Noto Serif CJK JP', 'IPAexMincho', 'Hiragino Mincho P
 
 import matplotlib.pyplot as plt
 
-import net
+from net.detector import CenterNetDetectionBlock, SimpleDecoderBlock
+from util_funcs import calc_predid, width, height, scale, feature_dim
 
 if len(sys.argv) < 2:
     print(sys.argv[0],'target.png','(twopass)')
@@ -49,42 +50,12 @@ if feature_plot:
         out_dir = '%s-%d'%(out_dir, count)
     os.mkdir(out_dir)
 
-def calc_predid(*args):
-    m = net.modulo_list
-    b = args
-    assert(len(m) == len(b))
-    t = []
-
-    for k in range(len(m)):
-        u = 0
-        for j in range(k):
-            w = t[j]
-            for i in range(j):
-                w *= m[i]
-            u += w
-        tk = b[k] - u
-        for j in range(k):
-            tk *= pow(m[j], -1, m[k])
-        tk = tk % m[k]
-        t.append(tk)
-    x = 0
-    for k in range(len(t)):
-        w = t[k]
-        for i in range(k):
-            w *= m[i]
-        x += w
-    mk = 1
-    for k in range(len(m)):
-        mk *= m[k]
-    x = x % mk
-    return x
-
 class TextDetectorModel(tf.keras.models.Model):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.detector = net.CenterNetDetectionBlock(pre_weight=False)
-        self.decoder = net.SimpleDecoderBlock()
+        self.detector = CenterNetDetectionBlock(pre_weight=False)
+        self.decoder = SimpleDecoderBlock()
 
     def eval(self, ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
         org_img = org_img.numpy()
@@ -92,14 +63,14 @@ class TextDetectorModel(tf.keras.models.Model):
         print("test")
 
         locations = [np.zeros(5+4)]
-        glyphfeatures = [np.zeros(net.feature_dim)]
-        #allfeatures = np.zeros([0,net.feature_dim])
-        keymap_all = np.zeros([org_img.shape[0] // net.scale, org_img.shape[1] // net.scale])
-        lines_all = np.zeros([org_img.shape[0] // net.scale, org_img.shape[1] // net.scale])
-        seps_all = np.zeros([org_img.shape[0] // net.scale, org_img.shape[1] // net.scale])
+        glyphfeatures = [np.zeros(feature_dim)]
+        #allfeatures = np.zeros([0,feature_dim])
+        keymap_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale])
+        lines_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale])
+        seps_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale])
         code_all = []
         for _ in range(4):
-            code_all.append(np.zeros([org_img.shape[0] // net.scale, org_img.shape[1] // net.scale]))
+            code_all.append(np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale]))
 
 
         for n, inputs in ds.enumerate():
@@ -120,27 +91,27 @@ class TextDetectorModel(tf.keras.models.Model):
             separator = tf.math.sigmoid(maps[...,6])
             xsize = maps[...,1]
             ysize = maps[...,2]
-            xoffset = maps[...,3] * net.scale
-            yoffset = maps[...,4] * net.scale
+            xoffset = maps[...,3] * scale
+            yoffset = maps[...,4] * scale
             code_map = []
             for k in range(4):
                 code_map.append(tf.math.sigmoid(maps[...,7+k]))
 
-            #allfeatures = np.concatenate([allfeatures, np.reshape(feature, [-1, net.feature_dim])])
+            #allfeatures = np.concatenate([allfeatures, np.reshape(feature, [-1, feature_dim])])
 
             for img_idx in range(images.shape[0]):
                 x_i = offsetx[img_idx]
                 y_i = offsety[img_idx]
-                x_is = x_i // net.scale
-                y_is = y_i // net.scale
-                x_s = net.width // net.scale
-                y_s = net.height // net.scale
+                x_is = x_i // scale
+                y_is = y_i // scale
+                x_s = width // scale
+                y_s = height // scale
 
                 mask = np.zeros([y_s, x_s], dtype=bool)
                 x_min = int(x_s * 1 / 6) if x_i > 0 else 0
-                x_max = int(x_s * 5 / 6) if x_i + net.width < org_img.shape[1] else x_s
+                x_max = int(x_s * 5 / 6) if x_i + width < org_img.shape[1] else x_s
                 y_min = int(y_s * 1 / 6) if y_i > 0 else 0
-                y_max = int(y_s * 5 / 6) if y_i + net.height < org_img.shape[0] else y_s
+                y_max = int(y_s * 5 / 6) if y_i + height < org_img.shape[0] else y_s
                 mask[y_min:y_max, x_min:x_max] = True
 
                 keymap_p = keymap[img_idx,...]
@@ -168,8 +139,8 @@ class TextDetectorModel(tf.keras.models.Model):
                     dx = xoffset[img_idx,y,x]
                     dy = yoffset[img_idx,y,x]
 
-                    ix = x * net.scale + dx + x_i
-                    iy = y * net.scale + dy + y_i
+                    ix = x * scale + dx + x_i
+                    iy = y * scale + dy + y_i
 
                     codes = []
                     for k in range(4):
@@ -222,14 +193,14 @@ class TextDetectorModel(tf.keras.models.Model):
             glyphfeatures = glyphfeatures[selected_idx,:]
         else:
             locations = np.zeros([0,5+4])
-            glyphfeatures = np.zeros([0,net.feature_dim])
+            glyphfeatures = np.zeros([0,feature_dim])
 
         # for i in range(locations.shape[0]):
         #     cx = locations[i,1]
         #     cy = locations[i,2]
-        #     x = int(cx / net.scale)
-        #     y = int(cy / net.scale)
-        #     if x >= 0 and x < org_img.shape[1] // net.scale and y >= 0 and y < org_img.shape[0] // net.scale:
+        #     x = int(cx / scale)
+        #     y = int(cy / scale)
+        #     if x >= 0 and x < org_img.shape[1] // scale and y >= 0 and y < org_img.shape[0] // scale:
         #         for k in range(4):
         #             locations[i,5+k] = max(code_all[k][y,x], locations[i,5+k])
 
@@ -290,24 +261,24 @@ last = tf.train.latest_checkpoint('ckpt1')
 print(last)
 model.load_weights(last).expect_partial()
 
-stepx = net.width * 1 // 2
-stepy = net.height * 1 // 2
+stepx = width * 1 // 2
+stepy = height * 1 // 2
 
 im0 = Image.open(target_file).convert('RGB')
 #im0 = im0.filter(ImageFilter.SHARPEN)
 im0 = np.asarray(im0)
 
-padx = max(0, stepx - (im0.shape[1] - net.width) % stepx, net.width - im0.shape[1])
-pady = max(0, stepy - (im0.shape[0] - net.height) % stepy, net.height - im0.shape[0])
+padx = max(0, stepx - (im0.shape[1] - width) % stepx, width - im0.shape[1])
+pady = max(0, stepy - (im0.shape[0] - height) % stepy, height - im0.shape[0])
 im0 = np.pad(im0, [[0,pady],[0,padx],[0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
 
 if twopass and (im0.shape[1] / stepx > 2 or im0.shape[0] / stepy > 2):
     print('two-pass')
-    s = max(im0.shape[1], im0.shape[0]) / max(net.width, net.height)
+    s = max(im0.shape[1], im0.shape[0]) / max(width, height)
     im1 = Image.fromarray(im0).resize((int(im0.shape[1] / s), int(im0.shape[0] / s)), resample=Resampling.BILINEAR)
     im1 = np.asarray(im1)
-    padx = max(0, net.width - im1.shape[1])
-    pady = max(0, net.height - im1.shape[0])
+    padx = max(0, width - im1.shape[1])
+    pady = max(0, height - im1.shape[0])
     im1 = np.pad(im1, [[0,pady],[0,padx],[0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
 
     im = tf.image.convert_image_dtype(im1, dtype=tf.float32)
@@ -330,11 +301,11 @@ else:
 im = tf.image.convert_image_dtype(im0, dtype=tf.float32)
 im = im * 255.
 
-yi = tf.data.Dataset.range(0, im0.shape[0] - net.height + 1, stepy)
-xi = tf.data.Dataset.range(0, im0.shape[1] - net.width + 1, stepx)
+yi = tf.data.Dataset.range(0, im0.shape[0] - height + 1, stepy)
+xi = tf.data.Dataset.range(0, im0.shape[1] - width + 1, stepx)
 ds0 = yi.flat_map(lambda y: xi.map(lambda x : (x, y)))
 ds0 = ds0.map(lambda x,y: {
-    'input': im[y:y+net.height,x:x+net.width,:],
+    'input': im[y:y+height,x:x+width,:],
     'offsetx': x,
     'offsety': y,
     })
