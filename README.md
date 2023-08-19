@@ -8,6 +8,9 @@ Backbone networkに EfficientNetV2 https://github.com/google/automl/tree/master/
 
 後段は、各文字の特徴量ベクトルを文として入力して、Transformerにより文字コードとして文章を出力します。
 
+iOS/macOS アプリとしてこのモデルを使えるようにしたもの
+https://apps.apple.com/us/app/bunkoocr/id1611405865
+
 # Example
 ## 手書き文字
 ![手書き文字サンプル1入力](https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1.png "入力1")
