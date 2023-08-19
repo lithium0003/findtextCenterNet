@@ -3824,15 +3824,15 @@ void hough_linefind(
     //         outfile << std::endl;
     //     }
     // }
-    {
-        std::ofstream outfile("linemap.txt");
-        for(int y = 0; y < height; y++){
-            for(int x = 0; x < width; x++){
-                outfile << lineid_map2[y * width + x] << " ";
-            }
-            outfile << std::endl;
-        }
-    }
+    // {
+    //     std::ofstream outfile("linemap.txt");
+    //     for(int y = 0; y < height; y++){
+    //         for(int x = 0; x < width; x++){
+    //             outfile << lineid_map2[y * width + x] << " ";
+    //         }
+    //         outfile << std::endl;
+    //     }
+    // }
 
     // 太くした線でもう一度、文字ボックスと線分の接触を検出して、ライン上にboxを並べる
     fprintf(stderr, "chain boxes2\n");
