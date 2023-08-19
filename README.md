@@ -186,6 +186,12 @@ make -C render_font
 make -C textline_detect
 ```
 
+Windowsの場合は、Makefile.makを使用してください。
+```cmd
+cd textline_detect
+nmake -f Makefile.mak
+```
+
 # Make train dataset for step1
 学習用データセットは、https://bucket.lithium03.info/dataset20230627/train_data1/ 以下にあります。
 ダウンロードするに次のようにします。
