@@ -175,7 +175,7 @@ pip3 install scikit-image
 sudo apt install libfreetype6-dev
 ```
 
-学習データを作成する前に、load_fontをコンパイルしておく必要があります。
+学習データを作成する前に、render_fontをコンパイルしておく必要があります。
 ```bash
 make -C render_font
 ```
