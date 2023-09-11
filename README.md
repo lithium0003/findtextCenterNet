@@ -12,7 +12,7 @@ iOS/macOS アプリとしてこのモデルを使えるようにしたもの
 https://apps.apple.com/us/app/bunkoocr/id1611405865
 
 Windowsでこのモデルを使えるようにしたもの
-https://lithium03.info/archives/bunkoOCR/bunkoOCR_20230910b.zip
+https://lithium03.info/product/bunkoOCR.html
 
 # Example
 ## 手書き文字
