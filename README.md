@@ -196,20 +196,20 @@ nmake -f Makefile.mak
 ```
 
 # Make train dataset for step1
-学習用データセットは、https://bucket.lithium03.info/dataset20230627/train_data1/ 以下にあります。
+学習用データセットは、https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/tree/20230627/train_data1/ 以下にあります。
 ダウンロードするに次のようにします。
 ```bash
 mkdir train_data1 && cd train_data1
-curl -O "https://bucket.lithium03.info/dataset20230627/train_data1/test0000000[0-4].tfrecords"
-curl -O "https://bucket.lithium03.info/dataset20230627/train_data1/train00000[000-299].tfrecords"
+curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/20230627/train_data1/test0000000[0-4].tfrecords"
+curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/20230627/train_data1/train00000[000-299].tfrecords"
 ```
 
 自身で学習データを作成するには、フォントデータが必要です。
 resource_list.txtを参照して、適宜フォントデータを配置してください。
 著作権法30条の4の規定により、機械学習の学習を目的とする場合はこれらのデータをお渡しすることができます。
-希望する方は、[メール](<mailto:contact@lithium03.info>)を送ってください。
+希望する方は、https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/data.tar.gz よりダウンロードしてください。
 
-以下のコマンドで、train_data1 フォルダに学習用データセットを準備します。
+展開してできる、data フォルダを置いた上で、以下のコマンドにより、train_data1 フォルダに学習用データセットを準備します。
 ```bash
 ./make_traindata1.py　5 300
 ```
@@ -250,7 +250,7 @@ convert_chardata.pyを用いて、charparam.npzを生成します。
 ```
 
 事前学習のckpt1のパラメータを使って作成した文字特徴量charparam.npzは、以下からダウンロード可能です。
-https://bucket.lithium03.info/dataset20230807/charparam.npz
+https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/20230807/charparam.npz
 
 ## step2の学習データtrain_data2の作成
 最後に、make_traindata2.pyを実行して、ランダムな文字列、日本語および英語の文章(wikipediaおよび青空文庫)から
@@ -260,12 +260,12 @@ Transformer用の学習データをtrain_data2　フォルダに作成します�
 ```
 この例では、test=10, train=200ファイルを作成します。
 
-事前学習のckpt1のパラメータを使って作成した学習用データセットは、https://bucket.lithium03.info/dataset20230807/train_data2/ 以下にあります。
+事前学習のckpt1のパラメータを使って作成した学習用データセットは、https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/tree/20230807/train_data2/ 以下にあります。
 ダウンロードするには次のようにします。
 ```bash
 mkdir train_data2 && cd train_data2
-curl -O "https://bucket.lithium03.info/dataset20230807/train_data2/test0000000[0-9].tfrecords"
-curl -O "https://bucket.lithium03.info/dataset20230807/train_data2/train00000[000-199].tfrecords"
+curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/20230807/train_data2/test0000000[0-9].tfrecords"
+curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/20230807/train_data2/train00000[000-199].tfrecords"
 ```
 
 # Train for step2
