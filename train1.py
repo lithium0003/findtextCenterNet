@@ -1,164 +1,286 @@
 #!/usr/bin/env python3
+
+import torch
+from torch.utils.tensorboard.writer import SummaryWriter
+from tqdm.auto import tqdm
+from torch.utils.data import DataLoader
 import os
-import tensorflow as tf
-import numpy as np
-tf.keras.mixed_precision.set_global_policy('mixed_float16')
+import sys
+import glob
+import datetime
 
-physical_devices = tf.config.list_physical_devices('GPU')
-try:
-    for gpu in physical_devices:
-        tf.config.experimental.set_memory_growth(gpu, True)
-except:
-    # Invalid device or cannot modify virtual devices once initialized.
-    pass
+from models.detector import TextDetectorModel
+from dataset.data_detector import get_dataset
+from loss_func import loss_function, CoVWeightingLoss
+from dataset.multi import MultiLoader
 
-save_target = 'result1'
-batchsize = 8
+upload_objectstorage = True
+if upload_objectstorage:
+    from put_object import upload
 
-import net
-from dataset import data_detector
+lr = 1e-4
+wd = 1e-4
+EPOCHS = 40
 
-class SimpleTextDetectorModel(tf.keras.models.Model):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+torch.set_float32_matmul_precision('high')
 
-        self.detector = net.CenterNetDetectionBlock(pre_weight=False)
-        self.decoder = net.SimpleDecoderBlock()
+class RunningLoss(torch.nn.modules.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        self.step = 0
+        self.writer = SummaryWriter(log_dir="result1/logs")
+        self.runningcount = kwargs.pop('runningcount', 1000)
+        self.losses = kwargs.pop('losses', [])
+        super().__init__(*args, **kwargs)
+        self.reset()
 
-    def call(self, inputs, **kwargs):
-        maps, feature = self.detector(inputs, **kwargs)
-        mask1 = maps[...,0] > 0
-        feature = tf.boolean_mask(feature, mask1)
-        return self.decoder(feature)
+    def reset(self):
+        self.count = 0
+        self.running_loss = {key: 0. for key in self.losses}
+        self.running_acc = 0.
 
-def copy_layers(src, dest):
-    for srclayer, destlayer in zip(src, dest):
-        if hasattr(srclayer, 'layers'):
-            copy_layers(srclayer.layers, destlayer.layers)
+    def write(self, ret=None):
+        if ret is None:
+            ret = {}
+            for key in self.losses:
+                ret[key] = self.running_loss[key] / self.count if self.count > 0 else 0.
+            ret['accuracy'] = self.running_acc / self.count if self.count > 0 else 0.
+
+        for key in ret:
+            name = 'train/'+key if self.training else 'val/'+key
+            self.writer.add_scalar(name, ret[key], self.step)
+
+        if upload_objectstorage:
+            self.writer.flush()
+            log = sorted(glob.glob('result1/logs/*'))
+            if len(log) > 0:
+                upload(log[0], 'logs')
+
+        return ret
+
+    def forward(self, losses):
+        if self.training:
+            self.step += 1
+        self.count += 1
+        for key in self.losses:
+            self.running_loss[key] += losses[key].item()
+        self.running_acc += losses['accuracy']
+
+        ret = {}
+        for key in self.losses:
+            ret[key] = self.running_loss[key] / self.count if self.count > 0 else 0.
+        ret['accuracy'] = self.running_acc / self.count if self.count > 0 else 0.
+        if 'lr' in losses:
+            ret['lr'] = losses['lr']
+
+        if self.training and self.count % self.runningcount == 0:
+            self.write(ret)
+            self.reset()
+
+        return ret
+
+def train(batch=4, compile=True, logstep=100):
+    training_dataset, train_count = get_dataset(train=True)
+
+    print('prepare numba')
+    with open('log.txt','a') as wf:
+        print(datetime.datetime.now(), 'prepare numba', file=wf, flush=True)
+    if upload_objectstorage:
+        upload('log.txt', 'log.txt')
+
+    next(iter(training_dataset))
+
+    print('numba done')
+    with open('log.txt','a') as wf:
+        print(datetime.datetime.now(), 'numba done', file=wf, flush=True)
+    if upload_objectstorage:
+        upload('log.txt', 'log.txt')
+
+    # training_loader = DataLoader(training_dataset, batch_size=batch, shuffle=True, num_workers=4)
+    training_loader = MultiLoader(training_dataset.batched(batch), workers=8)
+
+    validation_dataset, val_count = get_dataset(train=False)
+    # validation_loader = DataLoader(validation_dataset, batch_size=batch, shuffle=True, num_workers=8)
+    validation_loader = MultiLoader(validation_dataset.batched(batch), workers=8)
+
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    print('using device:', device)
+    with open('log.txt','a') as wf:
+        print(datetime.datetime.now(), 'using device:', device, file=wf, flush=True)
+    if upload_objectstorage:
+        upload('log.txt', 'log.txt')
+
+    model = TextDetectorModel()
+    if os.path.exists('result1/model.pt'):
+        data = torch.load('result1/model.pt', map_location="cpu", weights_only=True)
+        model.load_state_dict(data['model_state_dict'])
+    model.to(device)
+
+    all_params = set(filter(lambda p: p.requires_grad, model.parameters()))
+    no_wd = set()
+    for m in model.modules():
+        if isinstance(m, (torch.nn.BatchNorm2d)):
+            no_wd |= set(m.parameters())
+        elif isinstance(m, (torch.nn.LayerNorm)):
+            no_wd |= set(m.parameters())
         else:
-            dest_names = [v.name for v in destlayer.weights]
-            for src_value in srclayer.weights:
-                if src_value.name in dest_names:
-                    i = dest_names.index(src_value.name)
-                    destlayer.weights[i].assign(src_value)
-                else:
-                    print('skip', src_value)
-            destlayer.finalize_state()
+            for key, value in m.named_parameters(recurse=False):
+                if key == 'bias':
+                    no_wd |= set([value])
+    params = all_params - no_wd
+    params = list(params)
+    no_wd = list(no_wd)
 
-def load_weights(model, path):
-    model1 = SimpleTextDetectorModel()
-    model1.build(input_shape=[None, net.height, net.width, 3])
-    last = tf.train.latest_checkpoint(path)
-    print(last)
-    model1.load_weights(last).expect_partial()
+    optimizer = torch.optim.AdamW([
+        {'params': no_wd, 'weight_decay': 0}, 
+        {'params': params},
+    ], lr=lr, weight_decay=wd)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.925)
 
-    copy_layers(src=model1.detector.layers, dest=model.detector.layers)
-    copy_layers(src=model1.decoder.layers, dest=model.decoder.layers)
+    CoWloss = CoVWeightingLoss(device=device, losses=[
+        'keymap_loss',
+        'size_loss',
+        'textline_loss',
+        'separator_loss',
+        'id_loss',
+        *['code%d_loss'%2**(i) for i in range(4)],
+    ])
+    running_loss = RunningLoss(losses=[
+        'loss',
+        'CoWloss',
+        'keymap_loss',
+        'size_loss',
+        'textline_loss',
+        'separator_loss',
+        'id_loss',
+        *['code%d_loss'%2**(i) for i in range(4)],
+    ])
 
-class LearningRateReducer(tf.keras.callbacks.Callback):
-    def __init__(self, monitor="val_loss", patience=0, reduce_rate=0.5, min_lr=1e-6, significant_change=0.1, momentum=0.9):
-        super().__init__()
-        self.monitor = monitor
-        self.patience = patience
-        self.reduce_rate = reduce_rate
-        self.min_lr = min_lr
-        self.significant_change = significant_change
-        self.momentum = momentum
-        self.wait = 0
+    scaler = torch.GradScaler()
 
-    def on_train_begin(self, logs=None):
-        self.last_loss = np.Inf
+    def train_step(image, map, idmap):
+        fmask = model.get_fmask(map)
+        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+            heatmap, decoder_outputs = model(image, fmask)
+            rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs)
+            loss = CoWloss(rawloss)
+        return loss, rawloss
 
-    def on_epoch_begin(self, epoch, logs=None):
-        if self.wait > self.patience:
-            self.wait = 0
-            # reduce lr
-            lr = float(tf.keras.backend.get_value(self.model.optimizer.lr))
-            if lr < self.min_lr:
-                return
-            lr *= self.reduce_rate
-            tf.keras.backend.set_value(self.model.optimizer.lr, tf.keras.backend.get_value(lr))
+    def test_step(image, map, idmap):
+        fmask = model.get_fmask(map)
+        heatmap, decoder_outputs = model(image, fmask)
+        rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs)
+        loss = CoWloss(rawloss)
+        return loss, rawloss
 
-            if hasattr(self.model, 'backbone_optimizer') and self.model.backbone_optimizer is not None:
-                lr = float(tf.keras.backend.get_value(self.model.backbone_optimizer.lr))
-                lr *= self.reduce_rate
-                tf.keras.backend.set_value(self.model.backbone_optimizer.lr, tf.keras.backend.get_value(lr))
-
-            if hasattr(self.model, 'decoder_optimizer') and self.model.decoder_optimizer is not None:
-                lr = float(tf.keras.backend.get_value(self.model.decoder_optimizer.lr))
-                lr *= self.reduce_rate
-                tf.keras.backend.set_value(self.model.decoder_optimizer.lr, tf.keras.backend.get_value(lr))
-
-    def on_epoch_end(self, epoch, logs=None):
-        logs = logs or {}
-        monitor_value = logs.get(self.monitor)
-        logs["lr"] = tf.keras.backend.get_value(self.model.optimizer.lr)
-
-        if monitor_value is None:
-            return
-        if tf.math.is_finite(self.last_loss) and tf.math.is_finite(monitor_value):
-            self.last_loss = self.momentum * self.last_loss + (1 - self.momentum) * monitor_value
-        else:
-            if tf.math.is_finite(monitor_value):
-                self.last_loss = monitor_value
-        logs["lastvalue"] = tf.keras.backend.get_value(self.last_loss)
-
-        if (self.last_loss - monitor_value) / monitor_value > self.significant_change:
-            self.wait = 0
-        else:
-            self.wait += 1
-
-
-def train(pretrain=None):
-    model = net.TextDetectorModel(pre_weight=not pretrain)
-    opt1 = tf.keras.optimizers.Adam(learning_rate=3e-4)
-    opt2 = tf.keras.optimizers.Adam(learning_rate=1e-4)
-    opt3 = tf.keras.optimizers.Adam(learning_rate=4e-4)
-    model.compile(optimizer=opt1, backbone_optimizer=opt2, decoder_optimizer=opt3)
-
-    if pretrain:
-        load_weights(model, pretrain)
-
-    callbacks = [
-        tf.keras.callbacks.TerminateOnNaN(),
-        tf.keras.callbacks.ModelCheckpoint(
-            os.path.join(save_target,'ckpt1','ckpt'), 
-            save_best_only=True,
-            save_weights_only=True),
-        tf.keras.callbacks.BackupAndRestore(os.path.join(save_target,'backup')),
-        LearningRateReducer(
-            monitor='val_loss', 
-            patience=3,
-            reduce_rate=0.5,
-            min_lr=1e-4,
-            significant_change=0.03,
-            momentum=0.9),
-        tf.keras.callbacks.CSVLogger(
-            os.path.join(save_target,'resultlog.csv'),
-            append = True
-        ),
-        tf.keras.callbacks.TensorBoard(
-            log_dir=os.path.join(save_target,'log'),
-            write_graph=False),
-        tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=250),
-    ]
-
-    model.fit(
-        data_detector.train_data(batchsize),
-        epochs=1000,
-        steps_per_epoch=1000,
-        validation_data=data_detector.test_data(batchsize),
-        validation_steps=200,
-        callbacks=callbacks,
-        )
-
-if __name__ == '__main__':
-    import sys
-
-    if len(sys.argv) > 1:
-        batchsize = int(sys.argv[1])
-
-    if os.path.exists('pretrain'):
-        train(pretrain='pretrain')
+    if compile:
+        print('compile')
+        with open('log.txt','a') as wf:
+            print('compile', file=wf, flush=True)
+        if upload_objectstorage:
+            upload('log.txt', 'log.txt')
+        train_step = torch.compile(train_step, mode='reduce-overhead')
+        test_step = torch.compile(test_step, mode='reduce-overhead')
     else:
-        train()
+        print('no compile')
+        with open('log.txt','a') as wf:
+            print('no compile', file=wf, flush=True)
+        if upload_objectstorage:
+            upload('log.txt', 'log.txt')
+
+    print('batch', batch)
+    print('logstep', logstep)
+    with open('log.txt','a') as wf:
+        print('batch', batch, file=wf, flush=True)
+        print('logstep', logstep, file=wf, flush=True)
+    if upload_objectstorage:
+        upload('log.txt', 'log.txt')
+
+    last_epoch = 0
+    for epoch in range(last_epoch, EPOCHS):
+        with open('log.txt','a') as wf:
+            print(datetime.datetime.now(), 'epoch', epoch, file=wf, flush=True)
+        if upload_objectstorage:
+            upload('log.txt', 'log.txt')
+
+        model.train()
+        CoWloss.train()
+        running_loss.train()
+
+        optimizer.zero_grad()
+
+        with tqdm(training_loader, desc=f"[train {epoch + 1}]", total=train_count//batch) as pbar:
+            for data in pbar:
+                image, labelmap, idmap = data
+                image = torch.from_numpy(image).to(device=device, dtype=torch.float, non_blocking=True)
+                labelmap = torch.from_numpy(labelmap).to(device=device, dtype=torch.float, non_blocking=True)
+                idmap = torch.from_numpy(idmap).to(device=device, dtype=torch.long, non_blocking=True)
+
+                loss, rawloss = train_step(image, labelmap, idmap)
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
+
+                # Gather data and report
+                rawloss['CoWloss'] = loss
+                rawloss['lr'] = optimizer.param_groups[0]['lr']
+                losslog = running_loss(rawloss)
+                pbar.set_postfix({'CoW': losslog['CoWloss'], 'loss': losslog['loss'], 'acc': losslog['accuracy']})
+
+                if pbar.n % logstep == 0:
+                    with open('log.txt','a') as wf:
+                        print(pbar.n, datetime.datetime.now(), 'CoW', losslog['CoWloss'], 'loss', losslog['loss'], 'acc', losslog['accuracy'], file=wf, flush=True)
+
+                    if upload_objectstorage:
+                        upload('log.txt', 'log.txt')
+
+        running_loss.reset()
+
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            }, 'result1/model.pt')
+
+        if upload_objectstorage:
+            upload('result1/model.pt', 'epoch%04d.pt'%epoch)
+
+        model.eval()
+        CoWloss.eval()
+        running_loss.eval()
+
+        with torch.no_grad():
+            with tqdm(validation_loader, desc=f"[valid {epoch + 1}]", total=val_count//batch) as pbar:
+                for vdata in pbar:
+                    image, labelmap, idmap = vdata
+                    image = torch.from_numpy(image).to(device=device, dtype=torch.float, non_blocking=True)
+                    labelmap = torch.from_numpy(labelmap).to(device=device, dtype=torch.float, non_blocking=True)
+                    idmap = torch.from_numpy(idmap).to(device=device, dtype=torch.long, non_blocking=True)
+
+                    loss, rawloss = test_step(image, labelmap, idmap)
+
+                    rawloss['CoWloss'] = loss
+                    losslog = running_loss(rawloss)
+                    pbar.set_postfix({'loss': losslog['loss'], 'acc': losslog['accuracy']})
+
+        running_loss.write()
+        running_loss.reset()
+
+        scheduler.step() 
+
+
+if __name__=='__main__':
+    batch = 4
+    compile = True
+    logstep = 100
+    if len(sys.argv) > 1:
+        argv = sys.argv[1:]
+        for arg in argv:
+            if arg.startswith('--compile'):
+                compile = arg.split('=')[1].lower() == 'true'
+            elif arg.startswith('--logstep'):
+                logstep = int(arg.split('=')[1])
+            elif arg.startswith('--upload'):
+                upload_objectstorage = arg.split('=')[1].lower() == 'true'
+            else:
+                batch = int(arg)
+    train(batch, compile=compile, logstep=logstep)

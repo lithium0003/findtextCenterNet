@@ -96,11 +96,9 @@ def get_contents(url):
     maintext = re.sub(r'<[^>]*?>', r'', maintext)
     return maintext
 
-def decode_ruby(text):
-    text = re.sub('\uFFF9(.*?)\uFFFA(.*?)\uFFFB',r'<ruby><rb>\1</rb><rp>(</rp><rt>\2</rt><rp>)</rp></ruby>', text)
-    return text
-
 if __name__ == '__main__':
+    from util_funcs import decode_ruby
+    
     urls = get_aozora_urls()
     for u in urls:
         print(u)

@@ -5,7 +5,8 @@ import csv
 import string
 import time
 
-from render_font.get_aozora import get_aozora_urls, get_contents, decode_ruby
+from util_func import decode_ruby
+from render_font.get_aozora import get_aozora_urls, get_contents
 from render_font.get_wikipedia import get_random_wordid, get_word_content
 from render_font.renderer import Canvas, UNICODE_WHITESPACE_CHARACTERS
 from render_font.handwrite import HandwriteCanvas
@@ -145,8 +146,11 @@ for c in range(0xFF01, 0xFF9E):
     glyphs[c] = chr(c)
 
 #Hangul Syllables
+kr_char = ''
 for c in range(0xAC00, 0xD7A4):
     glyphs[c] = chr(c)
+    kr_char += chr(c)
+kr_char = list(kr_char)
 
 #Geometric Shapes
 for c in range(0x25A0, 0x2600):
@@ -158,6 +162,26 @@ for c in range(0x27F0, 0x2800):
 
 for c in ['•','◦','●','○','◎','◉','▲','△','﹅','﹆','〰']:
     glyphs[ord(c)] = c
+
+kakko_list = '''
+()
+<>
+[]
+{}
+（）
+＜＞
+［］
+｛｝
+｟｠
+｢｣
+〈〉
+《》
+「」
+『』
+【】
+〖〗
+'''
+kakko_list = list(kakko_list.split())
 
 sim_glyphs_list = '''
 高橋髙橋高槗髙槗
@@ -231,10 +255,19 @@ sim_glyphs_list = list(sim_glyphs_list.replace('\n',''))
 for c in set(sim_glyphs_list):
     glyphs[ord(c)] = c
 
+doublew1_list = 'ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ'
+doublew2_list = 'ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ'
+doublew1_list = list(doublew1_list)
+doublew2_list = list(doublew2_list)
+for c in doublew1_list + doublew2_list:
+    glyphs[ord(c)] = c
+
 glyphs_list = list(glyphs.values())
+
 
 jpfontlist = glob.glob(os.path.join('data','jpfont','*'))
 enfontlist = glob.glob(os.path.join('data','enfont','*'))
+krfontlist = glob.glob(os.path.join('data','krfont','*'))
 
 ignore_list = [
     'HanaMinA.ttf',
@@ -327,19 +360,19 @@ def get_random_wari(rng):
 
     header_str = '%d '%(rng.integers(1000))
     m_l = rng.integers(2, 5)
-    header_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+jp_type_list[5], m_l))
+    header_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
     for _ in range(5):
         header_str += '　'
         m_l = rng.integers(2, 5)
-        header_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+jp_type_list[5], m_l))
+        header_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
 
     footer_str = '%d '%(rng.integers(1000))
     m_l = rng.integers(2, 5)
-    footer_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+jp_type_list[5], m_l))
+    footer_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
     for _ in range(5):
         footer_str += '　'
         m_l = rng.integers(2, 5)
-        footer_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+jp_type_list[5], m_l))
+        footer_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
 
     italic = rng.random() < 0.1
     bold = rng.random() < 0.2
@@ -364,62 +397,110 @@ def get_random_furigana(rng):
     # 8: 弌
 
     print('get_random_furigana')
-    size = int(np.exp(rng.uniform(np.log(20), np.log(150))))
+    size = int(np.exp(rng.uniform(np.log(32), np.log(128))))
     count = 4000 // size
 
     txt = '　'
     for _ in range(count):
         p = rng.random()
-        if p < 0.7:
+        if p < 0.25:
             # 漢字にひらがな
             if rng.random() < 0.2:
                 before = ''.join(rng.choice(jp_type_list[5], rng.integers(1,5)))
             else:
                 before = ''.join(rng.choice(jp_type_list[3], 1))
-            m_l = rng.integers(1, 6)
-            main = ''.join(rng.choice(jp_type_list[5]+jp_type_list[8], m_l))
-            ruby = ''.join(rng.choice(jp_type_list[3], rng.integers(m_l, m_l * 2 + 4)))
+            m_l = rng.integers(1, 10)
+            main = ''.join(rng.choice(jp_type_list[5]+jp_type_list[8]+jp_type_list[9]+jp_type_list[10], m_l))
+            ruby = ''.join(rng.choice(jp_type_list[3] + ['ー'], rng.integers(3, m_l * 2 + 3)))
             if rng.random() < 0.2:
                 after = ''.join(rng.choice(jp_type_list[5], rng.integers(1,5)))
             else:
                 after = ''.join(rng.choice(jp_type_list[3], 1))
             txt += before+'\uFFF9'+main+'\uFFFA'+ruby+'\uFFFB'+after
-        elif p < 0.9:
+        elif p < 0.35:
             # 日本語に傍点
             m_l = rng.integers(1, 15)
             main1 = ''.join(rng.choice(jp_type_list[3], 20))
             main2 = ''.join(rng.choice(jp_type_list[4], 10))
-            main3 = ''.join(rng.choice(jp_type_list[5], 10))
-            main = ''.join(rng.choice(list(main1+main2+main3), m_l))
+            main3 = ''.join(rng.choice(jp_type_list[5]+jp_type_list[8]+jp_type_list[9]+jp_type_list[10], 10))
+            main = ''.join(rng.choice(list(main1+main2+main3+'ー'), m_l))
             if rng.random() < 0.95:
                 ruby = '﹅'
             else:
                 ruby = ''.join(rng.choice(['•','◦','●','○','◎','◉','▲','△','﹅','﹆'],1))
             txt += '\uFFF9'+main+'\uFFFA'+ruby+'\uFFFB'
-        elif p < 0.95:
+        elif p < 0.5:
             # 漢字にカタカナ
-            m_l = rng.integers(1, 6)
-            main = ''.join(rng.choice(jp_type_list[5]+jp_type_list[8], m_l))
-            ruby = ''.join(rng.choice(jp_type_list[4], rng.integers(m_l, m_l * 2 + 4)))
+            kanjis = list(rng.choice(jp_type_list[5]+jp_type_list[8]+jp_type_list[9]+jp_type_list[10], 40))
+            m_l = rng.integers(1, 15)
+            main = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+kanjis+['ー'], m_l))
+            ruby = ''.join(rng.choice(jp_type_list[4] + ['ー'], rng.integers(3, m_l * 2 + 3)))
             txt += '\uFFF9'+main+'\uFFFA'+ruby+'\uFFFB'
-        elif p < 0.975:
+        elif p < 0.7:
             # alphabetに日本語
-            m_l = rng.integers(5, 20)
-            main = ''.join(rng.choice(jp_type_list[2], m_l))
-            ruby = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+jp_type_list[5]+jp_type_list[8], rng.integers(3, m_l)))
+            if rng.random() < 0.5:
+                m_l = rng.integers(3, 20)
+                if rng.random() < 0.5:
+                    main = ''.join(rng.choice(doublew1_list, m_l))
+                else:
+                    main = ''.join(rng.choice(doublew1_list + doublew2_list, m_l))
+            else:
+                word = []
+                m_l = 0
+                while rng.random() < 0.5 or m_l < 6:
+                    m_l1 = rng.integers(2, 10)
+                    m_l += m_l1
+                    word.append(''.join(rng.choice(jp_type_list[2], m_l1)))
+                main = ' '.join(word)
+                m_l = 10
+            kanjis = list(rng.choice(jp_type_list[5]+jp_type_list[8], 100))
+            if rng.random() < 0.5:
+                m_l2 = rng.integers(3, m_l + 3)
+            else:
+                m_l2 = rng.integers(m_l // 4 + 3, m_l // 2 + 4)
+            ruby = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+kanjis+['ー'], m_l2))
+            txt += '\uFFF9'+main+'\uFFFA'+ruby+'\uFFFB'
+        elif p < 0.9:
+            # 日本語にalphabet
+            kanjis = list(rng.choice(jp_type_list[5]+jp_type_list[8], 100))
+            m_l = rng.integers(3, 20)
+            main = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+kanjis+['ー'], m_l))
+            if rng.random() < 0.5:
+                if rng.random() < 0.5:
+                    m_l2 = rng.integers(3, m_l // 2 + 4)
+                else:
+                    m_l2 = rng.integers(m_l, m_l * 2)
+                if rng.random() < 0.5:
+                    ruby = ''.join(rng.choice(doublew1_list, m_l2))
+                else:
+                    ruby = ''.join(rng.choice(doublew1_list + doublew2_list, m_l2))
+            else:
+                word = []
+                m_l2 = 0
+                while rng.random() < 0.5 or m_l2 < 6 or m_l * 2 > m_l2:
+                    m_l1 = rng.integers(2, 10)
+                    m_l2 += m_l1
+                    word.append(''.join(rng.choice(jp_type_list[2], m_l1)))
+                ruby = ' '.join(word)
             txt += '\uFFF9'+main+'\uFFFA'+ruby+'\uFFFB'
         else:
-            # 日本語にalphabet
-            m_l = rng.integers(3, 5)
-            main = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+jp_type_list[5]+jp_type_list[8], m_l))
-            ruby = ''.join(rng.choice(jp_type_list[2], rng.integers(10, 20)))
+            #日本語に日本語
+            kanjis = list(rng.choice(jp_type_list[5]+jp_type_list[8]+jp_type_list[9]+jp_type_list[10], 400))
+            m_l = rng.integers(3, 10)
+            main = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+kanjis+['ー'], m_l))
+            kanjis = list(rng.choice(jp_type_list[5]+jp_type_list[8]+jp_type_list[9]+jp_type_list[10], 400))
+            if rng.random() < 0.5:
+                m_l2 = rng.integers(3, m_l // 4 + 4)
+            else:
+                m_l2 = rng.integers(m_l, m_l * 2 + 1)
+            ruby = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+kanjis+['ー'], m_l2))
             txt += '\uFFF9'+main+'\uFFFA'+ruby+'\uFFFB'
 
         m_l = rng.integers(1, 10)
-        main = ''.join(rng.choice(jp_type_list[3]+list(rng.choice(jp_type_list[5], 100)), m_l))
+        main = ''.join(rng.choice(jp_type_list[3]+list(rng.choice(jp_type_list[5]+jp_type_list[8]+jp_type_list[9]+jp_type_list[10], 100)), m_l))
         txt += main
 
-        if rng.random() < 0.1:
+        if rng.random() < 0.2:
             txt += '\n　'
         elif rng.random() < 0.1:
             txt += '　'
@@ -427,22 +508,34 @@ def get_random_furigana(rng):
             txt += '、'
         elif rng.random() < 0.4:
             txt += '。'
+        elif rng.random() < 0.1:
+            txt += '！　'
+        elif rng.random() < 0.1:
+            txt += '？　'
+        elif rng.random() < 0.1:
+            txt += '‼　'
+        elif rng.random() < 0.1:
+            txt += '⁉　'
+        elif rng.random() < 0.1:
+            txt += '⁇　'
+        elif rng.random() < 0.1:
+            txt += '⁈　'
 
     header_str = '%d '%(rng.integers(1000))
     m_l = rng.integers(2, 5)
-    header_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+jp_type_list[5], m_l))
+    header_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
     for _ in range(5):
         header_str += '　'
         m_l = rng.integers(2, 5)
-        header_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+jp_type_list[5], m_l))
+        header_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
 
     footer_str = '%d '%(rng.integers(1000))
     m_l = rng.integers(2, 5)
-    footer_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+jp_type_list[5], m_l))
+    footer_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
     for _ in range(5):
         footer_str += '　'
         m_l = rng.integers(2, 5)
-        footer_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+jp_type_list[5], m_l))
+        footer_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
 
     direction = 1 if rng.random() < 0.5 else 2
     font = rng.choice(jp_furi_fontlist) if direction == 1 else rng.choice(jp_vfuri_fontlist)
@@ -450,7 +543,7 @@ def get_random_furigana(rng):
     italic = rng.random() < 0.1
     bold = rng.random() < 0.2
     with Canvas(font, size, direction==1, bold=bold, italic=italic) as canvas:
-        canvas.set_linewidth(min(80 * size, 2000))
+        canvas.set_linewidth(min(80 * size, 3000))
         canvas.line_space_ratio = rng.uniform(1.5,2.5)
         canvas.set_header(header_str)
         canvas.set_footer(footer_str)
@@ -459,25 +552,29 @@ def get_random_furigana(rng):
 
     return d        
 
-def get_random_char(rng, turn=False):
+def get_random_char(rng):
+    print('get_random_char')
     p = rng.random()
-    if turn:
+    if p < 0.5:
         en = True
     else:
-        if p < 0.5:
-            en = True
-        else:
-            en = False
+        en = False
 
     current_fontlist = enfontlist if en else jpfontlist
-    if turn or rng.random() < 0.01:
+    if en:
         max_text = 1024
-        txt = ''
-        while len(txt) < max_text:
-            txt += ''.join(rng.choice(ascii_list, size=rng.integers(1,20))) + (' ' if rng.random() < 0.5 else '\n')
+        content = ''
+        while len(content) < max_text:
+            content += ''.join(rng.choice(ascii_list, size=rng.integers(1,20))) + (' ' if rng.random() < 0.5 else '\n')
     else:
         max_text = 8*1024
-        txt = ''.join(rng.choice(glyphs_list, size=max_text))
+        content = ''.join(rng.choice(glyphs_list, size=max_text))
+
+        ln_count = len(content) // 100
+        for _ in range(ln_count):
+            idx = rng.integers(2,len(content))
+            content = content[:idx] + '\n　' + content[idx:]
+
 
     font = rng.choice(current_fontlist)
 
@@ -487,20 +584,181 @@ def get_random_char(rng, turn=False):
         size = int(np.exp(rng.uniform(np.log(18), np.log(128))))
     line_charcount = rng.integers(20, 40)
     sc_w = np.minimum(line_charcount * size, 2000)
-    line_count = len(txt) // (line_charcount)
+    line_count = len(content) // (line_charcount)
     sc_h = min(int(2000 / size), line_count)
 
     horizontal = rng.uniform() < 0.5
 
     italic = rng.random() < 0.1
     bold = rng.random() < 0.2
-    with Canvas(font, size, horizontal=horizontal, bold=bold, italic=italic, turn=turn) as canvas:
+    with Canvas(font, size, horizontal=horizontal, bold=bold, italic=italic) as canvas:
         canvas.set_linewidth(sc_w)
         canvas.set_linemax(sc_h)
         canvas.line_space_ratio = rng.uniform(1.0,2.0)
+        d = canvas.draw(content)
+        d['font'] = font
+    
+    d['horizontal'] = horizontal
+    return d
+
+def get_random_char2(rng):
+    print('get_random_char2')
+    max_text = 32*1024
+    content = ''.join(rng.choice(sim_glyphs_list+jp_type_list[3]+jp_type_list[4]+jp_type_list[5]+jp_type_list[8]+jp_type_list[9]+jp_type_list[10]+['ー'], size=max_text))
+    content = ''.join([c if rng.random() > 0.025 else (''.join(rng.choice(doublew1_list + doublew2_list, size=rng.integers(3,20)))) for c in content])
+    content = ''.join([c if rng.random() > 0.01 else (' ' if rng.random() < 0.5 else '　') for c in content])
+
+    for _ in range(100):
+        p = rng.random()
+        if p < 0.3:
+            nami = ''.join(['〰'] * rng.integers(2,20))
+        elif p < 0.6:
+            nami = ''.join(['—'] * rng.integers(2,20))
+        else:
+            nami = ''.join(['…'] * rng.integers(2,20))
+        idx = rng.integers(2,len(content))
+        content = content[:idx] + nami + content[idx:]
+
+    for _ in range(1000):
+        i = rng.integers(0,len(kakko_list))
+        kakko = kakko_list[i]
+        idx1 = rng.integers(2,len(content)-10)
+        idx2 = rng.integers(idx1,idx1+10)
+        content = content[:idx1] + kakko[0] + content[idx1:idx2] + kakko[1] + content[idx2:]
+
+    for _ in range(1000):
+        if rng.random() < 0.25:
+            txt = '！　'
+        elif rng.random() < 0.25:
+            txt = '？　'
+        elif rng.random() < 0.25:
+            txt = '‼　'
+        elif rng.random() < 0.25:
+            txt = '⁉　'
+        elif rng.random() < 0.25:
+            txt = '⁇　'
+        elif rng.random() < 0.25:
+            txt = '⁈　'
+        else:
+            continue
+        idx = rng.integers(2,len(content))
+        content = content[:idx] + txt + content[idx:]
+
+    ln_count = len(content) // 100
+    for _ in range(ln_count):
+        idx = rng.integers(2,len(content))
+        content = content[:idx] + '\n　' + content[idx:]
+
+    direction = 1 if rng.random() < 0.5 else 2
+    current_fontlist = jp_yoshi_fontlist
+
+    start = rng.integers(0, max(1, len(content)-4*1024))
+    if len(content) - start > 4*1024:
+        end = rng.integers(start + 4*1024, min(start + max_text, len(content)))
+    else:
+        end = len(content)
+
+    txt = content[start:end]
+
+    font = rng.choice(current_fontlist)
+
+    size = int(np.exp(rng.uniform(np.log(18), np.log(128))))
+    line_charcount = rng.integers(20, 40)
+    sec = 2
+    sc_w = np.minimum(line_charcount * size, 2000)
+    line_count = len(txt) // (line_charcount * sec)
+    sc_h = min(int(2000 / size), line_count)
+
+    header_str = '%d '%(rng.integers(1000))
+    m_l = rng.integers(2, 5)
+    header_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
+    for _ in range(5):
+        header_str += '　'
+        m_l = rng.integers(2, 5)
+        header_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
+
+    footer_str = '%d '%(rng.integers(1000))
+    m_l = rng.integers(2, 5)
+    footer_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
+    for _ in range(5):
+        footer_str += '　'
+        m_l = rng.integers(2, 5)
+        footer_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
+
+    bold = rng.random() < 0.2
+    with Canvas(font, size, direction==1, bold=bold, italic=False) as canvas:
+        canvas.set_linewidth(sc_w)
+        canvas.set_linemax(sc_h)
+        canvas.line_space_ratio = rng.uniform(1.0,2.0)
+        if sec > 1:
+            canvas.set_section(sec, rng.uniform(0.1, 3.0))
+        canvas.set_header(header_str)
+        canvas.set_footer(footer_str)
         d = canvas.draw(txt)
         d['font'] = font
     
+    d['horizontal'] = direction==1
+    return d
+
+def get_random_kr_char(rng):
+    print('get_random_kr_char')
+    max_text = 32*1024
+    content = ''.join(rng.choice(kr_char, size=max_text))
+    content = ''.join([c if rng.random() > 0.01 else (' ' if rng.random() < 0.5 else '　') for c in content])
+
+    for _ in range(1000):
+        if rng.random() < 0.25:
+            txt = '！　'
+        elif rng.random() < 0.25:
+            txt = '？　'
+        elif rng.random() < 0.25:
+            txt = '‼　'
+        elif rng.random() < 0.25:
+            txt = '⁉　'
+        elif rng.random() < 0.25:
+            txt = '⁇　'
+        elif rng.random() < 0.25:
+            txt = '⁈　'
+        else:
+            continue
+        idx = rng.integers(2,len(content))
+        content = content[:idx] + txt + content[idx:]
+
+    ln_count = len(content) // 100
+    for _ in range(ln_count):
+        idx = rng.integers(2,len(content))
+        content = content[:idx] + '\n　' + content[idx:]
+
+    direction = 1
+
+    start = rng.integers(0, max(1, len(content)-8*1024))
+    if len(content) - start > 8*1024:
+        end = rng.integers(start + 8*1024, min(start + max_text, len(content)))
+    else:
+        end = len(content)
+
+    txt = content[start:end]
+
+    font = rng.choice(krfontlist)
+
+    size = int(np.exp(rng.uniform(np.log(20), np.log(128))))
+    line_charcount = rng.integers(20, 40)
+    sec = 2
+    sc_w = np.minimum(line_charcount * size, 2000)
+    line_count = len(txt) // (line_charcount * sec)
+    sc_h = min(int(2000 / size), line_count)
+
+    bold = rng.random() < 0.2
+    with Canvas(font, size, direction==1, bold=bold, italic=False) as canvas:
+        canvas.set_linewidth(sc_w)
+        canvas.set_linemax(sc_h)
+        canvas.line_space_ratio = rng.uniform(1.0,2.0)
+        if sec > 1:
+            canvas.set_section(sec, rng.uniform(0.1, 3.0))
+        d = canvas.draw(txt)
+        d['font'] = font
+    
+    d['horizontal'] = direction==1
     return d
 
 def get_random_textline(rng, single=False):
@@ -509,36 +767,7 @@ def get_random_textline(rng, single=False):
         print('get_random_textline')
         p = rng.random()
         try:
-            yoshi = False
-            if p < 0.005:
-                en = False
-                yoshi = True
-
-                content = ''.join(rng.choice(sim_glyphs_list, size=max_text))
-                content = ''.join([c if rng.random() > 0.01 else (' ' if rng.random() < 0.5 else '　') for c in content])
-
-                for _ in range(100):
-                    nami = ''.join(['〰'] * rng.integers(2,20))
-                    idx = rng.integers(2,len(content))
-                    content = content[:idx] + nami + content[idx:]
-
-                ln_count = len(content) // 100
-                for _ in range(ln_count):
-                    idx = rng.integers(2,len(content))
-                    content = content[:idx] + '\n　' + content[idx:]
-
-            elif p < 0.2: 
-                en = False
-
-                content = ''.join(rng.choice(glyphs_list, size=max_text))
-                content = ''.join([c if rng.random() > 0.01 else (' ' if rng.random() < 0.5 else '　') for c in content])
-                
-                ln_count = len(content) // 100
-                for _ in range(ln_count):
-                    idx = rng.integers(2,len(content))
-                    content = content[:idx] + '\n　' + content[idx:]
-
-            elif p < 0.6:
+            if p < 0.6:
                 # en
                 en = True
 
@@ -565,8 +794,6 @@ def get_random_textline(rng, single=False):
     
     direction = 1 if en or rng.random() < 0.5 else 2
     current_fontlist = enfontlist if en else (jpfontlist if direction == 1 else jpvfontlist)
-    if yoshi:
-        current_fontlist = jp_yoshi_fontlist
     
     start = rng.integers(0, max(1, len(content)-4*1024))
     if len(content) - start > 4*1024:
@@ -598,11 +825,11 @@ def get_random_textline(rng, single=False):
             header_str += ''.join(rng.choice(jp_type_list[0]+jp_type_list[1]+jp_type_list[2], m_l))
     else:
         m_l = rng.integers(2, 5)
-        header_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+jp_type_list[5], m_l))
+        header_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
         for _ in range(5):
             header_str += '　'
             m_l = rng.integers(2, 5)
-            header_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+jp_type_list[5], m_l))
+            header_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
 
     footer_str = '%d '%(rng.integers(1000))
     if en:
@@ -614,11 +841,11 @@ def get_random_textline(rng, single=False):
             footer_str += ''.join(rng.choice(jp_type_list[0]+jp_type_list[1]+jp_type_list[2], m_l))
     else:
         m_l = rng.integers(2, 5)
-        footer_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+jp_type_list[5], m_l))
+        footer_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
         for _ in range(5):
             footer_str += '　'
             m_l = rng.integers(2, 5)
-            footer_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+jp_type_list[5], m_l))
+            footer_str += ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+list(rng.choice(jp_type_list[5], 50)), m_l))
 
     italic = rng.random() < 0.1
     bold = rng.random() < 0.2
@@ -768,26 +995,47 @@ def get_random_hendwrite(rng):
     canvas.set_linemax(sc_h)
     canvas.line_space_ratio = rng.uniform(1.0,2.0)
     d = canvas.draw(txt)
+    d['horizontal'] = direction==1
     
     return d
 
 def get_random_text(rng):
     p = rng.random()
-
-    if p < 0.4:
-        return get_random_textline(rng)
-    elif p < 0.55:
-        return get_random_wari(rng)
-    elif p < 0.7:
-        return get_random_word(rng)
-    elif p < 0.85:
+    if p < 0.325:
+        # 0.325
         return get_random_furigana(rng)
+    elif p < 0.45:
+        # 0.125
+        return get_random_textline(rng)
+    elif p < 0.8:
+        # 0.35
+        if rng.random() < 0.5:
+            # 0.175
+            return get_random_char(rng)
+        else:
+            # 0.175
+            return get_random_char2(rng)
     elif p < 0.9:
-        return get_random_grid(rng)
-    elif p < 0.95:
-        return get_random_il(rng)
+        # 0.1
+        return get_random_kr_char(rng)
     else:
-        return get_random_hendwrite(rng)
+        # 0.1
+        p = rng.random()
+        if p < 0.25:
+            # 0.025
+            return get_random_il(rng)
+        elif p < 0.5:
+            # 0.025
+            return get_random_wari(rng)
+        elif rng.random() < 0.7:
+            # 0.02
+            return get_random_word(rng)
+        elif rng.random() < 0.8:
+            # 0.01
+            return get_random_grid(rng)
+        else:
+            # 0.02
+            return get_random_hendwrite(rng)
 
 if __name__ == '__main__':
     from matplotlib import rcParams
@@ -798,11 +1046,11 @@ if __name__ == '__main__':
     rng = np.random.default_rng()
 
     while True:
-        d = get_random_char(rng, turn=True)
-        #d = get_random_textline(rng)
+        d = get_random_text(rng)
+        #d = get_random_kr_char(rng)
+        # d = get_random_char2(rng)
         #d = get_random_il(rng)
-        #d = get_random_furigana(rng)
-        #d = get_random_il(rng)
+        # d = get_random_furigana(rng)
         print()
         print(d.get('font'))
         print(decode_ruby(d['str']))

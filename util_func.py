@@ -2,13 +2,22 @@ import numpy as np
 import re
 
 modulo_list = [1091,1093,1097]
-width = 512
-height = 512
+width = 768
+height = 768
 scale = 2
 feature_dim = 64
 
 def gaussian(x,a,x0,sigma):
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
+
+def sigmoid(x):
+    return (np.tanh(x / 2) + 1) / 2
+
+def softmax(x):
+    mx = np.max(x, axis=-1, keepdims=True)
+    numerator = np.exp(x - mx)
+    denominator = np.sum(numerator, axis=-1, keepdims=True)
+    return numerator/denominator
 
 def calcHist(im):
     agg = 1
@@ -82,7 +91,7 @@ def calc_predid(*args):
             for i in range(j):
                 w *= m[i]
             u += w
-        tk = b[k] - u
+        tk = (b[k] - u) % m[k]
         for j in range(k):
             tk *= pow(m[j], m[k]-2, m[k])
             #tk *= pow(m[j], -1, m[k])
@@ -102,4 +111,8 @@ def calc_predid(*args):
 
 def decode_ruby(text):
     text = re.sub('\uFFF9(.*?)\uFFFA(.*?)\uFFFB',r'<ruby><rb>\1</rb><rp>(</rp><rt>\2</rt><rp>)</rp></ruby>', text)
+    return text
+
+def encode_rubyhtml(text):
+    text = re.sub('<ruby><rb>(.*?)</rb><rp>\\(</rp><rt>(.*?)</rt><rp>\\)</rp></ruby>', '\uFFF9\\1\uFFFA\\2\uFFFB', text)
     return text

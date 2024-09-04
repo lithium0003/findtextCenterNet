@@ -316,6 +316,13 @@ class Canvas:
         if im_buf is None:
             return
 
+        im = Image.fromarray(im_buf['image'])
+        im = im.resize((im.width*2//3, im.height*2//3), resample=Image.BILINEAR)
+        im_buf['image'] = np.asarray(im)
+
+        im_buf['position'] = im_buf['position'] * (2/3,2/3,2/3,2/3)
+        im_buf['base_line'] = im_buf['base_line'] * 2/3
+
         self.process_str += im_buf['str']
         image = im_buf['image']
         pos = im_buf['position']
@@ -395,6 +402,13 @@ class Canvas:
         im_buf = self._line_render(self.footer_str, horizontal=not self.is_horizontal, line_length=self.canvas_image.shape[0] if self.is_horizontal else self.canvas_image.shape[1])
         if im_buf is None:
             return
+
+        im = Image.fromarray(im_buf['image'])
+        im = im.resize((im.width*2//3, im.height*2//3), resample=Image.BILINEAR)
+        im_buf['image'] = np.asarray(im)
+
+        im_buf['position'] = im_buf['position'] * (2/3,2/3,2/3,2/3)
+        im_buf['base_line'] = im_buf['base_line'] * 2/3
 
         self.process_str += im_buf['str']
         image = im_buf['image']
@@ -1476,6 +1490,9 @@ class Canvas:
         position.insert(0, np.zeros([0,4]))
         code_list.insert(0, np.zeros([0,2], dtype=int))
 
+        if len(buffer) > 1:
+            cur_x -= space_fix
+
         return {
             'image': image,
             'str': ' '.join(result_str),
@@ -1484,7 +1501,7 @@ class Canvas:
             'code_list': np.concatenate(code_list, axis=0),
             'pad_left': pad_left,
             'base_line': base_line,
-            'next_cur': int(cur_x - space_fix),
+            'next_cur': int(cur_x),
         }
 
     def _horizontal_line_render(self, text, line_length=0, pad_space=0):
@@ -1945,30 +1962,38 @@ class Canvas:
                     # ルビの方が長いのでそちらに合わせる
                     text_pad = ruby_buf['image'].shape[1] - text_buf['image'].shape[1]
                     count = sum([0 if 0x20 <= ord(c) < 0x7F and c != ' ' else 1 for c in text])
+                    if ' ' in text:
+                        count += 1
                     if count > 1:
-                        text_pad /= count + 1
+                        text_pad /= count - 1
                         text_buf = self._horizontal_line_render(text, pad_space=text_pad)
                 elif text_len * 2 > ruby_len:
                     # ルビの方が短いので、本文に合わせる
                     ruby_pad = text_buf['image'].shape[1] - ruby_buf['image'].shape[1]
                     count = sum([0 if 0x20 <= ord(c) < 0x7F and c != ' ' else 1 for c in ruby])
+                    if ' ' in ruby:
+                        count += 1
                     if count > 1:
-                        ruby_pad /= count + 1
+                        ruby_pad /= count - 1
                         ruby_buf = ruby_small(self._horizontal_line_render(ruby, pad_space=ruby_pad/self.ruby_ratio))
             else:
                 if ruby_buf['image'].shape[1] > text_buf['image'].shape[1]:
                     # ルビの方が長いのでそちらに合わせる
                     text_pad = ruby_buf['image'].shape[1] - text_buf['image'].shape[1]
                     count = sum([0 if 0x20 <= ord(c) < 0x7F and c != ' ' else 1 for c in text])
+                    if ' ' in text:
+                        count += 1
                     if count > 1:
-                        text_pad /= count + 1
+                        text_pad /= count - 1
                         text_buf = self._horizontal_line_render(text, pad_space=text_pad)
                 elif text_buf['image'].shape[1] > ruby_buf['image'].shape[1]:
                     # ルビの方が短いので、本文に合わせる
                     ruby_pad = text_buf['image'].shape[1] - ruby_buf['image'].shape[1]
                     count = sum([0 if 0x20 <= ord(c) < 0x7F and c != ' ' else 1 for c in ruby])
+                    if ' ' in ruby:
+                        count += 1
                     if count > 1:
-                        ruby_pad /= count + 1
+                        ruby_pad /= count - 1
                         ruby_buf = ruby_small(self._horizontal_line_render(ruby, pad_space=ruby_pad/self.ruby_ratio))
 
 
@@ -2072,30 +2097,38 @@ class Canvas:
                     # ルビの方が長いのでそちらに合わせる
                     text_pad = ruby_buf['image'].shape[0] - text_buf['image'].shape[0]
                     count = sum([0 if 0x20 <= ord(c) < 0x7F and c != ' ' else 1 for c in text])
+                    if ' ' in text:
+                        count += 1
                     if count > 1:
-                        text_pad /= count + 1
+                        text_pad /= count - 1
                         text_buf = self._vertical_line_render(text, pad_space=text_pad)
                 elif text_len * 2 > ruby_len:
                     # ルビの方が短いので、本文に合わせる
                     ruby_pad = text_buf['image'].shape[0] - ruby_buf['image'].shape[0]
                     count = sum([0 if 0x20 <= ord(c) < 0x7F and c != ' ' else 1 for c in ruby])
+                    if ' ' in ruby:
+                        count += 1
                     if count > 1:
-                        ruby_pad /= count + 1
+                        ruby_pad /= count - 1
                         ruby_buf = ruby_small(self._vertical_line_render(ruby, pad_space=ruby_pad/self.ruby_ratio))
             else:
                 if ruby_buf['image'].shape[0] > text_buf['image'].shape[0]:
                     # ルビの方が長いのでそちらに合わせる
                     text_pad = ruby_buf['image'].shape[0] - text_buf['image'].shape[0]
                     count = sum([0 if 0x20 <= ord(c) < 0x7F and c != ' ' else 1 for c in text])
+                    if ' ' in text:
+                        count += 1
                     if count > 1:
-                        text_pad /= count + 1
+                        text_pad /= count - 1
                         text_buf = self._vertical_line_render(text, pad_space=text_pad)
                 elif text_buf['image'].shape[0] > ruby_buf['image'].shape[0]:
                     # ルビの方が短いので、本文に合わせる
                     ruby_pad = text_buf['image'].shape[0] - ruby_buf['image'].shape[0]
                     count = sum([0 if 0x20 <= ord(c) < 0x7F and c != ' ' else 1 for c in ruby])
+                    if ' ' in ruby:
+                        count += 1
                     if count > 1:
-                        ruby_pad /= count + 1
+                        ruby_pad /= count - 1
                         ruby_buf = ruby_small(self._vertical_line_render(ruby, pad_space=ruby_pad/self.ruby_ratio))
 
             image = text_buf['image']
@@ -2409,34 +2442,34 @@ if __name__=="__main__":
     rcParams['font.serif'] = ['IPAexMincho', 'IPAPMincho', 'Hiragino Mincho ProN']
 
     import matplotlib.pyplot as plt
-    import glob
-    import os
+    # import glob
+    # import os
 
-    jp_furi_fontlist = [
-        'GenShinGothic-Monospace-Normal.ttf',
-        'GenShinGothic-Normal.ttf',
-        'GenShinGothic-P-Normal.ttf',
-        'mgenplus-2m-regular.ttf',
-        'mgenplus-2p-regular.ttf',
-    ]
-    jp_furi_fontlist = [os.path.join('data','jpfont',f) for f in jp_furi_fontlist]
+    # jp_furi_fontlist = [
+    #     'GenShinGothic-Monospace-Normal.ttf',
+    #     'GenShinGothic-Normal.ttf',
+    #     'GenShinGothic-P-Normal.ttf',
+    #     'mgenplus-2m-regular.ttf',
+    #     'mgenplus-2p-regular.ttf',
+    # ]
+    # jp_furi_fontlist = [os.path.join('data','jpfont',f) for f in jp_furi_fontlist]
 
-    text = '𠮷𠮷𠮷𠮷〰〰〰〰〰〰'
+    # text = '𠮷𠮷𠮷𠮷〰〰〰〰〰〰'
     
-    for fontfile in jp_furi_fontlist:
-        with Canvas(fontfile, fontsize=48, horizontal=False) as canvas:
-            #a = canvas.random_draw(words, 1024, 1024, rng)
-            canvas.set_linewidth(870)
-            canvas.set_linemax(10)
-            # canvas.set_header('header test')
-            # canvas.set_footer('footer test')
-            a = canvas.draw(text)
-            #print(a)
-            plt.imshow(a['image'])
-            plt.show()
-        if a['str'] != '':
-            print(fontfile)
-    exit()
+    # for fontfile in jp_furi_fontlist:
+    #     with Canvas(fontfile, fontsize=48, horizontal=False) as canvas:
+    #         #a = canvas.random_draw(words, 1024, 1024, rng)
+    #         canvas.set_linewidth(870)
+    #         canvas.set_linemax(10)
+    #         # canvas.set_header('header test')
+    #         # canvas.set_footer('footer test')
+    #         a = canvas.draw(text)
+    #         #print(a)
+    #         plt.imshow(a['image'])
+    #         plt.show()
+    #     if a['str'] != '':
+    #         print(fontfile)
+    # exit()
 
     fontfile = 'data/jpfont/NotoSerifJP-Regular.otf'
     #fontfile = 'data/enfont/Gabriola.ttf'
@@ -2448,6 +2481,10 @@ if __name__=="__main__":
     text = '　テスト\uFFF9漢字\uFFFAかんじあいう\uFFFBのふりがな\n　テスト漢字のふりがな\nてすと\nfilter'
     text = '\uFFF9漢字\uFFFA﹅\uFFFBに圏点'
     #text = 'aphs have appeared on the covers of Life, Sports Illustrated, Newsweek, Fortune, and Forbes, and in Time, The New '
+    text = 'テスト\uFFF9漢字\uFFFAかんじあいう\uFFFBのふりがな\nテスト漢字のふりがな\nてすと\nfilter'
+    text = 'ぱ於がづ、\uFFF9習び惣妨妨王託簪櫓\uFFFAhmiacwcn sy ziqrrhjuu\uFFFB括へ串らぐ冗ろ。'
+    text = 'ぱ於がづ、\uFFF9習び惣妨妨王託簪櫓\uFFFAhmiacwcn a b ziqrrhjuu\uFFFB括へ串らぐ冗ろ。'
+    # text = '　\uFFF9埀銓う蒋ウサう獗巫医モ鱇ホ\uFFFAｖＮｖＰ\uFFFB屯怜る。'
     values = [
         ['身長','体重','性別'],
         ['192.8','48.4','女'],
@@ -2471,7 +2508,7 @@ if __name__=="__main__":
 
     rng = np.random.default_rng()
 
-    with Canvas(fontfile, fontsize=48, horizontal=False) as canvas:
+    with Canvas(fontfile, fontsize=48, horizontal=True) as canvas:
         #a = canvas.random_draw(words, 1024, 1024, rng)
         canvas.set_linewidth(870)
         canvas.set_linemax(10)

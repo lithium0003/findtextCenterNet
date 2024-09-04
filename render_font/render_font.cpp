@@ -6,12 +6,12 @@
 #include <map>
 #include <iostream>
 #include <algorithm>
+#include <cstdint>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_TRUETYPE_TABLES_H
 #include FT_TRUETYPE_TAGS_H
 #include FT_SYNTHESIS_H
-
 #ifdef _WIN64
 #include <fcntl.h>
 #include <io.h>

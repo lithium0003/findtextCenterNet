@@ -1,2 +1,0 @@
-recursive-include custom_rotate_op *.so
-recursive-include custom_fill_op *.so
