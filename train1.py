@@ -102,7 +102,7 @@ def train(batch=4, compile=True, logstep=100):
     # validation_loader = DataLoader(validation_dataset, batch_size=batch, shuffle=True, num_workers=8)
     validation_loader = MultiLoader(validation_dataset.batched(batch), workers=8)
 
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('using device:', device)
     with open('log.txt','a') as wf:
         print(datetime.datetime.now(), 'using device:', device, file=wf, flush=True)
@@ -157,15 +157,14 @@ def train(batch=4, compile=True, logstep=100):
 
     scaler = torch.GradScaler()
 
-    def train_step(image, map, idmap):
-        fmask = model.get_fmask(map)
+    def train_step(image, map, idmap, fmask):
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             heatmap, decoder_outputs = model(image, fmask)
             rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs)
             loss = CoWloss(rawloss)
         return loss, rawloss
 
-    def test_step(image, map, idmap):
+    def test_step(image, map, idmap, fmask):
         fmask = model.get_fmask(map)
         heatmap, decoder_outputs = model(image, fmask)
         rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs)
@@ -178,8 +177,8 @@ def train(batch=4, compile=True, logstep=100):
             print('compile', file=wf, flush=True)
         if upload_objectstorage:
             upload('log.txt', 'log.txt')
-        train_step = torch.compile(train_step, mode='reduce-overhead')
-        test_step = torch.compile(test_step, mode='reduce-overhead')
+        train_step = torch.compile(train_step)
+        test_step = torch.compile(test_step)
     else:
         print('no compile')
         with open('log.txt','a') as wf:
@@ -196,6 +195,7 @@ def train(batch=4, compile=True, logstep=100):
         upload('log.txt', 'log.txt')
 
     last_epoch = 0
+    fmask = None
     for epoch in range(last_epoch, EPOCHS):
         with open('log.txt','a') as wf:
             print(datetime.datetime.now(), 'epoch', epoch, file=wf, flush=True)
@@ -215,7 +215,8 @@ def train(batch=4, compile=True, logstep=100):
                 labelmap = torch.from_numpy(labelmap).to(device=device, dtype=torch.float, non_blocking=True)
                 idmap = torch.from_numpy(idmap).to(device=device, dtype=torch.long, non_blocking=True)
 
-                loss, rawloss = train_step(image, labelmap, idmap)
+                fmask = model.get_fmask(labelmap, fmask)
+                loss, rawloss = train_step(image, labelmap, idmap, fmask)
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
@@ -256,7 +257,8 @@ def train(batch=4, compile=True, logstep=100):
                     labelmap = torch.from_numpy(labelmap).to(device=device, dtype=torch.float, non_blocking=True)
                     idmap = torch.from_numpy(idmap).to(device=device, dtype=torch.long, non_blocking=True)
 
-                    loss, rawloss = test_step(image, labelmap, idmap)
+                    fmask = model.get_fmask(labelmap, fmask)
+                    loss, rawloss = test_step(image, labelmap, idmap, fmask)
 
                     rawloss['CoWloss'] = loss
                     losslog = running_loss(rawloss)

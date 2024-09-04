@@ -225,14 +225,16 @@ class TextDetectorModel(nn.Module):
 
         return heatmap, decoder_outputs
 
-    def get_fmask(self, heatmap) -> Tensor:
+    def get_fmask(self, heatmap, mask) -> Tensor:
         # heatmap: [-1, 11, 256, 256]
         batch_dim = heatmap.shape[0]
         labelmaps = heatmap[:,0,:,:]
         labelmaps = labelmaps.flatten()
 
         sort_idx = torch.argsort(labelmaps, descending=True)
-        mask = torch.zeros_like(sort_idx, dtype=torch.bool, device=sort_idx.device)
+        if mask is None:
+            mask = torch.zeros_like(sort_idx, dtype=torch.bool, device=sort_idx.device)
+        mask.fill_(0)
         mask[sort_idx[:256*batch_dim]] = True
         return mask
 
