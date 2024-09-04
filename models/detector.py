@@ -221,8 +221,7 @@ class TextDetectorModel(nn.Module):
         heatmap, features = self.detector(x)
 
         features = torch.permute(features, (0,2,3,1)).flatten(0,-2)
-        features = torch.gather(features, 0, fmask)
-        decoder_outputs = self.decoder(features)
+        decoder_outputs = self.decoder(features[fmask])
 
         return heatmap, decoder_outputs
 
@@ -233,7 +232,9 @@ class TextDetectorModel(nn.Module):
         labelmaps = labelmaps.flatten()
 
         sort_idx = torch.argsort(labelmaps, descending=True)
-        return sort_idx[:1024*batch_dim]
+        mask = torch.zeros_like(sort_idx, dtype=torch.bool, device=sort_idx.device)
+        mask[sort_idx[:256*batch_dim]] = True
+        return mask
 
 class CenterNetDetector(nn.Module):
     def __init__(self, detector, scale=False, *args, **kwargs) -> None:
