@@ -170,8 +170,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
         correct += p == t
 
     total = correct.numel()
-    correct = (correct == 3).sum().item()
-    accuracy = correct / total if total > 0 else 0.
+    correct = (correct == 3).sum()
 
     loss = keymap_loss + size_loss + textline_loss + separator_loss + id_loss
     for c_loss in code_losses.values():
@@ -185,5 +184,6 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
         'separator_loss': separator_loss,
         'id_loss': id_loss,
         **code_losses,
-        'accuracy': accuracy,
+        'correct': correct,
+        'total': total,
     }

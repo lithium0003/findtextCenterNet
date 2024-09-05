@@ -26,6 +26,7 @@ torch.set_float32_matmul_precision('high')
 
 class RunningLoss(torch.nn.modules.Module):
     def __init__(self, *args, **kwargs) -> None:
+        self.device = kwargs.pop('device', 'cpu')
         self.step = 0
         self.writer = SummaryWriter(log_dir="result1/logs")
         self.runningcount = kwargs.pop('runningcount', 1000)
@@ -35,15 +36,16 @@ class RunningLoss(torch.nn.modules.Module):
 
     def reset(self):
         self.count = 0
-        self.running_loss = {key: 0. for key in self.losses}
-        self.running_acc = 0.
+        self.running_loss = {key: torch.tensor(0., dtype=torch.float, device=self.device) for key in self.losses}
+        self.correct = torch.tensor(0, device=self.device)
+        self.total = torch.tensor(0, device=self.device)
 
     def write(self, ret=None):
         if ret is None:
             ret = {}
             for key in self.losses:
                 ret[key] = self.running_loss[key] / self.count if self.count > 0 else 0.
-            ret['accuracy'] = self.running_acc / self.count if self.count > 0 else 0.
+            ret['accuracy'] = self.correct.float() / self.total.float() if self.total > 0 else torch.tensor(0., dtype=torch.float, device=self.device)
 
         for key in ret:
             name = 'train/'+key if self.training else 'val/'+key
@@ -62,13 +64,14 @@ class RunningLoss(torch.nn.modules.Module):
             self.step += 1
         self.count += 1
         for key in self.losses:
-            self.running_loss[key] += losses[key].item()
-        self.running_acc += losses['accuracy']
+            self.running_loss[key] += losses[key]
+        self.correct += losses['correct']
+        self.total += losses['total']
 
         ret = {}
         for key in self.losses:
             ret[key] = self.running_loss[key] / self.count if self.count > 0 else 0.
-        ret['accuracy'] = self.running_acc / self.count if self.count > 0 else 0.
+        ret['accuracy'] = self.correct.float() / self.total.float() if self.total > 0 else torch.tensor(0., dtype=torch.float, device=self.device)
         if 'lr' in losses:
             ret['lr'] = losses['lr']
 
@@ -144,7 +147,7 @@ def train(batch=4, compile=True, logstep=100):
         'id_loss',
         *['code%d_loss'%2**(i) for i in range(4)],
     ])
-    running_loss = RunningLoss(losses=[
+    running_loss = RunningLoss(device=device, losses=[
         'loss',
         'CoWloss',
         'keymap_loss',
@@ -165,7 +168,6 @@ def train(batch=4, compile=True, logstep=100):
         return loss, rawloss
 
     def test_step(image, map, idmap, fmask):
-        fmask = model.get_fmask(map)
         heatmap, decoder_outputs = model(image, fmask)
         rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs)
         loss = CoWloss(rawloss)
@@ -197,6 +199,7 @@ def train(batch=4, compile=True, logstep=100):
     last_epoch = 0
     fmask = None
     for epoch in range(last_epoch, EPOCHS):
+        print(datetime.datetime.now(), 'epoch', epoch)
         with open('log.txt','a') as wf:
             print(datetime.datetime.now(), 'epoch', epoch, file=wf, flush=True)
         if upload_objectstorage:
@@ -207,33 +210,33 @@ def train(batch=4, compile=True, logstep=100):
         running_loss.train()
 
         optimizer.zero_grad()
+        for i, data in enumerate(training_loader):
+            image, labelmap, idmap = data
+            image = torch.tensor(image, dtype=torch.float, device=device)
+            labelmap = torch.tensor(labelmap, dtype=torch.float, device=device)
+            idmap = torch.tensor(idmap, dtype=torch.long, device=device)
 
-        with tqdm(training_loader, desc=f"[train {epoch + 1}]", total=train_count//batch) as pbar:
-            for data in pbar:
-                image, labelmap, idmap = data
-                image = torch.from_numpy(image).to(device=device, dtype=torch.float, non_blocking=True)
-                labelmap = torch.from_numpy(labelmap).to(device=device, dtype=torch.float, non_blocking=True)
-                idmap = torch.from_numpy(idmap).to(device=device, dtype=torch.long, non_blocking=True)
+            fmask = model.get_fmask(labelmap, fmask)
+            loss, rawloss = train_step(image, labelmap, idmap, fmask)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad()
 
-                fmask = model.get_fmask(labelmap, fmask)
-                loss, rawloss = train_step(image, labelmap, idmap, fmask)
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad()
+            # Gather data and report
+            rawloss['CoWloss'] = loss
+            rawloss['lr'] = optimizer.param_groups[0]['lr']
+            losslog = running_loss(rawloss)
+            if i % logstep == 0:
+                CoW_value = losslog['CoWloss'].item()
+                loss_value = losslog['loss'].item()
+                acc_value = losslog['accuracy'].item()
+                print(i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value)
+                with open('log.txt','a') as wf:
+                    print(i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
-                # Gather data and report
-                rawloss['CoWloss'] = loss
-                rawloss['lr'] = optimizer.param_groups[0]['lr']
-                losslog = running_loss(rawloss)
-                pbar.set_postfix({'CoW': losslog['CoWloss'], 'loss': losslog['loss'], 'acc': losslog['accuracy']})
-
-                if pbar.n % logstep == 0:
-                    with open('log.txt','a') as wf:
-                        print(pbar.n, datetime.datetime.now(), 'CoW', losslog['CoWloss'], 'loss', losslog['loss'], 'acc', losslog['accuracy'], file=wf, flush=True)
-
-                    if upload_objectstorage:
-                        upload('log.txt', 'log.txt')
+                if upload_objectstorage:
+                    upload('log.txt', 'log.txt')
 
         running_loss.reset()
 
@@ -250,21 +253,30 @@ def train(batch=4, compile=True, logstep=100):
         running_loss.eval()
 
         with torch.no_grad():
-            with tqdm(validation_loader, desc=f"[valid {epoch + 1}]", total=val_count//batch) as pbar:
-                for vdata in pbar:
-                    image, labelmap, idmap = vdata
-                    image = torch.from_numpy(image).to(device=device, dtype=torch.float, non_blocking=True)
-                    labelmap = torch.from_numpy(labelmap).to(device=device, dtype=torch.float, non_blocking=True)
-                    idmap = torch.from_numpy(idmap).to(device=device, dtype=torch.long, non_blocking=True)
+            for vdata in validation_loader:
+                image, labelmap, idmap = vdata
+                image = torch.tensor(image, dtype=torch.float, device=device)
+                labelmap = torch.tensor(labelmap, dtype=torch.float, device=device)
+                idmap = torch.tensor(idmap, dtype=torch.long, device=device)
 
-                    fmask = model.get_fmask(labelmap, fmask)
-                    loss, rawloss = test_step(image, labelmap, idmap, fmask)
+                fmask = model.get_fmask(labelmap, fmask)
+                loss, rawloss = test_step(image, labelmap, idmap, fmask)
 
-                    rawloss['CoWloss'] = loss
-                    losslog = running_loss(rawloss)
-                    pbar.set_postfix({'loss': losslog['loss'], 'acc': losslog['accuracy']})
+                rawloss['CoWloss'] = loss
+                running_loss(rawloss)
 
-        running_loss.write()
+        losslog = running_loss.write()
+
+        CoW_value = losslog['CoWloss'].item()
+        loss_value = losslog['loss'].item()
+        acc_value = losslog['accuracy'].item()
+        print('val', datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value)
+        with open('log.txt','a') as wf:
+            print('val', datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
+
+        if upload_objectstorage:
+            upload('log.txt', 'log.txt')
+
         running_loss.reset()
 
         scheduler.step() 
