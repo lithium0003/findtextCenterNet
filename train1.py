@@ -83,21 +83,6 @@ class RunningLoss(torch.nn.modules.Module):
 
 def train(batch=4, compile=True, logstep=100):
     training_dataset, train_count = get_dataset(train=True)
-
-    print('prepare numba')
-    with open('log.txt','a') as wf:
-        print(datetime.datetime.now(), 'prepare numba', file=wf, flush=True)
-    if upload_objectstorage:
-        upload('log.txt', 'log.txt')
-
-    next(iter(training_dataset))
-
-    print('numba done')
-    with open('log.txt','a') as wf:
-        print(datetime.datetime.now(), 'numba done', file=wf, flush=True)
-    if upload_objectstorage:
-        upload('log.txt', 'log.txt')
-
     # training_loader = DataLoader(training_dataset, batch_size=batch, shuffle=True, num_workers=4)
     training_loader = MultiLoader(training_dataset.batched(batch), workers=8)
 

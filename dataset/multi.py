@@ -56,11 +56,11 @@ def reader(dataset, sockname1, sockname2, index, num_workers):
             byte_io.seek(0)
             sock1.send(byte_io.read(n))
             while True:
-                socks = dict(poller.poll(20))
+                socks = dict(poller.poll(50))
                 if sock2 in socks and socks[sock2] == zmq.POLLIN:
                     rcount = sock2.recv_pyobj()
                 if i > rcount / num_workers + 2:
-                    time.sleep(0.02)
+                    time.sleep(0.05)
                 else:
                     break
         byte_io.seek(0)
