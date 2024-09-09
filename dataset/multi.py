@@ -12,18 +12,33 @@ ZMQ, provided for high performance multithreaded queueing.
 """
 
 import multiprocessing as mp
-import numpy as np
+import pickle
 import os
-import io
 import uuid
 import weakref
 import time
+import signal
 
 import zmq
 
-EOF = np.array('EOF')
+the_protocol = pickle.HIGHEST_PROTOCOL
 
 all_pids = weakref.WeakSet()
+
+
+class EOF:
+    """A class that indicates that a data stream is finished."""
+
+    def __init__(self, **kw):
+        """Initialize the class with the kw as instance variables."""
+        self.__dict__.update(kw)
+
+
+isalive = True
+
+def signal_handler(signal_number, frame):
+    global isalive
+    isalive = False
 
 def reader(dataset, sockname1, sockname2, index, num_workers):
     """Read samples from the dataset and send them over the socket.
@@ -32,9 +47,10 @@ def reader(dataset, sockname1, sockname2, index, num_workers):
     :param sockname: name for the socket to send data to
     :param index: index for this reader, using to indicate EOF
     """
-    global the_protocol
+    global isalive, the_protocol
     os.environ["WORKER"] = str(index)
     os.environ["NUM_WORKERS"] = str(num_workers)
+    signal.signal(signal.SIGTERM, signal_handler)
     ctx = zmq.Context.instance()
     sock1 = ctx.socket(zmq.PUSH)
     sock1.connect(sockname1)
@@ -44,32 +60,26 @@ def reader(dataset, sockname1, sockname2, index, num_workers):
     poller = zmq.Poller()
     poller.register(sock2, zmq.POLLIN)
     rcount = 0
-    with io.BytesIO() as byte_io:
-        for i, sample in enumerate(dataset):
-            while True:
-                socks = dict(poller.poll(50))
-                if sock2 in socks and socks[sock2] == zmq.POLLIN:
-                    rcount = sock2.recv_pyobj()
-                if i > rcount / num_workers + 2:
-                    time.sleep(0.05)
-                else:
-                    break
-            byte_io.seek(0)
-            if isinstance(sample, (tuple, list)):
-                for s in sample:
-                    np.save(byte_io, s, allow_pickle=False)
+    for i, sample in enumerate(dataset):
+        data = pickle.dumps(sample, protocol=the_protocol)
+        sock1.send(data)
+        while isalive:
+            socks = dict(poller.poll(50))
+            if sock2 in socks and socks[sock2] == zmq.POLLIN:
+                rcount = sock2.recv_pyobj()
+            if i > rcount / num_workers + 2:
+                time.sleep(0.05)
             else:
-                np.save(byte_io, sample, allow_pickle=False)
-            n = byte_io.tell()
-            byte_io.seek(0)
-            sock1.send(byte_io.read(n))
-        byte_io.seek(0)
-        np.save(byte_io, EOF, allow_pickle=False)
-        np.save(byte_io, np.array(index), allow_pickle=False)
-        n = byte_io.tell()
-        byte_io.seek(0)
-        sock1.send(byte_io.read(n))
-
+                break
+    sock1.send(pickle.dumps(EOF(index=index)))
+    while isalive:
+        socks = dict(poller.poll(50))
+        if sock2 in socks and socks[sock2] == zmq.POLLIN:
+            sample = sock2.recv_pyobj()
+        if isinstance(sample, EOF) and sample.index == index:
+            break
+        else:
+            time.sleep(0.05)
 
 class MultiLoader:
     """Alternative to PyTorch DataLoader based on ZMQ."""
@@ -136,7 +146,7 @@ class MultiLoader:
         self.pids = [None] * self.workers
         for index in range(self.workers):
             args = (self.dataset, self.sockname1, self.sockname2, index, self.workers)
-            self.pids[index] = mp.Process(target=reader, args=args, daemon=True)
+            self.pids[index] = mp.Process(target=reader, args=args)
         all_pids.update(self.pids)
         for pid in self.pids:
             pid.start()
@@ -144,23 +154,14 @@ class MultiLoader:
         self.socket2.send_pyobj(count)
         while self.pids.count(None) < len(self.pids):
             data = self.socket1.recv()
-            sample = []
-            with io.BytesIO(data) as byte_io:
-                while True:
-                    try:
-                        sample.append(np.load(byte_io))
-                    except:
-                        break
-            if np.array_equal(sample[0], EOF):
-                index = int(sample[1])
+            sample = pickle.loads(data)
+            if isinstance(sample, EOF):
+                self.socket2.send_pyobj(sample)
                 if self.verbose:
-                    print("# subprocess finished", index)
-                self.pids[index].join(1.0)
-                self.pids[index] = None
+                    print("# subprocess finished", sample.index)
+                self.pids[sample.index].join(1.0)
+                self.pids[sample.index] = None
             else:
-                if len(sample) > 1:
-                    yield tuple(sample)
-                else:
-                    yield sample[0]
-            count += 1
+                yield sample
+                count += 1
             self.socket2.send_pyobj(count)

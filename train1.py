@@ -88,7 +88,7 @@ class RunningLoss(torch.nn.modules.Module):
 def train():
     training_dataset, train_count = get_dataset(train=True)
     # training_loader = DataLoader(training_dataset, batch_size=batch, shuffle=True, num_workers=4)
-    training_loader = MultiLoader(training_dataset.batched(batch), workers=8)
+    training_loader = MultiLoader(training_dataset.shuffle(100).batched(batch), workers=8)
 
     validation_dataset, val_count = get_dataset(train=False)
     # validation_loader = DataLoader(validation_dataset, batch_size=batch, shuffle=True, num_workers=8)
