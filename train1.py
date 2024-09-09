@@ -228,6 +228,16 @@ def train():
                 if upload_objectstorage:
                     upload('log.txt', 'log.txt')
 
+        CoW_value = losslog['CoWloss'].item()
+        loss_value = losslog['loss'].item()
+        acc_value = losslog['accuracy'].item()
+        print(i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value)
+        with open('log.txt','a') as wf:
+            print(i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
+
+        if upload_objectstorage:
+            upload('log.txt', 'log.txt')
+
         running_loss.reset()
 
         torch.save({
