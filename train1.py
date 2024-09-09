@@ -21,6 +21,10 @@ if upload_objectstorage:
 lr = 1e-4
 wd = 1e-4
 EPOCHS = 40
+batch=4
+compile=True
+logstep=100
+iters_to_accumulate=1
 
 torch.set_float32_matmul_precision('high')
 
@@ -81,7 +85,7 @@ class RunningLoss(torch.nn.modules.Module):
 
         return ret
 
-def train(batch=4, compile=True, logstep=100):
+def train():
     training_dataset, train_count = get_dataset(train=True)
     # training_loader = DataLoader(training_dataset, batch_size=batch, shuffle=True, num_workers=4)
     training_loader = MultiLoader(training_dataset.batched(batch, partial=False), workers=8)
@@ -149,7 +153,7 @@ def train(batch=4, compile=True, logstep=100):
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             heatmap, decoder_outputs = model(image, fmask)
             rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs)
-            loss = CoWloss(rawloss)
+            loss = CoWloss(rawloss) / iters_to_accumulate
         return loss, rawloss
 
     def test_step(image, map, idmap, fmask):
@@ -204,9 +208,10 @@ def train(batch=4, compile=True, logstep=100):
             fmask = model.get_fmask(labelmap, fmask)
             loss, rawloss = train_step(image, labelmap, idmap, fmask)
             scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            optimizer.zero_grad()
+            if (i + 1) % iters_to_accumulate == 0:
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
 
             # Gather data and report
             rawloss['CoWloss'] = loss
@@ -268,18 +273,23 @@ def train(batch=4, compile=True, logstep=100):
 
 
 if __name__=='__main__':
-    batch = 4
-    compile = True
-    logstep = 100
     if len(sys.argv) > 1:
         argv = sys.argv[1:]
         for arg in argv:
             if arg.startswith('--compile'):
                 compile = arg.split('=')[1].lower() == 'true'
+            elif arg.startswith('--epoch'):
+                EPOCHS = int(arg.split('=')[1])
+            elif arg.startswith('--accumulate'):
+                iters_to_accumulate = int(arg.split('=')[1])
+            elif arg.startswith('--lr'):
+                lr = float(arg.split('=')[1])
+            elif arg.startswith('--wd'):
+                wd = float(arg.split('=')[1])
             elif arg.startswith('--logstep'):
                 logstep = int(arg.split('=')[1])
             elif arg.startswith('--upload'):
                 upload_objectstorage = arg.split('=')[1].lower() == 'true'
             else:
                 batch = int(arg)
-    train(batch, compile=compile, logstep=logstep)
+    train()
