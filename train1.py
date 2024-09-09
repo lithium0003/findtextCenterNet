@@ -88,14 +88,14 @@ class RunningLoss(torch.nn.modules.Module):
 def train():
     training_dataset, train_count = get_dataset(train=True)
     # training_loader = DataLoader(training_dataset, batch_size=batch, shuffle=True, num_workers=4)
-    training_loader = MultiLoader(training_dataset.batched(batch, partial=False), workers=8)
+    training_loader = MultiLoader(training_dataset.batched(batch), workers=8)
 
     validation_dataset, val_count = get_dataset(train=False)
     # validation_loader = DataLoader(validation_dataset, batch_size=batch, shuffle=True, num_workers=8)
-    validation_loader = MultiLoader(validation_dataset.batched(batch, partial=False), workers=8)
+    validation_loader = MultiLoader(validation_dataset.batched(batch), workers=8)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print('using device:', device)
+    print('using device:', device, flush=True)
     with open('log.txt','a') as wf:
         print(datetime.datetime.now(), 'using device:', device, file=wf, flush=True)
     if upload_objectstorage:
@@ -163,7 +163,7 @@ def train():
         return loss, rawloss
 
     if compile:
-        print('compile')
+        print('compile', flush=True)
         with open('log.txt','a') as wf:
             print('compile', file=wf, flush=True)
         if upload_objectstorage:
@@ -171,14 +171,14 @@ def train():
         train_step = torch.compile(train_step)
         test_step = torch.compile(test_step)
     else:
-        print('no compile')
+        print('no compile', flush=True)
         with open('log.txt','a') as wf:
             print('no compile', file=wf, flush=True)
         if upload_objectstorage:
             upload('log.txt', 'log.txt')
 
-    print('batch', batch)
-    print('logstep', logstep)
+    print('batch', batch, flush=True)
+    print('logstep', logstep, flush=True)
     with open('log.txt','a') as wf:
         print('batch', batch, file=wf, flush=True)
         print('logstep', logstep, file=wf, flush=True)
@@ -188,7 +188,7 @@ def train():
     last_epoch = 0
     fmask = None
     for epoch in range(last_epoch, EPOCHS):
-        print(datetime.datetime.now(), 'epoch', epoch)
+        print(datetime.datetime.now(), 'epoch', epoch, flush=True)
         with open('log.txt','a') as wf:
             print(datetime.datetime.now(), 'epoch', epoch, file=wf, flush=True)
         if upload_objectstorage:
@@ -221,7 +221,7 @@ def train():
                 CoW_value = losslog['CoWloss'].item()
                 loss_value = losslog['loss'].item()
                 acc_value = losslog['accuracy'].item()
-                print(i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value)
+                print(i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
                 with open('log.txt','a') as wf:
                     print(i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
@@ -231,7 +231,7 @@ def train():
         CoW_value = losslog['CoWloss'].item()
         loss_value = losslog['loss'].item()
         acc_value = losslog['accuracy'].item()
-        print(i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value)
+        print(i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
         with open('log.txt','a') as wf:
             print(i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
@@ -270,7 +270,7 @@ def train():
         CoW_value = losslog['CoWloss'].item()
         loss_value = losslog['loss'].item()
         acc_value = losslog['accuracy'].item()
-        print('val', datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value)
+        print('val', datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
         with open('log.txt','a') as wf:
             print('val', datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 

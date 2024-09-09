@@ -232,7 +232,7 @@ class TextDetectorModel(nn.Module):
         labelmaps = labelmaps.flatten()
 
         sort_idx = torch.argsort(labelmaps, descending=True)
-        if mask is None:
+        if mask is None or torch.not_equal(mask.shape, sort_idx.shape):
             mask = torch.zeros_like(sort_idx, dtype=torch.bool, device=sort_idx.device)
         mask.fill_(0)
         mask[sort_idx[:256*batch_dim]] = True
