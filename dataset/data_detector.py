@@ -44,13 +44,11 @@ def identity(x):
 def get_dataset(train=True):
     if train:
         shard_pattern = 'train_data1/train{00000000..00000399}.tar'
-        shard_pattern = 'pipe:curl --connect-timeout 30 --retry 30 --retry-delay 2 -f -s -L --http1.1 https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/train{00000000..00000399}.tar'
-        shard_pattern = 'pipe:wget -O - -q --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/train{00000000..00000399}.tar'
+        shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/train{00000000..00000399}.tar'
         num_sample = 400 * 100
     else:
         shard_pattern = 'train_data1/test{00000000..00000015}.tar'
-        shard_pattern = 'pipe:curl --connect-timeout 30 --retry 30 --retry-delay 2 -f -s -L --http1.1 https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test{00000000..00000015}.tar'
-        shard_pattern = 'pipe:wget -O - -q --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test{00000000..00000015}.tar'
+        shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test{00000000..00000015}.tar'
         num_sample = 16 * 100
     dataset = (
         wds.WebDataset(shard_pattern, shardshuffle=True)

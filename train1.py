@@ -126,7 +126,7 @@ def train():
         {'params': no_wd, 'weight_decay': 0}, 
         {'params': params},
     ], lr=lr, weight_decay=wd)
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.925)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=(1-0.05/iters_to_accumulate))
 
     CoWloss = CoVWeightingLoss(device=device, losses=[
         'keymap_loss',
@@ -221,9 +221,9 @@ def train():
                 CoW_value = losslog['CoWloss'].item()
                 loss_value = losslog['loss'].item()
                 acc_value = losslog['accuracy'].item()
-                print(i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
+                print(epoch, i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
                 with open('log.txt','a') as wf:
-                    print(i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
+                    print(epoch, i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
                 if upload_objectstorage:
                     upload('log.txt', 'log.txt')
@@ -231,9 +231,9 @@ def train():
         CoW_value = losslog['CoWloss'].item()
         loss_value = losslog['loss'].item()
         acc_value = losslog['accuracy'].item()
-        print(i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
+        print(epoch, i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
         with open('log.txt','a') as wf:
-            print(i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
+            print(epoch, i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
         if upload_objectstorage:
             upload('log.txt', 'log.txt')
@@ -270,9 +270,9 @@ def train():
         CoW_value = losslog['CoWloss'].item()
         loss_value = losslog['loss'].item()
         acc_value = losslog['accuracy'].item()
-        print('val', datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
+        print(epoch, 'val', datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
         with open('log.txt','a') as wf:
-            print('val', datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
+            print(epoch, 'val', datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
         if upload_objectstorage:
             upload('log.txt', 'log.txt')
