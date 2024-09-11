@@ -45,11 +45,9 @@ def get_dataset(train=True):
     if train:
         shard_pattern = 'train_data1/train{00000000..00000399}.tar'
         shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/train{00000000..00000399}.tar'
-        num_sample = 400 * 100
     else:
         shard_pattern = 'train_data1/test{00000000..00000015}.tar'
         shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test{00000000..00000015}.tar'
-        num_sample = 16 * 100
     dataset = (
         wds.WebDataset(shard_pattern, shardshuffle=True)
         .decode('l8')
@@ -64,14 +62,14 @@ def get_dataset(train=True):
         .map(process)
         .map_tuple(transforms3,identity,identity)
     )
-    return dataset, num_sample
+    return dataset
 
 if __name__=='__main__':
     import matplotlib.pylab as plt
     import time
     from dataset.multi import MultiLoader
 
-    dataset, count = get_dataset(train=False)
+    dataset = get_dataset(train=False)
     dataloader = MultiLoader(dataset.batched(1))
 
     st = time.time()

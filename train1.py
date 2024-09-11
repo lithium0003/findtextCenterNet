@@ -26,8 +26,6 @@ compile=True
 logstep=100
 iters_to_accumulate=1
 
-torch.set_float32_matmul_precision('high')
-
 class RunningLoss(torch.nn.modules.Module):
     def __init__(self, *args, **kwargs) -> None:
         self.device = kwargs.pop('device', 'cpu')
@@ -86,13 +84,13 @@ class RunningLoss(torch.nn.modules.Module):
         return ret
 
 def train():
-    training_dataset, train_count = get_dataset(train=True)
+    training_dataset = get_dataset(train=True)
     # training_loader = DataLoader(training_dataset, batch_size=batch, shuffle=True, num_workers=4)
-    training_loader = MultiLoader(training_dataset.shuffle(100).batched(batch), workers=8)
+    training_loader = MultiLoader(training_dataset.shuffle(100).batched(batch, partial=False), workers=8)
 
-    validation_dataset, val_count = get_dataset(train=False)
+    validation_dataset = get_dataset(train=False)
     # validation_loader = DataLoader(validation_dataset, batch_size=batch, shuffle=True, num_workers=8)
-    validation_loader = MultiLoader(validation_dataset.batched(batch), workers=8)
+    validation_loader = MultiLoader(validation_dataset.shuffle(100).batched(batch, partial=False), workers=8)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('using device:', device, flush=True)
@@ -157,9 +155,10 @@ def train():
         return loss, rawloss
 
     def test_step(image, map, idmap, fmask):
-        heatmap, decoder_outputs = model(image, fmask)
-        rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs)
-        loss = CoWloss(rawloss)
+        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+            heatmap, decoder_outputs = model(image, fmask)
+            rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs)
+            loss = CoWloss(rawloss)
         return loss, rawloss
 
     if compile:
