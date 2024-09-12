@@ -181,10 +181,15 @@ cdef void box_map(float cx, float cy, float w, float h, vector[float]& boxmap) n
 cdef void id_map(float cx, float cy, float w, float h, int code1, int code2, vector[cnp.int32_t]& indexmap) noexcept nogil:
     cdef float fix_w = max(w / 4, 4.0)
     cdef float fix_h = max(h / 4, 4.0)
+    cdef int xmin = max(0, <int>((cx - fix_w) / scale) - 2)
+    cdef int xmax = min(width//scale, <int>((cx + fix_w) / scale) + 2)
+    cdef int ymin = max(0, <int>((cy - fix_h) / scale) - 2)
+    cdef int ymax = min(height//scale, <int>((cy + fix_h) / scale) + 2)
+
     cdef float x,y
     cdef int xi,yi,idx
-    for yi in range(height//scale):
-        for xi in range(width//scale):
+    for yi in range(ymin, ymax):
+        for xi in range(xmin, xmax):
             x = <float>(xi * scale) - cx
             y = <float>(yi * scale) - cy
             if (x / fix_w) ** 2 + (y / fix_h) ** 2 < 1:
@@ -304,7 +309,7 @@ cpdef transform_crop(
         x1 = vposition[i*4 + 0] - vposition[i*4 + 2] / 2
         y1 = vposition[i*4 + 1] - vposition[i*4 + 3] / 2
         x2 = vposition[i*4 + 0] + vposition[i*4 + 2] / 2
-        y2 = vposition[i*4 + 1] + vposition[i*4 + 2] / 2
+        y2 = vposition[i*4 + 1] + vposition[i*4 + 3] / 2
         vector_dot(xr1, yr1, rotation_matrix.data(), x1, y1)
         vector_dot(xr2, yr2, rotation_matrix.data(), x2, y2)
         vposition[i*4 + 0] = (xr1 + xr2) / 2
