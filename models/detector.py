@@ -139,7 +139,8 @@ class Leafmap(nn.Module):
         upsamplers = []
         for i, (in_dim, o_dim) in enumerate(zip(in_dims, conv_dims)):
             layers = nn.Sequential(
-                nn.Conv2d(in_dim, o_dim, 3, padding=1),
+                nn.Conv2d(in_dim, o_dim, 3, padding=1, bias=False),
+                nn.BatchNorm2d(o_dim),
                 nn.Upsample(scale_factor=2**(i+1), mode='bilinear'),
             )
             upsamplers.append(layers)
@@ -147,7 +148,8 @@ class Leafmap(nn.Module):
 
         self.top_conv = nn.Sequential(
             nn.GELU(),
-            nn.Conv2d(sum(conv_dims), mid_dim, 3, padding=1),
+            nn.Conv2d(sum(conv_dims), mid_dim, 3, padding=1, bias=False),
+            nn.BatchNorm2d(mid_dim),
             nn.GELU(),
             nn.Conv2d(mid_dim, out_dim, 1),
         )
@@ -196,9 +198,11 @@ class SimpleDecoder(nn.Module):
         mid_dim = 1024
         for modulo in modulo_list:
             layer = nn.Sequential(
-                nn.Linear(feature_dim, mid_dim),
+                nn.Linear(feature_dim, mid_dim, bias=False),
+                nn.BatchNorm1d(mid_dim),
                 nn.GELU(),
-                nn.Linear(mid_dim, mid_dim),
+                nn.Linear(mid_dim, mid_dim, bias=False),
+                nn.BatchNorm1d(mid_dim),
                 nn.GELU(),
                 nn.Linear(mid_dim, modulo),
             )

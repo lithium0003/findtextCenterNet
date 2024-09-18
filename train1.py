@@ -110,6 +110,8 @@ def train():
     for m in model.modules():
         if isinstance(m, (torch.nn.BatchNorm2d)):
             no_wd |= set(m.parameters())
+        elif isinstance(m, (torch.nn.BatchNorm1d)):
+            no_wd |= set(m.parameters())
         elif isinstance(m, (torch.nn.LayerNorm)):
             no_wd |= set(m.parameters())
         else:
