@@ -42,16 +42,23 @@ def identity(x):
     return x
 
 def get_dataset(train=True, calib=False):
+    local_disk = False
     if calib:
-        shard_pattern = 'train_data1/test00000000.tar'
-        shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test00000000.tar'
+        if local_disk:
+            shard_pattern = 'train_data1/test00000000.tar'
+        else:
+            shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test00000000.tar'
     else:
         if train:
-            shard_pattern = 'train_data1/train{00000000..00000399}.tar'
-            shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/train{00000000..00000399}.tar'
+            if local_disk:
+                shard_pattern = 'train_data1/train{00000000..00001023}.tar'
+            else:
+                shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/train{00000000..00001023}.tar'
         else:
-            shard_pattern = 'train_data1/test{00000000..00000015}.tar'
-            shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test{00000000..00000015}.tar'
+            if local_disk:
+                shard_pattern = 'train_data1/test{00000000..00000063}.tar'
+            else:
+                shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test{00000000..00000063}.tar'
     dataset = (
         wds.WebDataset(shard_pattern, shardshuffle=True)
         .shuffle(100)

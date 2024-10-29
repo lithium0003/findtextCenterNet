@@ -87,11 +87,11 @@ class RunningLoss(torch.nn.modules.Module):
 def train():
     training_dataset = get_dataset(train=True)
     # training_loader = DataLoader(training_dataset, batch_size=batch, num_workers=4)
-    training_loader = MultiLoader(training_dataset.batched(batch, partial=False), workers=4)
+    training_loader = MultiLoader(training_dataset.batched(batch, partial=False), workers=8)
 
     validation_dataset = get_dataset(train=False)
     # validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=4)
-    validation_loader = MultiLoader(validation_dataset.batched(batch, partial=False), workers=4)
+    validation_loader = MultiLoader(validation_dataset.batched(batch, partial=False), workers=8)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('using device:', device, flush=True)
@@ -120,7 +120,7 @@ def train():
         'id_loss',
         *['code%d_loss'%2**(i) for i in range(4)],
     ])
-    running_loss = RunningLoss(device=device, losses=[
+    running_loss = RunningLoss(device=device, runningcount=100, losses=[
         'loss',
         'CoWloss',
         'keymap_loss',
