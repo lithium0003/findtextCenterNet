@@ -97,7 +97,7 @@ def heatmap_loss(true, logits):
 
     return loss
 
-def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
+def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs, features):
     key_th1 = 0.75
     key_th2 = 0.25
     key_th3 = 0.99
@@ -157,6 +157,8 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
         id1_loss = (id1_loss * weight3).sum() / weight3_count
         id_loss += id1_loss
 
+    l2_loss = torch.norm(features[mask4], p=2, dim=-1).mean().clamp_min(1) - 1
+
     pred_ids = []
     for decoder_id1 in decoder_outputs:
         pred_id1 = torch.argmax(decoder_id1[mask4,:], dim=-1)
@@ -175,7 +177,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     total = torch.ones_like(correct).sum()
     correct = (correct == 3).sum()
 
-    loss = keymap_loss + size_loss + textline_loss + separator_loss + id_loss
+    loss = keymap_loss + size_loss + textline_loss + separator_loss + id_loss + l2_loss
     for c_loss in code_losses.values():
         loss += c_loss
 
@@ -186,6 +188,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
         'textline_loss': textline_loss,
         'separator_loss': separator_loss,
         'id_loss': id_loss,
+        'l2_loss': l2_loss,
         **code_losses,
         'correct': correct,
         'total': total,

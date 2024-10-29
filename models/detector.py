@@ -132,9 +132,8 @@ class BackboneModel(nn.Module):
         return results
 
 class Leafmap(nn.Module):
-    def __init__(self, out_dim=1, mid_dim=64, normalize=False, **kwargs) -> None:
+    def __init__(self, out_dim=1, mid_dim=64, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.normalize = normalize
         in_dims = [64,96,256,1280]
         conv_dims = [8,8,16,96]
         upsamplers = []
@@ -158,12 +157,7 @@ class Leafmap(nn.Module):
         for x, up in zip([x1,x2,x3,x4], self.upsamplers):
             y.append(up(x))
         x = torch.cat(y, dim=1)
-        x = self.top_conv(x)
-        if self.normalize:
-            denorm = x.norm(dim=1, keepdim=True).clamp_min(1e-12).expand_as(x)
-            return x / denorm
-        else:
-            return x
+        return self.top_conv(x)
 
 class CenterNetDetection(nn.Module):
     def __init__(self, pre_weights=True, **kwargs) -> None:
@@ -177,7 +171,7 @@ class CenterNetDetection(nn.Module):
         self.code2 = Leafmap(out_dim=1)
         self.code4 = Leafmap(out_dim=1)
         self.code8 = Leafmap(out_dim=1)
-        self.feature = Leafmap(out_dim=feature_dim, normalize=True)
+        self.feature = Leafmap(out_dim=feature_dim)
 
     def forward(self, x):
         x = x * 2 - 1
@@ -231,7 +225,7 @@ class TextDetectorModel(nn.Module):
         features = torch.permute(features, (0,2,3,1)).flatten(0,-2)
         decoder_outputs = self.decoder(features[fmask])
 
-        return heatmap, decoder_outputs
+        return heatmap, decoder_outputs, features[fmask]
 
     def get_fmask(self, heatmap, mask) -> Tensor:
         # heatmap: [-1, 11, 256, 256]
