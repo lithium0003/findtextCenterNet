@@ -67,7 +67,7 @@ def reader(dataset, sockname1, sockname2, index, num_workers):
             socks = dict(poller.poll(50))
             if sock2 in socks and socks[sock2] == zmq.POLLIN:
                 rcount = sock2.recv_pyobj()
-            if i > rcount / num_workers + 5:
+            if i > rcount / num_workers + 1:
                 time.sleep(0.05)
             else:
                 break
@@ -80,6 +80,10 @@ def reader(dataset, sockname1, sockname2, index, num_workers):
             break
         else:
             time.sleep(0.05)
+
+    sock1.close()
+    sock2.close()
+    ctx.destroy()
 
 class MultiLoader:
     """Alternative to PyTorch DataLoader based on ZMQ."""
