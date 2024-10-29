@@ -17,8 +17,6 @@ from loss_func import loss_function, CoVWeightingLoss
 # from dataset.multi import MultiLoader
 
 upload_objectstorage = False
-if upload_objectstorage:
-    from put_object import upload
 
 lr = 1e-3
 wd = 1e-4
@@ -334,4 +332,8 @@ if __name__=='__main__':
                 scheduler_gamma = float(arg.split('=')[1])
             else:
                 batch = int(arg)
+
+    if upload_objectstorage:
+        from put_object import upload
+
     train()
