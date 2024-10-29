@@ -207,13 +207,13 @@ def train():
             rawloss['CoWloss'] = loss
             rawloss['lr'] = optimizer.param_groups[0]['lr']
             losslog = running_loss(rawloss)
-            if i % logstep == 0:
+            if (i + 1) % logstep == 0 or i == 0:
                 CoW_value = losslog['CoWloss'].item()
                 loss_value = losslog['loss'].item()
                 acc_value = losslog['accuracy'].item()
-                print(epoch, i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
+                print(epoch, i+1, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
                 with open('log.txt','a') as wf:
-                    print(epoch, i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
+                    print(epoch, i+1, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
                 if upload_objectstorage:
                     upload('log.txt', 'log.txt')
@@ -228,9 +228,9 @@ def train():
         CoW_value = losslog['CoWloss'].item()
         loss_value = losslog['loss'].item()
         acc_value = losslog['accuracy'].item()
-        print(epoch, i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
+        print(epoch, i+1, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
         with open('log.txt','a') as wf:
-            print(epoch, i, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
+            print(epoch, i+1, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
         if upload_objectstorage:
             upload('log.txt', 'log.txt')
