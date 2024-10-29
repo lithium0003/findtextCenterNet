@@ -196,11 +196,9 @@ class SimpleDecoder(nn.Module):
         mid_dim = 1024
         for modulo in modulo_list:
             layer = nn.Sequential(
-                nn.Linear(feature_dim, mid_dim, bias=False),
-                nn.BatchNorm1d(mid_dim),
+                nn.Linear(feature_dim, mid_dim),
                 nn.GELU(),
-                nn.Linear(mid_dim, mid_dim, bias=False),
-                nn.BatchNorm1d(mid_dim),
+                nn.Linear(mid_dim, mid_dim),
                 nn.GELU(),
                 nn.Linear(mid_dim, modulo),
             )
@@ -225,7 +223,7 @@ class TextDetectorModel(nn.Module):
         features = torch.permute(features, (0,2,3,1)).flatten(0,-2)
         decoder_outputs = self.decoder(features[fmask])
 
-        return heatmap, decoder_outputs, features[fmask]
+        return heatmap, decoder_outputs, features
 
     def get_fmask(self, heatmap, mask) -> Tensor:
         # heatmap: [-1, 11, 256, 256]

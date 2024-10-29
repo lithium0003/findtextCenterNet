@@ -157,7 +157,8 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs, features):
         id1_loss = (id1_loss * weight3).sum() / weight3_count
         id_loss += id1_loss
 
-    l2_loss = torch.norm(features[mask4], p=2, dim=-1).mean().clamp_min(1) - 1
+    l2_loss = features.std(dim=-1)
+    l2_loss = torch.where(l2_loss > 3, l2_loss - 3, 0.).mean()
 
     pred_ids = []
     for decoder_id1 in decoder_outputs:

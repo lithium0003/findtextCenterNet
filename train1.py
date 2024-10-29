@@ -107,33 +107,37 @@ def train():
         model.load_state_dict(data['model_state_dict'])
     model.to(device)
 
-    all_params = set(filter(lambda p: p.requires_grad, model.parameters()))
-    no_wd = set()
-    backbone_params = set()
-    for n, m in model.named_modules():
-        if isinstance(m, (torch.nn.BatchNorm2d)):
-            no_wd |= set(m.parameters())
-        elif isinstance(m, (torch.nn.BatchNorm1d)):
-            no_wd |= set(m.parameters())
-        elif isinstance(m, (torch.nn.InstanceNorm2d)):
-            no_wd |= set(m.parameters())
-        elif isinstance(m, (torch.nn.GroupNorm)):
-            no_wd |= set(m.parameters())
-        else:
-            if 'detector.backbone' in n:
-                backbone_params |= set(m.parameters())
-            for key, value in m.named_parameters(recurse=False):
-                if key == 'bias':
-                    no_wd |= set([value])
-    backbone_params = backbone_params - no_wd
-    all_params = all_params - no_wd
-    all_params = list(all_params)
-    no_wd = list(no_wd)
+    # all_params = set(filter(lambda p: p.requires_grad, model.parameters()))
+    # no_wd = set()
+    # backbone_params = set()
+    # for n, m in model.named_modules():
+    #     if isinstance(m, (torch.nn.BatchNorm2d)):
+    #         no_wd |= set(m.parameters())
+    #     elif isinstance(m, (torch.nn.BatchNorm1d)):
+    #         no_wd |= set(m.parameters())
+    #     elif isinstance(m, (torch.nn.InstanceNorm2d)):
+    #         no_wd |= set(m.parameters())
+    #     elif isinstance(m, (torch.nn.GroupNorm)):
+    #         no_wd |= set(m.parameters())
+    #     else:
+    #         if 'detector.backbone' in n:
+    #             backbone_params |= set(m.parameters())
+    #         for key, value in m.named_parameters(recurse=False):
+    #             if key == 'bias':
+    #                 no_wd |= set([value])
+    # backbone_params = backbone_params - no_wd
+    # all_params = all_params - no_wd
+    # all_params = list(all_params)
+    # no_wd = list(no_wd)
+    # optimizer = torch.optim.AdamW([
+    #     {'params': no_wd, 'weight_decay': 0}, 
+    #     {'params': all_params},
+    # ], lr=lr, weight_decay=wd)
 
-    optimizer = torch.optim.AdamW([
-        {'params': no_wd, 'weight_decay': 0}, 
+    all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
+    optimizer = torch.optim.Adam([
         {'params': all_params},
-    ], lr=lr, weight_decay=wd)
+    ], lr=lr)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=scheduler_gamma)
 
     CoWloss = CoVWeightingLoss(momentum=1/100, device=device, losses=[
