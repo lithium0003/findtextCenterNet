@@ -3,7 +3,7 @@
 import torch
 from torch.utils.tensorboard.writer import SummaryWriter
 from tqdm.auto import tqdm
-from torch.utils.data import DataLoader
+# from torch.utils.data import DataLoader
 import os
 import sys
 import glob
@@ -14,12 +14,11 @@ torch.set_float32_matmul_precision('high')
 from models.detector import TextDetectorModel
 from dataset.data_detector import get_dataset
 from loss_func import loss_function, CoVWeightingLoss
-# from dataset.multi import MultiLoader
+from dataset.multi import MultiLoader
 
 upload_objectstorage = False
 
 lr = 1e-3
-wd = 1e-4
 EPOCHS = 40
 batch=4
 compile=True
@@ -87,12 +86,12 @@ class RunningLoss(torch.nn.modules.Module):
 
 def train():
     training_dataset = get_dataset(train=True)
-    training_loader = DataLoader(training_dataset, batch_size=batch, num_workers=8)
-    # training_loader = MultiLoader(training_dataset.shuffle(100).batched(batch, partial=False), workers=8)
+    # training_loader = DataLoader(training_dataset, batch_size=batch, num_workers=8)
+    training_loader = MultiLoader(training_dataset.batched(batch, partial=False), workers=8)
 
     validation_dataset = get_dataset(train=False)
-    validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=8)
-    # validation_loader = MultiLoader(validation_dataset.shuffle(100).batched(batch, partial=False), workers=8)
+    # validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=8)
+    validation_loader = MultiLoader(validation_dataset.batched(batch, partial=False), workers=8)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('using device:', device, flush=True)
@@ -106,33 +105,6 @@ def train():
         data = torch.load('result1/model.pt', map_location="cpu", weights_only=True)
         model.load_state_dict(data['model_state_dict'])
     model.to(device)
-
-    # all_params = set(filter(lambda p: p.requires_grad, model.parameters()))
-    # no_wd = set()
-    # backbone_params = set()
-    # for n, m in model.named_modules():
-    #     if isinstance(m, (torch.nn.BatchNorm2d)):
-    #         no_wd |= set(m.parameters())
-    #     elif isinstance(m, (torch.nn.BatchNorm1d)):
-    #         no_wd |= set(m.parameters())
-    #     elif isinstance(m, (torch.nn.InstanceNorm2d)):
-    #         no_wd |= set(m.parameters())
-    #     elif isinstance(m, (torch.nn.GroupNorm)):
-    #         no_wd |= set(m.parameters())
-    #     else:
-    #         if 'detector.backbone' in n:
-    #             backbone_params |= set(m.parameters())
-    #         for key, value in m.named_parameters(recurse=False):
-    #             if key == 'bias':
-    #                 no_wd |= set([value])
-    # backbone_params = backbone_params - no_wd
-    # all_params = all_params - no_wd
-    # all_params = list(all_params)
-    # no_wd = list(no_wd)
-    # optimizer = torch.optim.AdamW([
-    #     {'params': no_wd, 'weight_decay': 0}, 
-    #     {'params': all_params},
-    # ], lr=lr, weight_decay=wd)
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
     optimizer = torch.optim.Adam([
@@ -192,12 +164,10 @@ def train():
     print('batch', batch, flush=True)
     print('logstep', logstep, flush=True)
     print('lr', lr, flush=True)
-    print('wd', wd, flush=True)
     with open('log.txt','a') as wf:
         print('batch', batch, file=wf, flush=True)
         print('logstep', logstep, file=wf, flush=True)
         print('lr', lr, file=wf, flush=True)
-        print('wd', wd, file=wf, flush=True)
     if upload_objectstorage:
         upload('log.txt', 'log.txt')
 
@@ -219,12 +189,12 @@ def train():
         optimizer.zero_grad()
         for i, data in enumerate(training_loader):
             image, labelmap, idmap = data
-            image = image.to(device=device)
-            labelmap = labelmap.to(device=device)
-            idmap = idmap.to(dtype=torch.long, device=device)
-            # image = torch.tensor(image, dtype=torch.float, device=device)
-            # labelmap = torch.tensor(labelmap, dtype=torch.float, device=device)
-            # idmap = torch.tensor(idmap, dtype=torch.long, device=device)
+            # image = image.to(device=device)
+            # labelmap = labelmap.to(device=device)
+            # idmap = idmap.to(dtype=torch.long, device=device)
+            image = torch.tensor(image, dtype=torch.float, device=device)
+            labelmap = torch.tensor(labelmap, dtype=torch.float, device=device)
+            idmap = torch.tensor(idmap, dtype=torch.long, device=device)
 
             fmask = model.get_fmask(labelmap, fmask)
             loss, rawloss = train_step(image, labelmap, idmap, fmask)
@@ -282,12 +252,12 @@ def train():
         with torch.no_grad():
             for vdata in validation_loader:
                 image, labelmap, idmap = vdata
-                image = image.to(device=device)
-                labelmap = labelmap.to(device=device)
-                idmap = idmap.to(dtype=torch.long, device=device)
-                # image = torch.tensor(image, dtype=torch.float, device=device)
-                # labelmap = torch.tensor(labelmap, dtype=torch.float, device=device)
-                # idmap = torch.tensor(idmap, dtype=torch.long, device=device)
+                # image = image.to(device=device)
+                # labelmap = labelmap.to(device=device)
+                # idmap = idmap.to(dtype=torch.long, device=device)
+                image = torch.tensor(image, dtype=torch.float, device=device)
+                labelmap = torch.tensor(labelmap, dtype=torch.float, device=device)
+                idmap = torch.tensor(idmap, dtype=torch.long, device=device)
 
                 fmask = model.get_fmask(labelmap, fmask)
                 loss, rawloss = test_step(image, labelmap, idmap, fmask)
@@ -324,8 +294,6 @@ if __name__=='__main__':
                 iters_to_accumulate = int(arg.split('=')[1])
             elif arg.startswith('--lr'):
                 lr = float(arg.split('=')[1])
-            elif arg.startswith('--wd'):
-                wd1 = float(arg.split('=')[1])
             elif arg.startswith('--logstep'):
                 logstep = int(arg.split('=')[1])
             elif arg.startswith('--upload'):
