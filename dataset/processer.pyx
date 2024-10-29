@@ -19,7 +19,8 @@ cdef int height = 768
 
 cdef inline float random_uniform() noexcept nogil:
     cdef float r = rand()
-    return r / RAND_MAX
+    cdef float rmax = RAND_MAX
+    return r / rmax
 
 cdef float random_gaussian() noexcept nogil:
     cdef float x1, x2, w
@@ -263,10 +264,15 @@ cpdef transform_crop(
 
     # augmentation param
     cdef float rotation_angle = np.deg2rad(random_gaussian() * 5.0)
-    cdef float size_x = max(3 * random_gaussian() + 1, 1.0)
-    cdef float size_y = max(3 * random_gaussian() + 1, 1.0)
+    cdef float size_x = abs(random_gaussian()) + 1.0
+    cdef float aspect_ratio = abs(random_gaussian()) + 1.0
+    cdef float size_y
     cdef float sh_x = random_gaussian() * 0.01
     cdef float sh_y = random_gaussian() * 0.01
+    if random_uniform() < 0.5:
+        size_y = size_x * aspect_ratio
+    else:
+        size_y = size_x / aspect_ratio
 
     # get rotate matrix
     cdef vector[float] rotation_matrix = GetMatrix(im_w / 2, im_h / 2, rotation_angle, size_x, size_y, sh_x, sh_y)
@@ -318,15 +324,16 @@ cpdef transform_crop(
         vposition[i*4 + 3] = yr2 - yr1
 
     # set center point
-    if position_len > 0:
+    # ensure 95% is included text
+    if random_uniform() < 0.95 and position_len > 0:
         cidx = <int>(random_uniform() * <float>position_len)
         woffset = random_uniform() * <float>width * 0.75 + <float>width / 8
         hoffset = random_uniform() * <float>height * 0.75 + <float>height / 8
         startx = vposition[cidx*4 + 0] - woffset
         starty = vposition[cidx*4 + 1] - hoffset
     else:
-        startx = 0
-        starty = 0
+        startx = random_uniform() * <float>width
+        starty = random_uniform() * <float>height
 
     # process position array
     for i in range(position_len):
@@ -403,7 +410,7 @@ def process(sample):
     cdef cnp.ndarray[cnp.float32_t, ndim=2] position 
     cdef cnp.ndarray[cnp.int32_t, ndim=2] codelist
 
-    if random_uniform() < 0.01:
+    if random_uniform() < 0.05:
         outimage = np.zeros((height,width), dtype=np.float32)
         mapimage = np.zeros((5,height//2,width//2), dtype=np.float32)
         indexmap = np.zeros((2,height//2,width//2), dtype=np.int32)
@@ -444,41 +451,41 @@ def random_background(cnp.ndarray[cnp.float32_t, ndim=2] im, cnp.ndarray[cnp.uin
                     value = <float>bgimg[yi,xi,c] / 255
                 cropbg[c,y,x] = value
 
-    cdef float bg_r = np.median(bgimg[0])
-    cdef float bg_g = np.median(bgimg[1])
-    cdef float bg_b = np.median(bgimg[2])
+    cdef float bg_r = np.mean(cropbg[0])
+    cdef float bg_g = np.mean(cropbg[1])
+    cdef float bg_b = np.mean(cropbg[2])
 
-    cdef float bg_r_hi = min(1, bg_r + 0.5)
-    cdef float bg_r_lo = max(0, bg_r - 0.5)
-    cdef float fgw_r = bg_r_hi - bg_r_lo
-    cdef float fg_r = random_uniform() * (1 - fgw_r)
-    if fg_r > bg_r_lo:
-        fg_r += fgw_r
-    fg_r = min(1, max(0, fg_r))
+    cdef float bg_r_hi = bg_r + 0.5
+    cdef float bg_r_lo = bg_r - 0.5
+    cdef float fg_r = random_uniform()
+    if bg_r > 0.5:
+        fg_r = fg_r * bg_r_lo
+    else:
+        fg_r = 1 - fg_r * (1 - bg_r_hi)
 
-    cdef float bg_g_hi = min(1, bg_g + 0.5)
-    cdef float bg_g_lo = max(0, bg_g - 0.5)
-    cdef float fgw_g = bg_g_hi - bg_g_lo
-    cdef float fg_g = random_uniform() * (1 - fgw_g)
-    if fg_g > bg_g_lo:
-        fg_g += fgw_g
-    fg_g = min(1, max(0, fg_g))
+    cdef float bg_g_hi = bg_g + 0.5
+    cdef float bg_g_lo = bg_g - 0.5
+    cdef float fg_g = random_uniform()
+    if bg_g > 0.5:
+        fg_g = fg_g * bg_g_lo
+    else:
+        fg_g = 1 - fg_g * (1 - bg_g_hi)
 
-    cdef float bg_b_hi = min(1, bg_b + 0.5)
-    cdef float bg_b_lo = max(0, bg_b - 0.5)
-    cdef float fgw_b = bg_b_hi - bg_b_lo
-    cdef float fg_b = random_uniform() * (1 - fgw_b)
-    if fg_b > bg_b_lo:
-        fg_b += fgw_b
-    fg_b = min(1, max(0, fg_b))
+    cdef float bg_b_hi = bg_b + 0.5
+    cdef float bg_b_lo = bg_b - 0.5
+    cdef float fg_b = random_uniform()
+    if bg_b > 0.5:
+        fg_b = fg_b * bg_b_lo
+    else:
+        fg_b = 1 - fg_b * (1 - bg_b_hi)
 
     cdef float a
     for y in range(height):
         for x in range(width):
             a = im[y,x]
-            outimage[0,y,x] = a * fg_r + (1 - a) * cropbg[0,y,x]
-            outimage[1,y,x] = a * fg_g + (1 - a) * cropbg[1,y,x]
-            outimage[2,y,x] = a * fg_b + (1 - a) * cropbg[2,y,x]
+            outimage[0,y,x] = max(0, min(1, a * fg_r + (1 - a) * cropbg[0,y,x]))
+            outimage[1,y,x] = max(0, min(1, a * fg_g + (1 - a) * cropbg[1,y,x]))
+            outimage[2,y,x] = max(0, min(1, a * fg_b + (1 - a) * cropbg[2,y,x]))
     return outimage
 
 
@@ -489,29 +496,29 @@ def random_single(cnp.ndarray[cnp.float32_t, ndim=2] im):
     cdef float fg_g = random_uniform()
     cdef float fg_b = random_uniform()
 
-    cdef float fg_r_hi = min(1, fg_r + 0.25)
-    cdef float fg_r_lo = max(0, fg_r - 0.25)
-    cdef float bgw_r = fg_r_hi - fg_r_lo
-    cdef float bg_r = random_uniform() * (1 - bgw_r)
-    if bg_r > fg_r_lo:
-        bg_r += bgw_r
-    bg_r = min(1, max(0, bg_r))
+    cdef float fg_r_hi = fg_r + 0.5
+    cdef float fg_r_lo = fg_r - 0.5
+    cdef float bg_r = random_uniform()
+    if fg_r > 0.5:
+        bg_r = bg_r * fg_r_lo
+    else:
+        bg_r = 1 - bg_r * (1 - fg_r_hi)
 
-    cdef float fg_g_hi = min(1, fg_g + 0.25)
-    cdef float fg_g_lo = max(0, fg_g - 0.25)
-    cdef float bgw_g = fg_g_hi - fg_g_lo
-    cdef float bg_g = random_uniform() * (1 - bgw_g)
-    if bg_g > fg_g_lo:
-        bg_g += bgw_g
-    bg_g = min(1, max(0, bg_g))
+    cdef float fg_g_hi = fg_g + 0.5
+    cdef float fg_g_lo = fg_g - 0.5
+    cdef float bg_g = random_uniform()
+    if fg_g > 0.5:
+        bg_g = bg_g * fg_g_lo
+    else:
+        bg_g = 1 - bg_g * (1 - fg_g_hi)
 
-    cdef float fg_b_hi = min(1, fg_b + 0.25)
-    cdef float fg_b_lo = max(0, fg_b - 0.25)
-    cdef float bgw_b = fg_b_hi - fg_b_lo
-    cdef float bg_b = random_uniform() * (1 - bgw_b)
-    if bg_b > fg_b_lo:
-        bg_b += bgw_b
-    bg_b = min(1, max(0, bg_b))
+    cdef float fg_b_hi = fg_b + 0.5
+    cdef float fg_b_lo = fg_b - 0.5
+    cdef float bg_b = random_uniform()
+    if fg_b > 0.5:
+        bg_b = bg_b * fg_b_lo
+    else:
+        bg_b = 1 - bg_b * (1 - fg_b_hi)
 
     cdef float a
     for y in range(height):
@@ -529,65 +536,50 @@ def random_double(cnp.ndarray[cnp.float32_t, ndim=2] im):
     cdef float fg1_g = random_uniform()
     cdef float fg1_b = random_uniform()
 
-    cdef float fg1_r_hi = min(1, fg1_r + 0.2)
-    cdef float fg1_r_lo = max(0, fg1_r - 0.2)
-    cdef float fg1_g_hi = min(1, fg1_g + 0.2)
-    cdef float fg1_g_lo = max(0, fg1_g - 0.2)
-    cdef float fg1_b_hi = min(1, fg1_b + 0.2)
-    cdef float fg1_b_lo = max(0, fg1_b - 0.2)
-
     cdef float fg2_r = random_uniform()
     cdef float fg2_g = random_uniform()
     cdef float fg2_b = random_uniform()
 
-    cdef float fg2_r_hi = min(1, fg2_r + 0.2)
-    cdef float fg2_r_lo = max(0, fg2_r - 0.2)
-    cdef float fg2_g_hi = min(1, fg2_g + 0.2)
-    cdef float fg2_g_lo = max(0, fg2_g - 0.2)
-    cdef float fg2_b_hi = min(1, fg2_b + 0.2)
-    cdef float fg2_b_lo = max(0, fg2_b - 0.2)
+    if fg1_r > 0.5:
+        fg2_r = fg2_r * 0.5 + 0.5
+    else:
+        fg2_r = fg2_r * 0.5
 
-    cdef float bgw1_r = fg1_r_hi - fg1_r_lo
-    cdef float bgw2_r = fg2_r_hi - fg2_r_lo
-    cdef float bgw1_g = fg1_g_hi - fg1_g_lo
-    cdef float bgw2_g = fg2_g_hi - fg2_g_lo
-    cdef float bgw1_b = fg1_b_hi - fg1_b_lo
-    cdef float bgw2_b = fg2_b_hi - fg2_b_lo
-    cdef float bgw_r = max(fg1_r_hi, fg2_r_hi) - min(fg1_r_lo, fg2_r_lo)
-    cdef float bgw_g = max(fg1_g_hi, fg2_g_hi) - min(fg1_g_lo, fg2_g_lo)
-    cdef float bgw_b = max(fg1_b_hi, fg2_b_hi) - min(fg1_b_lo, fg2_b_lo)
+    if fg1_g > 0.5:
+        fg2_g = fg2_g * 0.5 + 0.5
+    else:
+        fg2_g = fg2_g * 0.5
 
-    cdef float overlap_r = bgw_r - (bgw1_r + bgw2_r) if bgw1_r + bgw2_r < bgw_r else 0 
-    cdef float overlap_g = bgw_g - (bgw1_g + bgw2_g) if bgw1_g + bgw2_g < bgw_g else 0 
-    cdef float overlap_b = bgw_b - (bgw1_b + bgw2_b) if bgw1_b + bgw2_b < bgw_b else 0 
+    if fg1_b > 0.5:
+        fg2_b = fg2_b * 0.5 + 0.5
+    else:
+        fg2_b = fg2_b * 0.5
 
-    cdef float bg_r = random_uniform() * (1 - bgw1_r - bgw2_r + overlap_r)
-    cdef float bg_g = random_uniform() * (1 - bgw1_g - bgw2_g + overlap_g)
-    cdef float bg_b = random_uniform() * (1 - bgw1_b - bgw2_b + overlap_b)
+    cdef float fg_r_hi = max(fg1_r, fg2_r) + 0.5
+    cdef float fg_r_lo = min(fg1_r, fg2_r) - 0.5
+    cdef float fg_g_hi = max(fg1_g, fg2_g) + 0.5
+    cdef float fg_g_lo = min(fg1_g, fg2_g) - 0.5
+    cdef float fg_b_hi = max(fg1_b, fg2_b) + 0.5
+    cdef float fg_b_lo = min(fg1_b, fg2_b) - 0.5
 
-    if bg_r > fg1_r_lo:
-        bg_r += bgw1_r
-    if bg_r > fg2_r_lo:
-        bg_r += bgw2_r
-    if bg_r > max(fg1_r_lo, fg2_r_lo):
-        bg_r -= overlap_r
-    bg_r = max(0, min(1, bg_r))
+    cdef float bg_r = random_uniform()
+    cdef float bg_g = random_uniform()
+    cdef float bg_b = random_uniform()
 
-    if bg_g > fg1_g_lo:
-        bg_g += bgw1_g
-    if bg_g > fg2_g_lo:
-        bg_g += bgw2_g
-    if bg_g > max(fg1_g_lo, fg2_g_lo):
-        bg_g -= overlap_g
-    bg_g = max(0, min(1, bg_g))
+    if fg1_r > 0.5:
+        bg_r = bg_r * fg_r_lo
+    else:
+        bg_r = 1 - bg_r * (1 - fg_r_hi)
 
-    if bg_b > fg1_b_lo:
-        bg_b += bgw1_b
-    if bg_b > fg2_b_lo:
-        bg_b += bgw2_b
-    if bg_b > max(fg1_b_lo, fg2_b_lo):
-        bg_b -= overlap_b
-    bg_b = max(0, min(1, bg_b))
+    if fg1_g > 0.5:
+        bg_g = bg_g * fg_g_lo
+    else:
+        bg_g = 1 - bg_g * (1 - fg_g_hi)
+
+    if fg1_b > 0.5:
+        bg_b = bg_b * fg_b_lo
+    else:
+        bg_b = 1 - bg_b * (1 - fg_b_hi)
 
     cdef int top = <int>(random_uniform() * <float>(height - 1))
     cdef int bottom = <int>(random_uniform() * <float>(height - top)) + top

@@ -19,10 +19,10 @@ def random_distortion(im):
         im += 0.2 * rng.random() * rng.normal(size=im.shape)
         im = np.clip(im, 0, 1)
     if rng.random() < 0.3:
-        im = gaussian_filter(im, sigma=1.5*rng.random())
+        im = gaussian_filter(im, sigma=3.0*rng.random())
         im = np.clip(im, 0, 1)
     elif rng.random() < 0.3:
-        blurred = gaussian_filter(im, sigma=1.)
+        blurred = gaussian_filter(im, sigma=5.)
         im = im + 10. * rng.random() * (im - blurred)
         im = np.clip(im, 0, 1)
     return im
@@ -41,15 +41,20 @@ def transforms3(x):
 def identity(x):
     return x
 
-def get_dataset(train=True):
-    if train:
-        shard_pattern = 'train_data1/train{00000000..00000399}.tar'
-        shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/train{00000000..00000399}.tar'
+def get_dataset(train=True, calib=False):
+    if calib:
+        shard_pattern = 'train_data1/test00000000.tar'
+        shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test00000000.tar'
     else:
-        shard_pattern = 'train_data1/test{00000000..00000015}.tar'
-        shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test{00000000..00000015}.tar'
+        if train:
+            shard_pattern = 'train_data1/train{00000000..00000399}.tar'
+            shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/train{00000000..00000399}.tar'
+        else:
+            shard_pattern = 'train_data1/test{00000000..00000015}.tar'
+            shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test{00000000..00000015}.tar'
     dataset = (
         wds.WebDataset(shard_pattern, shardshuffle=True)
+        .shuffle(100)
         .decode('l8')
         .rename(
             image='image.png', 
@@ -67,10 +72,11 @@ def get_dataset(train=True):
 if __name__=='__main__':
     import matplotlib.pylab as plt
     import time
-    from dataset.multi import MultiLoader
+    # from dataset.multi import MultiLoader
 
     dataset = get_dataset(train=False)
-    dataloader = MultiLoader(dataset.batched(1))
+    dataloader = DataLoader(dataset, batch_size=1, num_workers=4)
+    # dataloader = MultiLoader(dataset.batched(1))
 
     st = time.time()
     for sample in dataloader:
@@ -82,14 +88,14 @@ if __name__=='__main__':
 
         plt.figure()
         if len(image[0].shape) > 2:
-            plt.imshow(image[0].transpose(1,2,0))
+            plt.imshow(image[0].permute(1,2,0))
         else:
             plt.imshow(image[0])
 
         plt.figure()
         plt.subplot(2,4,1)
         if len(image[0].shape) > 2:
-            plt.imshow(image[0].transpose(1,2,0))
+            plt.imshow(image[0].permute(1,2,0))
         else:
             plt.imshow(image[0])
         for i in range(5):

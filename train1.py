@@ -9,22 +9,26 @@ import sys
 import glob
 import datetime
 
+torch.set_float32_matmul_precision('high')
+
 from models.detector import TextDetectorModel
 from dataset.data_detector import get_dataset
 from loss_func import loss_function, CoVWeightingLoss
-from dataset.multi import MultiLoader
+# from dataset.multi import MultiLoader
 
-upload_objectstorage = True
+upload_objectstorage = False
 if upload_objectstorage:
     from put_object import upload
 
-lr = 1e-4
+lr = 1e-3
 wd = 1e-4
 EPOCHS = 40
 batch=4
 compile=True
 logstep=100
 iters_to_accumulate=1
+output_iter=None
+scheduler_gamma = 0.9
 
 class RunningLoss(torch.nn.modules.Module):
     def __init__(self, *args, **kwargs) -> None:
@@ -85,16 +89,16 @@ class RunningLoss(torch.nn.modules.Module):
 
 def train():
     training_dataset = get_dataset(train=True)
-    # training_loader = DataLoader(training_dataset, batch_size=batch, shuffle=True, num_workers=4)
-    training_loader = MultiLoader(training_dataset.shuffle(100).batched(batch, partial=False), workers=8)
+    training_loader = DataLoader(training_dataset, batch_size=batch, num_workers=8)
+    # training_loader = MultiLoader(training_dataset.shuffle(100).batched(batch, partial=False), workers=8)
 
     validation_dataset = get_dataset(train=False)
-    # validation_loader = DataLoader(validation_dataset, batch_size=batch, shuffle=True, num_workers=8)
-    validation_loader = MultiLoader(validation_dataset.shuffle(100).batched(batch, partial=False), workers=8)
+    validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=8)
+    # validation_loader = MultiLoader(validation_dataset.shuffle(100).batched(batch, partial=False), workers=8)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('using device:', device, flush=True)
-    with open('log.txt','a') as wf:
+    with open('log.txt','w') as wf:
         print(datetime.datetime.now(), 'using device:', device, file=wf, flush=True)
     if upload_objectstorage:
         upload('log.txt', 'log.txt')
@@ -107,28 +111,34 @@ def train():
 
     all_params = set(filter(lambda p: p.requires_grad, model.parameters()))
     no_wd = set()
-    for m in model.modules():
+    backbone_params = set()
+    for n, m in model.named_modules():
         if isinstance(m, (torch.nn.BatchNorm2d)):
             no_wd |= set(m.parameters())
         elif isinstance(m, (torch.nn.BatchNorm1d)):
             no_wd |= set(m.parameters())
-        elif isinstance(m, (torch.nn.LayerNorm)):
+        elif isinstance(m, (torch.nn.InstanceNorm2d)):
+            no_wd |= set(m.parameters())
+        elif isinstance(m, (torch.nn.GroupNorm)):
             no_wd |= set(m.parameters())
         else:
+            if 'detector.backbone' in n:
+                backbone_params |= set(m.parameters())
             for key, value in m.named_parameters(recurse=False):
                 if key == 'bias':
                     no_wd |= set([value])
-    params = all_params - no_wd
-    params = list(params)
+    backbone_params = backbone_params - no_wd
+    all_params = all_params - no_wd
+    all_params = list(all_params)
     no_wd = list(no_wd)
 
     optimizer = torch.optim.AdamW([
         {'params': no_wd, 'weight_decay': 0}, 
-        {'params': params},
+        {'params': all_params},
     ], lr=lr, weight_decay=wd)
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=(1-0.05/iters_to_accumulate))
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=scheduler_gamma)
 
-    CoWloss = CoVWeightingLoss(device=device, losses=[
+    CoWloss = CoVWeightingLoss(momentum=1/100, device=device, losses=[
         'keymap_loss',
         'size_loss',
         'textline_loss',
@@ -147,13 +157,11 @@ def train():
         *['code%d_loss'%2**(i) for i in range(4)],
     ])
 
-    scaler = torch.GradScaler()
-
     def train_step(image, map, idmap, fmask):
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             heatmap, decoder_outputs = model(image, fmask)
             rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs)
-            loss = CoWloss(rawloss) / iters_to_accumulate
+            loss = CoWloss(rawloss)
         return loss, rawloss
 
     def test_step(image, map, idmap, fmask):
@@ -180,9 +188,13 @@ def train():
 
     print('batch', batch, flush=True)
     print('logstep', logstep, flush=True)
+    print('lr', lr, flush=True)
+    print('wd', wd, flush=True)
     with open('log.txt','a') as wf:
         print('batch', batch, file=wf, flush=True)
         print('logstep', logstep, file=wf, flush=True)
+        print('lr', lr, file=wf, flush=True)
+        print('wd', wd, file=wf, flush=True)
     if upload_objectstorage:
         upload('log.txt', 'log.txt')
 
@@ -190,8 +202,10 @@ def train():
     fmask = None
     for epoch in range(last_epoch, EPOCHS):
         print(datetime.datetime.now(), 'epoch', epoch, flush=True)
+        print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], flush=True)
         with open('log.txt','a') as wf:
             print(datetime.datetime.now(), 'epoch', epoch, file=wf, flush=True)
+            print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], file=wf, flush=True)
         if upload_objectstorage:
             upload('log.txt', 'log.txt')
 
@@ -202,16 +216,18 @@ def train():
         optimizer.zero_grad()
         for i, data in enumerate(training_loader):
             image, labelmap, idmap = data
-            image = torch.tensor(image, dtype=torch.float, device=device)
-            labelmap = torch.tensor(labelmap, dtype=torch.float, device=device)
-            idmap = torch.tensor(idmap, dtype=torch.long, device=device)
+            image = image.to(device=device)
+            labelmap = labelmap.to(device=device)
+            idmap = idmap.to(dtype=torch.long, device=device)
+            # image = torch.tensor(image, dtype=torch.float, device=device)
+            # labelmap = torch.tensor(labelmap, dtype=torch.float, device=device)
+            # idmap = torch.tensor(idmap, dtype=torch.long, device=device)
 
             fmask = model.get_fmask(labelmap, fmask)
             loss, rawloss = train_step(image, labelmap, idmap, fmask)
-            scaler.scale(loss).backward()
+            loss.backward()
             if (i + 1) % iters_to_accumulate == 0:
-                scaler.step(optimizer)
-                scaler.update()
+                optimizer.step()
                 optimizer.zero_grad()
 
             # Gather data and report
@@ -228,6 +244,13 @@ def train():
 
                 if upload_objectstorage:
                     upload('log.txt', 'log.txt')
+            
+            if output_iter is not None and (i + 1) % output_iter == 0:
+                torch.save({
+                    'epoch': epoch,
+                    'step': i,
+                    'model_state_dict': model.state_dict(),
+                    }, 'result1/model.pt')
 
         CoW_value = losslog['CoWloss'].item()
         loss_value = losslog['loss'].item()
@@ -256,9 +279,12 @@ def train():
         with torch.no_grad():
             for vdata in validation_loader:
                 image, labelmap, idmap = vdata
-                image = torch.tensor(image, dtype=torch.float, device=device)
-                labelmap = torch.tensor(labelmap, dtype=torch.float, device=device)
-                idmap = torch.tensor(idmap, dtype=torch.long, device=device)
+                image = image.to(device=device)
+                labelmap = labelmap.to(device=device)
+                idmap = idmap.to(dtype=torch.long, device=device)
+                # image = torch.tensor(image, dtype=torch.float, device=device)
+                # labelmap = torch.tensor(labelmap, dtype=torch.float, device=device)
+                # idmap = torch.tensor(idmap, dtype=torch.long, device=device)
 
                 fmask = model.get_fmask(labelmap, fmask)
                 loss, rawloss = test_step(image, labelmap, idmap, fmask)
@@ -296,11 +322,15 @@ if __name__=='__main__':
             elif arg.startswith('--lr'):
                 lr = float(arg.split('=')[1])
             elif arg.startswith('--wd'):
-                wd = float(arg.split('=')[1])
+                wd1 = float(arg.split('=')[1])
             elif arg.startswith('--logstep'):
                 logstep = int(arg.split('=')[1])
             elif arg.startswith('--upload'):
                 upload_objectstorage = arg.split('=')[1].lower() == 'true'
+            elif arg.startswith('--output'):
+                output_iter = int(arg.split('=')[1])
+            elif arg.startswith('--gamma'):
+                scheduler_gamma = float(arg.split('=')[1])
             else:
                 batch = int(arg)
     train()

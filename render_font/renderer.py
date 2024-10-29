@@ -1490,7 +1490,7 @@ class Canvas:
         position.insert(0, np.zeros([0,4]))
         code_list.insert(0, np.zeros([0,2], dtype=int))
 
-        if len(buffer) > 1:
+        if len(buffer) == 1:
             cur_x -= space_fix
 
         return {
@@ -1576,6 +1576,7 @@ class Canvas:
             image = None
             position = np.zeros([0,4])
             code_list = np.zeros([0,2], dtype=int)
+            pad_space /= len(splited_text)
             for i, segment in enumerate(splited_text):
                 if line_length > 0 and cur_x + pad_left >= line_length:
                     for seg in splited_text[i:]:
@@ -1664,7 +1665,7 @@ class Canvas:
                 "code_list": code_list,
                 "pad_left": pad_left,
                 "base_line": base_line,
-                "next_cur": int(cur_x - pad_space),
+                "next_cur": int(cur_x),
             }
 
     def _vertical_line_render(self, text, line_length=0, pad_space=0):
@@ -1723,7 +1724,7 @@ class Canvas:
                             "code_list": buffer['code_list'],
                             "pad_top": buffer['pad_left'],
                             "base_line": buffer['base_line'],
-                            "next_cur": int(buffer['next_cur'] - pad_space),
+                            "next_cur": int(buffer['next_cur']),
                         }
 
             pad_top = buffer['pad_left']
@@ -1738,7 +1739,7 @@ class Canvas:
                 "code_list": buffer['code_list'],
                 "pad_top": pad_top,
                 "base_line": fix_base_lise,
-                "next_cur": int(buffer['next_cur'] - pad_space),
+                "next_cur": int(buffer['next_cur']),
             }
         else:
             #mix
@@ -1770,6 +1771,8 @@ class Canvas:
             image = None
             position = np.zeros([0,4])
             code_list = np.zeros([0,2], dtype=int)
+            pad_space /= len(splited_text)
+            print(splited_text)
             for i, segment in enumerate(splited_text):
                 if line_length > 0 and cur_y + pad_top >= line_length:
                     for seg in splited_text[i:]:
@@ -1815,7 +1818,7 @@ class Canvas:
                                 "code_list": seg_buf['code_list'],
                                 "pad_top": seg_buf['pad_left'],
                                 "base_line": seg_buf['base_line'],
-                                "next_cur": int(seg_buf['next_cur'] - pad_space),
+                                "next_cur": int(seg_buf['next_cur']),
                             }
                         else:
                             fix_base_lise = seg_buf['image'].shape[0]-seg_buf['base_line'] + self.fontsize * 0.33
@@ -1829,7 +1832,7 @@ class Canvas:
                                 "code_list": seg_buf['code_list'],
                                 "pad_top": seg_buf['pad_left'],
                                 "base_line": fix_base_lise,
-                                "next_cur": int(seg_buf['next_cur'] - pad_space),
+                                "next_cur": int(seg_buf['next_cur']),
                             }
                 else:
                     seg_buf = jp_word_sep(segment, line_length=cur_line_length, pad_space=pad_space)
@@ -1908,7 +1911,7 @@ class Canvas:
                 "code_list": code_list,
                 "pad_top": pad_top,
                 "base_line": base_line,
-                "next_cur": int(cur_y + pad_top - pad_space),
+                "next_cur": int(cur_y),
             }
 
     def _ruby_line_render(self, text, ruby, pre_allow=True, post_allow=True, horizontal=True, ruby_dist=1.0):
@@ -2484,6 +2487,7 @@ if __name__=="__main__":
     text = 'テスト\uFFF9漢字\uFFFAかんじあいう\uFFFBのふりがな\nテスト漢字のふりがな\nてすと\nfilter'
     text = 'ぱ於がづ、\uFFF9習び惣妨妨王託簪櫓\uFFFAhmiacwcn sy ziqrrhjuu\uFFFB括へ串らぐ冗ろ。'
     text = 'ぱ於がづ、\uFFF9習び惣妨妨王託簪櫓\uFFFAhmiacwcn a b ziqrrhjuu\uFFFB括へ串らぐ冗ろ。'
+    text = 'ぱ於がづ、\uFFF9hm あ uu a\uFFFA習び妨王託簪櫓\uFFFB括へ串らぐ冗ろ。'
     # text = '　\uFFF9埀銓う蒋ウサう獗巫医モ鱇ホ\uFFFAｖＮｖＰ\uFFFB屯怜る。'
     values = [
         ['身長','体重','性別'],
@@ -2508,9 +2512,9 @@ if __name__=="__main__":
 
     rng = np.random.default_rng()
 
-    with Canvas(fontfile, fontsize=48, horizontal=True) as canvas:
+    with Canvas(fontfile, fontsize=48, horizontal=False) as canvas:
         #a = canvas.random_draw(words, 1024, 1024, rng)
-        canvas.set_linewidth(870)
+        canvas.set_linewidth(1600)
         canvas.set_linemax(10)
         # canvas.set_header('header test')
         # canvas.set_footer('footer test')

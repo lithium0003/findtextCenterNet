@@ -7,6 +7,7 @@ from util_func import modulo_list
 # https://github.com/rickgroen/cov-weighting
 class CoVWeightingLoss(torch.nn.modules.Module):
     def __init__(self, *args, **kwargs) -> None:
+        self.momentum = kwargs.pop('momentum', 1e-3)
         self.device = kwargs.pop('device', 'cpu')
         self.losses = kwargs.pop('losses', [])
         self.num_losses = len(self.losses)
@@ -21,8 +22,9 @@ class CoVWeightingLoss(torch.nn.modules.Module):
         self.running_S_l = torch.zeros((self.num_losses,), requires_grad=False, dtype=torch.float32, device=self.device)
         self.running_std_l = None
 
+    @torch.autocast(device_type="cuda", enabled=False)
     def forward(self, losses):
-        L = torch.stack([losses[key].clone().detach() for key in self.losses])
+        L = torch.stack([losses[key].clone().detach().to(torch.float32) for key in self.losses])
         L = torch.nan_to_num(L)
 
         # If we are doing validation, we would like to return an unweighted loss be able
@@ -53,7 +55,7 @@ class CoVWeightingLoss(torch.nn.modules.Module):
         if self.current_iter == 0:
             mean_param = 0.0
         else:
-            mean_param = (1. - 1 / min(1000, self.current_iter + 1))
+            mean_param = (1. - max(self.momentum, 1 / (self.current_iter + 1)))
 
         # 2. Update the statistics for l
         x_l = l.clone().detach()
@@ -70,16 +72,17 @@ class CoVWeightingLoss(torch.nn.modules.Module):
         self.running_mean_L = mean_param * self.running_mean_L + (1 - mean_param) * x_L
 
         # Get the weighted losses and perform a standard back-pass.
-        weighted_losses = [self.alphas[i] * losses[key] for i,key in enumerate(self.losses)]
+        weighted_losses = [self.alphas[i] * losses[key].to(torch.float32) for i,key in enumerate(self.losses)]
         loss = sum(weighted_losses)
         return loss
 
+@torch.autocast(device_type="cuda", enabled=False)
 def heatmap_loss(true, logits):
     alpha = 2
     beta = 4
     pos_th = 1.0
 
-    predict = torch.sigmoid(logits)
+    predict = torch.sigmoid(logits.to(torch.float32))
 
     pos_mask = (true >= pos_th).to(torch.float32)
     neg_mask = (true < pos_th).to(torch.float32)
@@ -103,6 +106,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     mask1 = keylabel > key_th1
     mask2 = keylabel > key_th2
     mask3 = keylabel.flatten()[fmask] > key_th3
+    mask4 = keylabel.flatten()[fmask] == 1.0
 
     weight1 = torch.maximum(keylabel - key_th1, torch.tensor(0.)) / (1 - key_th1)
     weight1 = torch.masked_select(weight1, mask1)
@@ -155,11 +159,10 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
 
     pred_ids = []
     for decoder_id1 in decoder_outputs:
-        decoder_id1 = torch.softmax(decoder_id1[mask3,:], dim=-1)
-        pred_id1 = torch.argmax(decoder_id1, dim=-1)
+        pred_id1 = torch.argmax(decoder_id1[mask4,:], dim=-1)
         pred_ids.append(pred_id1)
 
-    target_id = torch.masked_select(target_id, mask3)
+    target_id = torch.masked_select(target_id, mask4)
     target_ids = []
     for modulo in modulo_list:
         target_id1 = target_id % modulo
@@ -169,7 +172,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     for p,t in zip(pred_ids,target_ids):
         correct += p == t
 
-    total = correct.numel()
+    total = torch.ones_like(correct).sum()
     correct = (correct == 3).sum()
 
     loss = keymap_loss + size_loss + textline_loss + separator_loss + id_loss

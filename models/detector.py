@@ -132,24 +132,23 @@ class BackboneModel(nn.Module):
         return results
 
 class Leafmap(nn.Module):
-    def __init__(self, out_dim=1, mid_dim=64, **kwargs) -> None:
+    def __init__(self, out_dim=1, mid_dim=64, normalize=False, **kwargs) -> None:
         super().__init__(**kwargs)
+        self.normalize = normalize
         in_dims = [64,96,256,1280]
         conv_dims = [8,8,16,96]
         upsamplers = []
         for i, (in_dim, o_dim) in enumerate(zip(in_dims, conv_dims)):
             layers = nn.Sequential(
-                nn.Conv2d(in_dim, o_dim, 3, padding=1, bias=False),
-                nn.BatchNorm2d(o_dim),
-                nn.Upsample(scale_factor=2**(i+1), mode='bilinear'),
+                nn.Conv2d(in_dim, o_dim, 3, padding=1),
+                nn.UpsamplingBilinear2d(scale_factor=2**(i+1)),
             )
             upsamplers.append(layers)
         self.upsamplers = nn.ModuleList(upsamplers)
 
         self.top_conv = nn.Sequential(
             nn.GELU(),
-            nn.Conv2d(sum(conv_dims), mid_dim, 3, padding=1, bias=False),
-            nn.BatchNorm2d(mid_dim),
+            nn.Conv2d(sum(conv_dims), mid_dim, 3, padding=1),
             nn.GELU(),
             nn.Conv2d(mid_dim, out_dim, 1),
         )
@@ -159,7 +158,12 @@ class Leafmap(nn.Module):
         for x, up in zip([x1,x2,x3,x4], self.upsamplers):
             y.append(up(x))
         x = torch.cat(y, dim=1)
-        return self.top_conv(x)
+        x = self.top_conv(x)
+        if self.normalize:
+            denorm = x.norm(dim=1, keepdim=True).clamp_min(1e-12).expand_as(x)
+            return x / denorm
+        else:
+            return x
 
 class CenterNetDetection(nn.Module):
     def __init__(self, pre_weights=True, **kwargs) -> None:
@@ -173,7 +177,7 @@ class CenterNetDetection(nn.Module):
         self.code2 = Leafmap(out_dim=1)
         self.code4 = Leafmap(out_dim=1)
         self.code8 = Leafmap(out_dim=1)
-        self.feature = Leafmap(out_dim=feature_dim)
+        self.feature = Leafmap(out_dim=feature_dim, normalize=True)
 
     def forward(self, x):
         x = x * 2 - 1
@@ -239,7 +243,9 @@ class TextDetectorModel(nn.Module):
         if mask is None or mask.shape != sort_idx.shape:
             mask = torch.zeros_like(sort_idx, dtype=torch.bool, device=sort_idx.device)
         mask.fill_(0)
-        mask[sort_idx[:256*batch_dim]] = True
+        mask[sort_idx[:1024*batch_dim]] = True
+        nidx = torch.randperm(mask.size(0) - 1024*batch_dim) + 1024*batch_dim
+        mask[sort_idx[nidx[:1024*batch_dim]]] = True
         return mask
 
 class CenterNetDetector(nn.Module):
@@ -290,5 +296,5 @@ if __name__=="__main__":
     print(model)
     summary(model, input_size=[[1, feature_dim]])
     with torch.no_grad():
-        outputs = model(torch.zeros(1, feature_dim))
+        outputs = model(torch.zeros(2, feature_dim))
     print([t.shape for t in outputs])

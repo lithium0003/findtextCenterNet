@@ -274,7 +274,6 @@ ignore_list = [
     'Kaisei*.ttf',
     'Murecho*.ttf',
     'PixelMplus*.ttf',
-    'sawarabi-gothic-medium.ttf',
     'toroman.ttf',
 ]
 jpvfontlist = set(jpfontlist)
@@ -284,12 +283,6 @@ for ign in ignore_list:
 jpvfontlist = list(jpvfontlist)
 
 jp_furi_fontlist = [
-    'BIZUDGothic-Bold.ttf',
-    'BIZUDGothic-Regular.ttf',
-    'BIZUDMincho-Regular.ttf',
-    'BIZUDPGothic-Bold.ttf',
-    'BIZUDPGothic-Regular.ttf',
-    'BIZUDPMincho-Regular.ttf',
     'GenShinGothic-Monospace-Normal.ttf',
     'GenShinGothic-Normal.ttf',
     'GenShinGothic-P-Normal.ttf',
@@ -316,14 +309,17 @@ jp_furi_fontlist = [
     'ipaexm.ttf',
     'mgenplus-2m-regular.ttf',
     'mgenplus-2p-regular.ttf',
-    'sawarabi-mincho-medium.ttf',
 ]
 jp_furi_fontlist = [os.path.join('data','jpfont',f) for f in jp_furi_fontlist]
-jp_vfuri_fontlist = set(jp_furi_fontlist)
-for ign in ignore_list:
-    r = set(glob.glob(os.path.join('data','jpfont',ign)))
-    jp_vfuri_fontlist -= r
-jp_vfuri_fontlist = list(jp_vfuri_fontlist)
+jp_vfuri_fontlist = [
+    'GenShinGothic-Monospace-Normal.ttf',
+    'GenShinGothic-Normal.ttf',
+    'GenShinGothic-P-Normal.ttf',
+    'OradanoGSRR.ttf',
+    'mgenplus-2m-regular.ttf',
+    'mgenplus-2p-regular.ttf',
+]
+jp_vfuri_fontlist = [os.path.join('data','jpfont',f) for f in jp_vfuri_fontlist]
 
 jp_yoshi_fontlist = [
     'GenShinGothic-Monospace-Normal.ttf',
@@ -398,7 +394,7 @@ def get_random_furigana(rng):
 
     print('get_random_furigana')
     size = int(np.exp(rng.uniform(np.log(32), np.log(128))))
-    count = 4000 // size
+    count = 6400 // size
 
     txt = '　'
     for _ in range(count):
@@ -457,7 +453,7 @@ def get_random_furigana(rng):
             if rng.random() < 0.5:
                 m_l2 = rng.integers(3, m_l + 3)
             else:
-                m_l2 = rng.integers(m_l // 4 + 3, m_l // 2 + 4)
+                m_l2 = rng.integers(m_l // 5 + 3, m_l // 3 + 4)
             ruby = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+kanjis+['ー'], m_l2))
             txt += '\uFFF9'+main+'\uFFFA'+ruby+'\uFFFB'
         elif p < 0.9:
@@ -466,10 +462,10 @@ def get_random_furigana(rng):
             m_l = rng.integers(3, 20)
             main = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+kanjis+['ー'], m_l))
             if rng.random() < 0.5:
-                if rng.random() < 0.5:
-                    m_l2 = rng.integers(3, m_l // 2 + 4)
+                if rng.random() < 0.75:
+                    m_l2 = rng.integers(m_l // 5 + 3, m_l // 3 + 4)
                 else:
-                    m_l2 = rng.integers(m_l, m_l * 2)
+                    m_l2 = rng.integers(m_l, m_l * 3)
                 if rng.random() < 0.5:
                     ruby = ''.join(rng.choice(doublew1_list, m_l2))
                 else:
@@ -486,11 +482,11 @@ def get_random_furigana(rng):
         else:
             #日本語に日本語
             kanjis = list(rng.choice(jp_type_list[5]+jp_type_list[8]+jp_type_list[9]+jp_type_list[10], 400))
-            m_l = rng.integers(3, 10)
+            m_l = rng.integers(3, 12)
             main = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+kanjis+['ー'], m_l))
             kanjis = list(rng.choice(jp_type_list[5]+jp_type_list[8]+jp_type_list[9]+jp_type_list[10], 400))
-            if rng.random() < 0.5:
-                m_l2 = rng.integers(3, m_l // 4 + 4)
+            if rng.random() < 0.75:
+                m_l2 = rng.integers(3, m_l // 5 + 4)
             else:
                 m_l2 = rng.integers(m_l, m_l * 2 + 1)
             ruby = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+kanjis+['ー'], m_l2))
@@ -500,7 +496,7 @@ def get_random_furigana(rng):
         main = ''.join(rng.choice(jp_type_list[3]+list(rng.choice(jp_type_list[5]+jp_type_list[8]+jp_type_list[9]+jp_type_list[10], 100)), m_l))
         txt += main
 
-        if rng.random() < 0.2:
+        if rng.random() < 0.05:
             txt += '\n　'
         elif rng.random() < 0.1:
             txt += '　'
@@ -508,6 +504,8 @@ def get_random_furigana(rng):
             txt += '、'
         elif rng.random() < 0.4:
             txt += '。'
+        elif rng.random() < 0.4:
+            txt += '——'
         elif rng.random() < 0.1:
             txt += '！　'
         elif rng.random() < 0.1:
@@ -1001,19 +999,19 @@ def get_random_hendwrite(rng):
 
 def get_random_text(rng):
     p = rng.random()
-    if p < 0.325:
-        # 0.325
+    if p < 0.35:
+        # 0.35
         return get_random_furigana(rng)
-    elif p < 0.45:
-        # 0.125
+    elif p < 0.5:
+        # 0.15
         return get_random_textline(rng)
     elif p < 0.8:
-        # 0.35
+        # 0.3
         if rng.random() < 0.5:
-            # 0.175
+            # 0.15
             return get_random_char(rng)
         else:
-            # 0.175
+            # 0.15
             return get_random_char2(rng)
     elif p < 0.9:
         # 0.1
