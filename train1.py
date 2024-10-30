@@ -25,7 +25,7 @@ compile=True
 logstep=100
 iters_to_accumulate=1
 output_iter=None
-scheduler_gamma = 0.9
+scheduler_gamma = 0.95
 
 class RunningLoss(torch.nn.modules.Module):
     def __init__(self, *args, **kwargs) -> None:

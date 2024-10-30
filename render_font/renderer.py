@@ -1021,7 +1021,7 @@ class Canvas:
         t1 = 1 if self.italic else 0
         t2 = 2 if self.bold else 0
         t = t1 + t2
-        print(self.fontfile,self.fontsize,t)
+        # print(self.fontfile,self.fontsize,t)
         self.proc = subprocess.Popen([
             os.path.join(os.path.dirname(__file__), 'render_font'),
             str(self.fontfile),
@@ -1772,7 +1772,6 @@ class Canvas:
             position = np.zeros([0,4])
             code_list = np.zeros([0,2], dtype=int)
             pad_space /= len(splited_text)
-            print(splited_text)
             for i, segment in enumerate(splited_text):
                 if line_length > 0 and cur_y + pad_top >= line_length:
                     for seg in splited_text[i:]:
