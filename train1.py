@@ -2,7 +2,6 @@
 
 import torch
 from torch.utils.tensorboard.writer import SummaryWriter
-from tqdm.auto import tqdm
 # from torch.utils.data import DataLoader
 import os
 import sys
@@ -26,6 +25,7 @@ logstep=100
 iters_to_accumulate=1
 output_iter=None
 scheduler_gamma = 0.95
+continue_train = False
 
 class RunningLoss(torch.nn.modules.Module):
     def __init__(self, *args, **kwargs) -> None:
@@ -85,6 +85,10 @@ class RunningLoss(torch.nn.modules.Module):
         return ret
 
 def train():
+    if continue_train:
+        from load_object import download
+        download()
+
     training_dataset = get_dataset(train=True)
     # training_loader = DataLoader(training_dataset, batch_size=batch, num_workers=4)
     training_loader = MultiLoader(training_dataset.batched(batch, partial=False), workers=8)
@@ -302,6 +306,8 @@ if __name__=='__main__':
                 output_iter = int(arg.split('=')[1])
             elif arg.startswith('--gamma'):
                 scheduler_gamma = float(arg.split('=')[1])
+            elif arg.startswith('--continue'):
+                continue_train = arg.split('=')[1].lower() == 'true'
             else:
                 batch = int(arg)
 
