@@ -1,4 +1,5 @@
 import boto3
+import os
 
 client = boto3.client('s3', endpoint_url='https://s3.isk01.sakurastorage.jp', region_name='jp-north-1')
 Bucket = '20240830'
@@ -23,5 +24,6 @@ def download():
             print('output',last_cp)
             response = client.get_object(Bucket=Bucket, Key=last_cp)
             body = response['Body'].read()
+            os.makedirs('result1', exist_ok=True)
             with open('result1/model.pt','wb') as wf:
                 wf.write(body)
