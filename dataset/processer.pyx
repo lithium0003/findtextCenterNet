@@ -13,9 +13,9 @@ from libc.stdlib cimport rand, srand, RAND_MAX
 from libc.time cimport time
 from libcpp.vector cimport vector
 
-cdef int scale = 2
-cdef int width = 768
-cdef int height = 768
+cdef int scale = 4
+cdef int width = 512
+cdef int height = 512
 
 cdef inline float random_uniform() noexcept nogil:
     cdef float r = rand()
@@ -157,8 +157,8 @@ cdef void center_map(float cx, float cy, float w, float h, vector[float]& center
             center[idx] = max(center[idx], center_kernel[idxk])
 
 cdef void box_map(float cx, float cy, float w, float h, vector[float]& boxmap) noexcept nogil:
-    cdef float fix_w = max(w / 4, 4.0)
-    cdef float fix_h = max(h / 4, 4.0)
+    cdef float fix_w = max(w / (2 * scale), 4.0)
+    cdef float fix_h = max(h / (2 * scale), 4.0)
     cdef float sizex = logf(w / 1024) + 3
     cdef float sizey = logf(h / 1024) + 3
 
@@ -180,8 +180,8 @@ cdef void box_map(float cx, float cy, float w, float h, vector[float]& boxmap) n
                 boxmap[idx] = min(sizey, boxmap[idx])
 
 cdef void id_map(float cx, float cy, float w, float h, int code1, int code2, vector[cnp.int32_t]& indexmap) noexcept nogil:
-    cdef float fix_w = max(w / 4, 4.0)
-    cdef float fix_h = max(h / 4, 4.0)
+    cdef float fix_w = max(w / (2 * scale), 4.0)
+    cdef float fix_h = max(h / (2 * scale), 4.0)
     cdef int xmin = max(0, <int>((cx - fix_w) / scale) - 2)
     cdef int xmax = min(width//scale, <int>((cx + fix_w) / scale) + 2)
     cdef int ymin = max(0, <int>((cy - fix_h) / scale) - 2)
@@ -240,8 +240,8 @@ cpdef transform_crop(
     cnp.ndarray[cnp.int32_t, ndim=2] codelist):
 
     cdef cnp.ndarray[cnp.float32_t, ndim=2] outimage = np.empty((height,width), dtype=np.float32)
-    cdef cnp.ndarray[cnp.float32_t, ndim=3] mapimage = np.empty((5,height//2,width//2), dtype=np.float32)
-    cdef cnp.ndarray[cnp.int32_t, ndim=3] indexmap = np.empty((2,height//2,width//2), dtype=np.int32)
+    cdef cnp.ndarray[cnp.float32_t, ndim=3] mapimage = np.empty((5,height//scale,width//scale), dtype=np.float32)
+    cdef cnp.ndarray[cnp.int32_t, ndim=3] indexmap = np.empty((2,height//scale,width//scale), dtype=np.int32)
 
     cdef int im_h = image.shape[0]
     cdef int im_w = image.shape[1]
@@ -254,11 +254,11 @@ cpdef transform_crop(
     cdef vector[cnp.uint8_t] vsepline = covert_image(sepline)
     cdef vector[float] vposition = covert_position(position)
     cdef vector[cnp.int32_t] vcodelist = covert_codelist(codelist)
-    cdef vector[float] vcenter = vector[float](height//2 * width//2)
-    cdef vector[float] vboxmap = vector[float](2 * height//2 * width//2, np.inf)
-    cdef vector[cnp.int32_t] vindexmap = vector[cnp.int32_t](2 * height//2 * width//2)
+    cdef vector[float] vcenter = vector[float](height//scale * width//scale)
+    cdef vector[float] vboxmap = vector[float](2 * height//scale * width//scale, np.inf)
+    cdef vector[cnp.int32_t] vindexmap = vector[cnp.int32_t](2 * height//scale * width//scale)
     cdef vector[float] voutimage = vector[float](height * width)
-    cdef vector[float] vmapimage = vector[float](2 * height//2 * width//2)
+    cdef vector[float] vmapimage = vector[float](2 * height//scale * width//scale)
 
     cdef int i,j
 
@@ -365,8 +365,8 @@ cpdef transform_crop(
             voutimage[y * width + x] += w22 * getpixel(<int>rx+1, <int>ry+1, vimage, im_h, im_w)
 
     # sepimage, lineimage rotation
-    for y in range(height//2):
-        for x in range(width//2):
+    for y in range(height//scale):
+        for x in range(width//scale):
             vector_dot(rx, ry, inv_affin2.data(), <float>x + startx/2, <float>y + starty/2)
             dx = rx - floorf(rx)
             dy = ry - floorf(ry)
@@ -374,29 +374,29 @@ cpdef transform_crop(
             w21 = dx * (1-dy)
             w12 = (1-dx) * dy
             w22 = dx * dy
-            vmapimage[y * width//2 + x] = w11 * getpixel(<int>rx, <int>ry, vtextline, im_h2, im_w2)
-            vmapimage[y * width//2 + x] += w21 * getpixel(<int>rx+1, <int>ry, vtextline, im_h2, im_w2)
-            vmapimage[y * width//2 + x] += w12 * getpixel(<int>rx, <int>ry+1, vtextline, im_h2, im_w2)
-            vmapimage[y * width//2 + x] += w22 * getpixel(<int>rx+1, <int>ry+1, vtextline, im_h2, im_w2)
-            vmapimage[width//2 * height//2 + y * width//2 + x] = w11 * getpixel(<int>rx, <int>ry, vsepline, im_h2, im_w2)
-            vmapimage[width//2 * height//2 + y * width//2 + x] += w21 * getpixel(<int>rx+1, <int>ry, vsepline, im_h2, im_w2)
-            vmapimage[width//2 * height//2 + y * width//2 + x] += w12 * getpixel(<int>rx, <int>ry+1, vsepline, im_h2, im_w2)
-            vmapimage[width//2 * height//2 + y * width//2 + x] += w22 * getpixel(<int>rx+1, <int>ry+1, vsepline, im_h2, im_w2)
+            vmapimage[y * width//scale + x] = w11 * getpixel(<int>rx, <int>ry, vtextline, im_h2, im_w2)
+            vmapimage[y * width//scale + x] += w21 * getpixel(<int>rx+1, <int>ry, vtextline, im_h2, im_w2)
+            vmapimage[y * width//scale + x] += w12 * getpixel(<int>rx, <int>ry+1, vtextline, im_h2, im_w2)
+            vmapimage[y * width//scale + x] += w22 * getpixel(<int>rx+1, <int>ry+1, vtextline, im_h2, im_w2)
+            vmapimage[width//scale * height//scale + y * width//scale + x] = w11 * getpixel(<int>rx, <int>ry, vsepline, im_h2, im_w2)
+            vmapimage[width//scale * height//scale + y * width//scale + x] += w21 * getpixel(<int>rx+1, <int>ry, vsepline, im_h2, im_w2)
+            vmapimage[width//scale * height//scale + y * width//scale + x] += w12 * getpixel(<int>rx, <int>ry+1, vsepline, im_h2, im_w2)
+            vmapimage[width//scale * height//scale + y * width//scale + x] += w22 * getpixel(<int>rx+1, <int>ry+1, vsepline, im_h2, im_w2)
 
     for y in range(height):
         for x in range(width):
             outimage[y,x] = voutimage[y * width + x]
 
-    for y in range(height//2):
-        for x in range(width//2):
-            mapimage[0,y,x] = vcenter[y * width//2 + x]
-            mapimage[1,y,x] = vboxmap[y * width//2 + x] if isfinite(vboxmap[y * width//2 + x]) else 0
-            mapimage[2,y,x] = vboxmap[width//2 * height//2 + y * width//2 + x] if isfinite(vboxmap[width//2 * height//2 + y * width//2 + x]) else 0
-            mapimage[3,y,x] = vmapimage[y * width//2 + x]
-            mapimage[4,y,x] = vmapimage[width//2 * height//2 + y * width//2 + x]
+    for y in range(height//scale):
+        for x in range(width//scale):
+            mapimage[0,y,x] = vcenter[y * width//scale + x]
+            mapimage[1,y,x] = vboxmap[y * width//scale + x] if isfinite(vboxmap[y * width//scale + x]) else 0
+            mapimage[2,y,x] = vboxmap[width//scale * height//scale + y * width//scale + x] if isfinite(vboxmap[width//scale * height//scale + y * width//scale + x]) else 0
+            mapimage[3,y,x] = vmapimage[y * width//scale + x]
+            mapimage[4,y,x] = vmapimage[width//scale * height//scale + y * width//scale + x]
 
-            indexmap[0,y,x] = vindexmap[y * width//2 + x]
-            indexmap[1,y,x] = vindexmap[width//2 * height//2 + y * width//2 + x]
+            indexmap[0,y,x] = vindexmap[y * width//scale + x]
+            indexmap[1,y,x] = vindexmap[width//scale * height//scale + y * width//scale + x]
 
     return outimage, mapimage, indexmap
 
@@ -412,8 +412,8 @@ def process(sample):
 
     if random_uniform() < 0.05:
         outimage = np.zeros((height,width), dtype=np.float32)
-        mapimage = np.zeros((5,height//2,width//2), dtype=np.float32)
-        indexmap = np.zeros((2,height//2,width//2), dtype=np.int32)
+        mapimage = np.zeros((5,height//scale,width//scale), dtype=np.float32)
+        indexmap = np.zeros((2,height//scale,width//scale), dtype=np.int32)
         return outimage, mapimage, indexmap
 
     image,textline,sepline,position,codelist = sample

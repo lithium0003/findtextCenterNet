@@ -140,7 +140,7 @@ class Leafmap(nn.Module):
         for i, (in_dim, o_dim) in enumerate(zip(in_dims, conv_dims)):
             layers = nn.Sequential(
                 nn.Conv2d(in_dim, o_dim, 3, padding=1),
-                nn.UpsamplingBilinear2d(scale_factor=2**(i+1)),
+                nn.UpsamplingBilinear2d(scale_factor=2**i),
             )
             upsamplers.append(layers)
         self.upsamplers = nn.ModuleList(upsamplers)
@@ -226,7 +226,7 @@ class TextDetectorModel(nn.Module):
         return heatmap, decoder_outputs, features
 
     def get_fmask(self, heatmap, mask) -> Tensor:
-        # heatmap: [-1, 11, 256, 256]
+        # heatmap: [-1, 11, 128, 128]
         batch_dim = heatmap.shape[0]
         labelmaps = heatmap[:,0,:,:]
         labelmaps = labelmaps.flatten()
@@ -236,8 +236,6 @@ class TextDetectorModel(nn.Module):
             mask = torch.zeros_like(sort_idx, dtype=torch.bool, device=sort_idx.device)
         mask.fill_(0)
         mask[sort_idx[:1024*batch_dim]] = True
-        nidx = torch.randperm(mask.size(0) - 1024*batch_dim) + 1024*batch_dim
-        mask[sort_idx[nidx[:1024*batch_dim]]] = True
         return mask
 
 class CenterNetDetector(nn.Module):
