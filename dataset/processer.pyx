@@ -367,7 +367,7 @@ cpdef transform_crop(
     # sepimage, lineimage rotation
     for y in range(height//scale):
         for x in range(width//scale):
-            vector_dot(rx, ry, inv_affin2.data(), <float>x + startx/2, <float>y + starty/2)
+            vector_dot(rx, ry, inv_affin2.data(), <float>x * (scale/2) + startx/2, <float>y * (scale/2) + starty/2)
             dx = rx - floorf(rx)
             dy = ry - floorf(ry)
             w11 = (1-dx) * (1-dy)
