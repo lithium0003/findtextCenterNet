@@ -16,10 +16,10 @@ imagelist = glob.glob('data/background/*', recursive=True)
 
 def random_distortion(im):
     if rng.random() < 0.3:
-        im += 0.2 * rng.random() * rng.normal(size=im.shape)
+        im += 0.4 * rng.random() * rng.normal(size=im.shape)
         im = np.clip(im, 0, 1)
     if rng.random() < 0.3:
-        im = gaussian_filter(im, sigma=3.0*rng.random())
+        im = gaussian_filter(im, sigma=1.5*rng.random())
         im = np.clip(im, 0, 1)
     elif rng.random() < 0.3:
         blurred = gaussian_filter(im, sigma=5.)

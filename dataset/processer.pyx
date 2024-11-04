@@ -134,8 +134,8 @@ cdef void center_map(float cx, float cy, float w, float h, vector[float]& center
     w = w / <float>scale
     h = h / <float>scale
 
-    cdef float fix_w = max(w / 2, 4.0)
-    cdef float fix_h = max(h / 2, 4.0)
+    cdef float fix_w = max(w / 2, scale * 1.5)
+    cdef float fix_h = max(h / 2, scale * 1.5)
     cdef int kernel_size = <int>max(fix_w, fix_h)
     cdef float std_x = fix_w / 4
     cdef float std_y = fix_h / 4
@@ -157,8 +157,8 @@ cdef void center_map(float cx, float cy, float w, float h, vector[float]& center
             center[idx] = max(center[idx], center_kernel[idxk])
 
 cdef void box_map(float cx, float cy, float w, float h, vector[float]& boxmap) noexcept nogil:
-    cdef float fix_w = max(w / (2 * scale), 4.0)
-    cdef float fix_h = max(h / (2 * scale), 4.0)
+    cdef float fix_w = max(w / 10, scale * 1.5)
+    cdef float fix_h = max(h / 10, scale * 1.5)
     cdef float sizex = logf(w / 1024) + 3
     cdef float sizey = logf(h / 1024) + 3
 
@@ -180,8 +180,8 @@ cdef void box_map(float cx, float cy, float w, float h, vector[float]& boxmap) n
                 boxmap[idx] = min(sizey, boxmap[idx])
 
 cdef void id_map(float cx, float cy, float w, float h, int code1, int code2, vector[cnp.int32_t]& indexmap) noexcept nogil:
-    cdef float fix_w = max(w / (2 * scale), 4.0)
-    cdef float fix_h = max(h / (2 * scale), 4.0)
+    cdef float fix_w = max(w / 10, scale * 1.5)
+    cdef float fix_h = max(h / 10, scale * 1.5)
     cdef int xmin = max(0, <int>((cx - fix_w) / scale) - 2)
     cdef int xmax = min(width//scale, <int>((cx + fix_w) / scale) + 2)
     cdef int ymin = max(0, <int>((cy - fix_h) / scale) - 2)

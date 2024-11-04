@@ -99,23 +99,18 @@ def heatmap_loss(true, logits):
 
 def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs, features):
     key_th1 = 0.75
-    key_th2 = 0.25
     key_th3 = 0.99
 
     keylabel = labelmap[:,0,:,:]
     mask1 = keylabel > key_th1
-    mask2 = keylabel > key_th2
     mask3 = keylabel.flatten()[fmask] > key_th3
     mask4 = keylabel.flatten()[fmask] == 1.0
 
     weight1 = torch.maximum(keylabel - key_th1, torch.tensor(0.)) / (1 - key_th1)
     weight1 = torch.masked_select(weight1, mask1)
-    weight2 = torch.maximum(keylabel - key_th2, torch.tensor(0.)) / (1 - key_th2)
-    weight2 = torch.masked_select(weight2, mask2)
     weight3 = torch.maximum(keylabel - key_th3, torch.tensor(0.)) / (1 - key_th3)
     weight3 = torch.masked_select(weight3.flatten()[fmask], mask3)
     weight1_count = torch.maximum(torch.tensor(1.), weight1.sum())
-    weight2_count = torch.maximum(torch.tensor(1.), weight2.sum())
     weight3_count = torch.maximum(torch.tensor(1.), weight3.sum())
 
     keymap_loss = heatmap_loss(true=keylabel, logits=heatmap[:,0,:,:])
@@ -130,16 +125,11 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs, features):
     textline_loss = BCEloss(heatmap[:,3,:,:], labelmap[:,3,:,:])
     separator_loss = BCEloss(heatmap[:,4,:,:], labelmap[:,4,:,:])
     
-    BCEloss = torch.nn.BCEWithLogitsLoss(reduction='none')
     code_losses = {}
     for i in range(4):
         label_map = ((idmap[:,1,:,:] & 2**(i)) > 0).to(torch.float32)
-        label_map = torch.masked_select(label_map, mask2)
         predict_map = heatmap[:,5+i,:,:]
-        predict_map = torch.masked_select(predict_map, mask2)
         code_loss = BCEloss(predict_map, label_map)
-        code_loss = code_loss * weight2
-        code_loss = code_loss.sum() / weight2_count
         code_losses['code%d_loss'%2**(i)] = code_loss
     
     target_id = idmap[:,0,:,:].flatten()[fmask]
