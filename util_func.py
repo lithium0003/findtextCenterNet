@@ -2,8 +2,8 @@ import numpy as np
 import re
 
 modulo_list = [1091,1093,1097]
-width = 512
-height = 512
+width = 1024
+height = 1024
 scale = 4
 feature_dim = 64
 

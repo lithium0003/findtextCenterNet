@@ -13,9 +13,11 @@ from libc.stdlib cimport rand, srand, RAND_MAX
 from libc.time cimport time
 from libcpp.vector cimport vector
 
-cdef int scale = 4
-cdef int width = 512
-cdef int height = 512
+import util_func
+
+cdef int scale = util_func.scale
+cdef int width = util_func.width
+cdef int height = util_func.height
 
 cdef inline float random_uniform() noexcept nogil:
     cdef float r = rand()
