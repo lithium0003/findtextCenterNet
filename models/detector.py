@@ -135,7 +135,7 @@ class Leafmap(nn.Module):
     def __init__(self, out_dim=1, mid_dim=64, **kwargs) -> None:
         super().__init__(**kwargs)
         in_dims = [64,96,256,1280]
-        conv_dims = [8,8,16,96]
+        conv_dims = [8,12,32,160]
         upsamplers = []
         for i, (in_dim, o_dim) in enumerate(zip(in_dims, conv_dims)):
             layers = nn.Sequential(
