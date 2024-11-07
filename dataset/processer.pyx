@@ -266,7 +266,7 @@ cpdef transform_crop(
 
     # augmentation param
     cdef float rotation_angle = np.deg2rad(random_gaussian() * 5.0)
-    cdef float size_x = abs(random_gaussian()) + 1.0
+    cdef float size_x = 2.0 * abs(random_gaussian()) + 1.0
     cdef float aspect_ratio = abs(random_gaussian()) + 1.0
     cdef float size_y
     cdef float sh_x = random_gaussian() * 0.01
@@ -326,8 +326,7 @@ cpdef transform_crop(
         vposition[i*4 + 3] = yr2 - yr1
 
     # set center point
-    # ensure 95% is included text
-    if random_uniform() < 0.95 and position_len > 0:
+    if position_len > 0:
         cidx = <int>(random_uniform() * <float>position_len)
         woffset = random_uniform() * <float>width * 0.75 + <float>width / 8
         hoffset = random_uniform() * <float>height * 0.75 + <float>height / 8
@@ -412,7 +411,7 @@ def process(sample):
     cdef cnp.ndarray[cnp.float32_t, ndim=2] position 
     cdef cnp.ndarray[cnp.int32_t, ndim=2] codelist
 
-    if random_uniform() < 0.05:
+    if random_uniform() < 0.01:
         outimage = np.zeros((height,width), dtype=np.float32)
         mapimage = np.zeros((5,height//scale,width//scale), dtype=np.float32)
         indexmap = np.zeros((2,height//scale,width//scale), dtype=np.int32)
