@@ -44,8 +44,9 @@ int main(int argc, const char * argv[]) {
 	CURLcode res = curl_easy_perform(curl);
 	if (res != CURLE_OK) {
 		fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-		if(isLive && count > 0) {
-			do {
+		int retry = 1000;
+		while(isLive && res != CURLE_OK && (count > 0 || retry-- > 0)) {
+			if(count > 0) {
 				std::stringstream ss;
 				ss << count << "-";
 				std::cerr << "range:" << ss.str() << std::endl;
@@ -53,13 +54,18 @@ int main(int argc, const char * argv[]) {
 				res = curl_easy_perform(curl);
 				if(res != CURLE_OK) {
 					fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+					fprintf(stderr, "retry remain %d\n", retry);
 					std::this_thread::sleep_for(std::chrono::milliseconds(500));
 				}
-			} while(isLive && res != CURLE_OK);
-		}
-		else {
-			curl_easy_cleanup(curl);
-			return 1;
+			}
+			else {
+				res = curl_easy_perform(curl);
+				if(res != CURLE_OK) {
+					fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+					fprintf(stderr, "retry remain %d\n", retry);
+					std::this_thread::sleep_for(std::chrono::milliseconds(500));
+				}
+			}
 		}
 	}
 
