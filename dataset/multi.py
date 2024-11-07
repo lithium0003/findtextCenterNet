@@ -112,6 +112,12 @@ class MultiLoader:
         self.nokill = nokill
         self.prefix = prefix
 
+    def __del__(self):
+        global isalive
+        isalive = False
+        self.kill()
+        self.ctx.destroy()
+
     def kill(self):
         """kill."""
         for pid in self.pids:

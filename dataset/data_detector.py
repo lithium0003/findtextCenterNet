@@ -2,6 +2,7 @@ import torch
 import webdataset as wds
 from torch.utils.data import DataLoader
 import glob
+import os
 import numpy as np
 from PIL import Image
 from scipy.ndimage import gaussian_filter
@@ -43,22 +44,26 @@ def identity(x):
 
 def get_dataset(train=True, calib=False):
     local_disk = False
+    downloader = os.path.join(os.path.dirname(__file__), 'downloader')
     if calib:
         if local_disk:
             shard_pattern = 'train_data1/test00000000.tar'
         else:
-            shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test00000000.tar'
+            shard_pattern = 'pipe:%s https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test00000000.tar'
+            shard_pattern = shard_pattern%(downloader)
     else:
         if train:
             if local_disk:
                 shard_pattern = 'train_data1/train{00000000..00001023}.tar'
             else:
-                shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/train{00000000..00001023}.tar'
+                shard_pattern = 'pipe:%s https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/train{00000000..00001023}.tar'
+                shard_pattern = shard_pattern%(downloader)
         else:
             if local_disk:
                 shard_pattern = 'train_data1/test{00000000..00000063}.tar'
             else:
-                shard_pattern = 'pipe:wget -O - -q --tries=0 --retry-on-http-error=500 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0 --continue https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test{00000000..00000063}.tar'
+                shard_pattern = 'pipe:%s https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test{00000000..00000063}.tar'
+                shard_pattern = shard_pattern%(downloader)
     dataset = (
         wds.WebDataset(shard_pattern, shardshuffle=True)
         .shuffle(100)
@@ -79,16 +84,19 @@ def get_dataset(train=True, calib=False):
 if __name__=='__main__':
     import matplotlib.pylab as plt
     import time
-    # from dataset.multi import MultiLoader
+    from dataset.multi import MultiLoader
 
     dataset = get_dataset(train=False)
-    dataloader = DataLoader(dataset, batch_size=1, num_workers=4)
-    # dataloader = MultiLoader(dataset.batched(1))
+    # dataloader = DataLoader(dataset, batch_size=1, num_workers=4)
+    dataloader = MultiLoader(dataset.batched(1))
 
     st = time.time()
     for sample in dataloader:
         print((time.time() - st) * 1000)
         image, labelmap, idmap = sample
+        image = torch.tensor(image, dtype=torch.float)
+        labelmap = torch.tensor(labelmap, dtype=torch.float)
+        idmap = torch.tensor(idmap, dtype=torch.long)
 
         st = time.time()
         # continue
