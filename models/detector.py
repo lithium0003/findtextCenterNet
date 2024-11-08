@@ -135,13 +135,11 @@ class Leafmap(nn.Module):
     def __init__(self, out_dim=1, mid_dim=64, **kwargs) -> None:
         super().__init__(**kwargs)
         in_dims = [64,96,256,1280]
-        conv_dims = [8,8,16,32]
+        conv_dims = [4,4,8,16]
         upsamplers = []
         for i, (in_dim, o_dim) in enumerate(zip(in_dims, conv_dims)):
             layers = nn.Sequential(
                 nn.Conv2d(in_dim, o_dim, 3, padding=1),
-                nn.GELU(),
-                nn.Conv2d(o_dim, o_dim, 3, padding=1),
                 nn.UpsamplingBilinear2d(scale_factor=2**i),
             )
             upsamplers.append(layers)
@@ -149,7 +147,7 @@ class Leafmap(nn.Module):
 
         self.top_conv = nn.Sequential(
             nn.GELU(),
-            nn.Conv2d(sum(conv_dims), mid_dim, 3, padding=1),
+            nn.Conv2d(sum(conv_dims), mid_dim, 1),
             nn.GELU(),
             nn.Conv2d(mid_dim, out_dim, 1),
         )
@@ -258,7 +256,7 @@ class CenterNetDetector(nn.Module):
         local_area = torch.nn.functional.avg_pool2d(local_area, kernel_size=5, stride=1)
         p_peak = torch.nn.functional.sigmoid(local_peak)
         p_area = torch.nn.functional.sigmoid(local_area)
-        detectedkey = torch.where(torch.logical_or(keymap < local_peak, p_peak < p_area * 1.25), self.minval, keymap)
+        detectedkey = torch.where(torch.logical_or(keymap < local_peak, p_peak < p_area * 1.1), self.minval, keymap)
         return torch.cat([keymap, detectedkey, heatmap[:,1:,:,:]], dim=1), features
 
 class CodeDecoder(nn.Module):
