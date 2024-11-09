@@ -132,10 +132,10 @@ class BackboneModel(nn.Module):
         return results
 
 class Leafmap(nn.Module):
-    def __init__(self, out_dim=1, mid_dim=64, **kwargs) -> None:
+    def __init__(self, out_dim=1, **kwargs) -> None:
         super().__init__(**kwargs)
         in_dims = [64,96,256,1280]
-        conv_dims = [4,4,8,16]
+        conv_dims = [4,6,16,40]
         upsamplers = []
         for i, (in_dim, o_dim) in enumerate(zip(in_dims, conv_dims)):
             layers = nn.Sequential(
@@ -147,9 +147,7 @@ class Leafmap(nn.Module):
 
         self.top_conv = nn.Sequential(
             nn.GELU(),
-            nn.Conv2d(sum(conv_dims), mid_dim, 1),
-            nn.GELU(),
-            nn.Conv2d(mid_dim, out_dim, 1),
+            nn.Conv2d(sum(conv_dims), out_dim, 1),
         )
 
     def forward(self, x1, x2, x3, x4) -> Tensor:
