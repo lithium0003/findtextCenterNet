@@ -111,9 +111,7 @@ def train():
     model.to(device)
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
-    optimizer = torch.optim.Adam([
-        {'params': all_params},
-    ], lr=lr)
+    optimizer = torch.optim.Adam(all_params, lr=lr)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=scheduler_gamma)
 
     CoWloss = CoVWeightingLoss(momentum=1/100, device=device, losses=[
