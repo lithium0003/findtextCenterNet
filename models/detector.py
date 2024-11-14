@@ -1,4 +1,5 @@
 from torchvision.models.efficientnet import EfficientNet, FusedMBConvConfig, MBConvConfig
+from torchvision.models import efficientnet_v2_l, efficientnet_v2_m, efficientnet_v2_s
 import torch
 from torch import nn, Tensor
 from torch.nn.modules import Conv2d
@@ -114,12 +115,19 @@ def load_weight(model: EfficientNet, weight_path: str) -> EfficientNet:
     return model
 
 class BackboneModel(nn.Module):
-    def __init__(self, pre_weights=True, **kwargs):
+    def __init__(self, pre_weights=True, model_size='xl', **kwargs):
         super().__init__(**kwargs)
-        import os
-        model = efficientnet_v2_xl()
-        if pre_weights:
-            load_weight(model, os.path.join(os.path.dirname(__file__),'efficientnetv2-xl-21k.npz'))
+        if model_size == 'xl':
+            import os
+            model = efficientnet_v2_xl()
+            if pre_weights:
+                load_weight(model, os.path.join(os.path.dirname(__file__),'efficientnetv2-xl-21k.npz'))
+        elif model_size == 'l':
+            model = efficientnet_v2_l(weights='DEFAULT' if pre_weights else None)
+        elif model_size == 'm':
+            model = efficientnet_v2_m(weights='DEFAULT' if pre_weights else None)
+        elif model_size == 's':
+            model = efficientnet_v2_s(weights='DEFAULT' if pre_weights else None)
         self.features = model.features
 
     def forward(self, x):
@@ -132,9 +140,16 @@ class BackboneModel(nn.Module):
         return results
 
 class Leafmap(nn.Module):
-    def __init__(self, out_dim=1, **kwargs) -> None:
+    def __init__(self, out_dim=1, model_size='xl', **kwargs) -> None:
         super().__init__(**kwargs)
-        in_dims = [64,96,256,1280]
+        if model_size == 'xl':
+            in_dims = [64,96,256,1280]
+        elif model_size == 'l':
+            in_dims = [64,96,224,1280]
+        elif model_size == 'm':
+            in_dims = [48,80,176,1280]
+        elif model_size == 's':
+            in_dims = [48,64,160,1280]
         conv_dims = [4,6,16,80]
         upsamplers = []
         for i, (in_dim, o_dim) in enumerate(zip(in_dims, conv_dims)):
@@ -158,18 +173,18 @@ class Leafmap(nn.Module):
         return self.top_conv(x)
 
 class CenterNetDetection(nn.Module):
-    def __init__(self, pre_weights=True, **kwargs) -> None:
+    def __init__(self, pre_weights=True, model_size='xl', **kwargs) -> None:
         super().__init__(**kwargs)
-        self.backbone = BackboneModel(pre_weights=pre_weights)
-        self.keyheatmap = Leafmap(out_dim=1)
-        self.sizes = Leafmap(out_dim=2)
-        self.textline = Leafmap(out_dim=1)
-        self.sepatator = Leafmap(out_dim=1)
-        self.code1 = Leafmap(out_dim=1)
-        self.code2 = Leafmap(out_dim=1)
-        self.code4 = Leafmap(out_dim=1)
-        self.code8 = Leafmap(out_dim=1)
-        self.feature = Leafmap(out_dim=feature_dim)
+        self.backbone = BackboneModel(pre_weights=pre_weights, model_size=model_size)
+        self.keyheatmap = Leafmap(out_dim=1, model_size=model_size)
+        self.sizes = Leafmap(out_dim=2, model_size=model_size)
+        self.textline = Leafmap(out_dim=1, model_size=model_size)
+        self.sepatator = Leafmap(out_dim=1, model_size=model_size)
+        self.code1 = Leafmap(out_dim=1, model_size=model_size)
+        self.code2 = Leafmap(out_dim=1, model_size=model_size)
+        self.code4 = Leafmap(out_dim=1, model_size=model_size)
+        self.code8 = Leafmap(out_dim=1, model_size=model_size)
+        self.feature = Leafmap(out_dim=feature_dim, model_size=model_size)
 
     def forward(self, x):
         x = x * 2 - 1
@@ -209,9 +224,9 @@ class SimpleDecoder(nn.Module):
         return y
 
 class TextDetectorModel(nn.Module):
-    def __init__(self, pre_weights=True, **kwargs) -> None:
+    def __init__(self, pre_weights=True, model_size='xl', **kwargs) -> None:
         super().__init__(**kwargs)
-        self.detector = CenterNetDetection(pre_weights=pre_weights)
+        self.detector = CenterNetDetection(pre_weights=pre_weights, model_size=model_size)
         self.decoder = SimpleDecoder()
 
     def forward(self, x, fmask):
@@ -270,7 +285,7 @@ if __name__=="__main__":
     import os
     from torchinfo import summary
 
-    # model = BackboneModel()
+    # model = BackboneModel(model_size='s')
     # print(model)
     # with torch.no_grad():
     #     outputs = model(torch.zeros(1, 3, height, width))
@@ -278,7 +293,7 @@ if __name__=="__main__":
 
     # exit()
 
-    model = CenterNetDetection()
+    model = CenterNetDetection(model_size='s')
     print(model)
     summary(model, input_size=[[1, 3, height, width]])
     with torch.no_grad():

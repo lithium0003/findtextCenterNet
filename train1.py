@@ -26,6 +26,7 @@ iters_to_accumulate=1
 output_iter=None
 scheduler_gamma = 0.95
 continue_train = False
+model_size = 'xl'
 
 class RunningLoss(torch.nn.modules.Module):
     def __init__(self, *args, **kwargs) -> None:
@@ -104,7 +105,7 @@ def train():
     if upload_objectstorage:
         upload('log.txt', 'log.txt')
 
-    model = TextDetectorModel()
+    model = TextDetectorModel(model_size=model_size)
     if os.path.exists('result1/model.pt'):
         data = torch.load('result1/model.pt', map_location="cpu", weights_only=True)
         model.load_state_dict(data['model_state_dict'])
@@ -163,10 +164,12 @@ def train():
         if upload_objectstorage:
             upload('log.txt', 'log.txt')
 
+    print('model', model_size, flush=True)
     print('batch', batch, flush=True)
     print('logstep', logstep, flush=True)
     print('lr', lr, flush=True)
     with open('log.txt','a') as wf:
+        print('model', model_size, file=wf, flush=True)
         print('batch', batch, file=wf, flush=True)
         print('logstep', logstep, file=wf, flush=True)
         print('lr', lr, file=wf, flush=True)
@@ -306,6 +309,8 @@ if __name__=='__main__':
                 scheduler_gamma = float(arg.split('=')[1])
             elif arg.startswith('--continue'):
                 continue_train = arg.split('=')[1].lower() == 'true'
+            elif arg.startswith('--model'):
+                model_size = arg.split('=')[1].lower()
             else:
                 batch = int(arg)
 
