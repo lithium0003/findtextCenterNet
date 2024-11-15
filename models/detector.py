@@ -29,6 +29,10 @@ def efficientnet_v2_xl(**kwargs: Any) -> EfficientNet:
 
 def load_weight(model: EfficientNet, weight_path: str) -> EfficientNet:
     import numpy as np
+    import os
+
+    if not os.path.exists(model):
+        return model
 
     with np.load(weight_path) as weights:
         def apply_weights(func, base, tag=None):
