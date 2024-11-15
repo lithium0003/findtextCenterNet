@@ -31,7 +31,7 @@ def load_weight(model: EfficientNet, weight_path: str) -> EfficientNet:
     import numpy as np
     import os
 
-    if not os.path.exists(model):
+    if not os.path.exists(weight_path):
         return model
 
     with np.load(weight_path) as weights:
