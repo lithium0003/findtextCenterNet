@@ -1,0 +1,7 @@
+sudo apt install build-essential pkg-config libfreetype-dev python3-venv
+python3 -m venv venv/mkdata
+. venv/mkdata/bin/activate
+cd make_traindata
+make -C render_font
+pip install -U webdataset numpy pillow
+./make_traindata1.py 64 1024

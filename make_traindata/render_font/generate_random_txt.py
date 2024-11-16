@@ -346,7 +346,7 @@ def get_random_wari(rng):
         main2 = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+kanji, m_l))
         txt += main + '（' + wari + '）' + main2
 
-    size = int(np.exp(rng.uniform(np.log(32), np.log(128))))
+    size = int(np.exp(rng.uniform(np.log(32), np.log(256))))
     direction = 1 if rng.random() < 0.5 else 2
     line_charcount = rng.integers(20, 40)
     sc_w = np.minimum(line_charcount * size, 2000)
@@ -393,7 +393,7 @@ def get_random_furigana(rng):
     # 8: 弌
 
     print('get_random_furigana')
-    size = int(np.exp(rng.uniform(np.log(32), np.log(128))))
+    size = int(np.exp(rng.uniform(np.log(32), np.log(256))))
     count = 6400 // size
 
     txt = '　'
@@ -407,7 +407,7 @@ def get_random_furigana(rng):
                 before = ''.join(rng.choice(jp_type_list[3], 1))
             m_l = rng.integers(1, 10)
             main = ''.join(rng.choice(jp_type_list[5]+jp_type_list[8]+jp_type_list[9]+jp_type_list[10], m_l))
-            ruby = ''.join(rng.choice(jp_type_list[3] + ['ー'], rng.integers(3, m_l * 2 + 3)))
+            ruby = ''.join(rng.choice(jp_type_list[3] + ['ー'], rng.integers(1, m_l * 2 + 2)))
             if rng.random() < 0.2:
                 after = ''.join(rng.choice(jp_type_list[5], rng.integers(1,5)))
             else:
@@ -425,7 +425,7 @@ def get_random_furigana(rng):
             else:
                 ruby = ''.join(rng.choice(['•','◦','●','○','◎','◉','▲','△','﹅','﹆'],1))
             txt += '\uFFF9'+main+'\uFFFA'+ruby+'\uFFFB'
-        elif p < 0.5:
+        elif p < 0.55:
             # 漢字にカタカナ
             kanjis = list(rng.choice(jp_type_list[5]+jp_type_list[8]+jp_type_list[9]+jp_type_list[10], 40))
             m_l = rng.integers(1, 15)
@@ -456,13 +456,13 @@ def get_random_furigana(rng):
                 m_l2 = rng.integers(m_l // 5 + 3, m_l // 3 + 4)
             ruby = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+kanjis+['ー'], m_l2))
             txt += '\uFFF9'+main+'\uFFFA'+ruby+'\uFFFB'
-        elif p < 0.9:
+        elif p < 0.85:
             # 日本語にalphabet
             kanjis = list(rng.choice(jp_type_list[5]+jp_type_list[8], 100))
             m_l = rng.integers(3, 20)
             main = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+kanjis+['ー'], m_l))
             if rng.random() < 0.5:
-                if rng.random() < 0.75:
+                if rng.random() < 0.5:
                     m_l2 = rng.integers(m_l // 5 + 3, m_l // 3 + 4)
                 else:
                     m_l2 = rng.integers(m_l, m_l * 3)
@@ -485,7 +485,7 @@ def get_random_furigana(rng):
             m_l = rng.integers(3, 12)
             main = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+kanjis+['ー'], m_l))
             kanjis = list(rng.choice(jp_type_list[5]+jp_type_list[8]+jp_type_list[9]+jp_type_list[10], 400))
-            if rng.random() < 0.75:
+            if rng.random() < 0.5:
                 m_l2 = rng.integers(3, m_l // 5 + 4)
             else:
                 m_l2 = rng.integers(m_l, m_l * 2 + 1)
@@ -577,9 +577,9 @@ def get_random_char(rng):
     font = rng.choice(current_fontlist)
 
     if en:
-        size = int(np.exp(rng.uniform(np.log(30), np.log(128))))
+        size = int(np.exp(rng.uniform(np.log(30), np.log(256))))
     else:
-        size = int(np.exp(rng.uniform(np.log(18), np.log(128))))
+        size = int(np.exp(rng.uniform(np.log(18), np.log(256))))
     line_charcount = rng.integers(20, 40)
     sc_w = np.minimum(line_charcount * size, 2000)
     line_count = len(content) // (line_charcount)
@@ -660,7 +660,7 @@ def get_random_char2(rng):
 
     font = rng.choice(current_fontlist)
 
-    size = int(np.exp(rng.uniform(np.log(18), np.log(128))))
+    size = int(np.exp(rng.uniform(np.log(18), np.log(256))))
     line_charcount = rng.integers(20, 40)
     sec = 2
     sc_w = np.minimum(line_charcount * size, 2000)
@@ -689,7 +689,7 @@ def get_random_char2(rng):
         canvas.set_linemax(sc_h)
         canvas.line_space_ratio = rng.uniform(1.0,2.0)
         if sec > 1:
-            canvas.set_section(sec, rng.uniform(0.1, 3.0))
+            canvas.set_section(sec, rng.uniform(0.3, 3.0))
         canvas.set_header(header_str)
         canvas.set_footer(footer_str)
         d = canvas.draw(txt)
@@ -739,7 +739,7 @@ def get_random_kr_char(rng):
 
     font = rng.choice(krfontlist)
 
-    size = int(np.exp(rng.uniform(np.log(20), np.log(128))))
+    size = int(np.exp(rng.uniform(np.log(20), np.log(256))))
     line_charcount = rng.integers(20, 40)
     sec = 2
     sc_w = np.minimum(line_charcount * size, 2000)
@@ -752,7 +752,7 @@ def get_random_kr_char(rng):
         canvas.set_linemax(sc_h)
         canvas.line_space_ratio = rng.uniform(1.0,2.0)
         if sec > 1:
-            canvas.set_section(sec, rng.uniform(0.1, 3.0))
+            canvas.set_section(sec, rng.uniform(0.3, 3.0))
         d = canvas.draw(txt)
         d['font'] = font
     
@@ -804,9 +804,9 @@ def get_random_textline(rng, single=False):
     font = rng.choice(current_fontlist)
 
     if en:
-        size = int(np.exp(rng.uniform(np.log(30), np.log(128))))
+        size = int(np.exp(rng.uniform(np.log(30), np.log(256))))
     else:
-        size = int(np.exp(rng.uniform(np.log(18), np.log(128))))
+        size = int(np.exp(rng.uniform(np.log(18), np.log(256))))
     line_charcount = rng.integers(20, 40)
     sec = 1 if single else 2
     sc_w = np.minimum(line_charcount * size, 2000)
@@ -855,7 +855,7 @@ def get_random_textline(rng, single=False):
         else:
             canvas.line_space_ratio = rng.uniform(1.0,2.0)
         if sec > 1:
-            canvas.set_section(sec, rng.uniform(0.1, 3.0))
+            canvas.set_section(sec, rng.uniform(0.3, 3.0))
         canvas.set_header(header_str)
         canvas.set_footer(footer_str)
         d = canvas.draw(txt)
@@ -879,7 +879,7 @@ def get_random_il(rng):
         word = "“%s”"%word
         content.append(word)
 
-    size = int(np.exp(rng.uniform(np.log(48), np.log(128))))
+    size = int(np.exp(rng.uniform(np.log(100), np.log(200))))
 
     italic = rng.random() < 0.1
     bold = rng.random() < 0.2
@@ -896,14 +896,14 @@ def get_random_word(rng):
         content = rng.choice(en_wordlist, size=rng.integers(64, 256))
         font = rng.choice(enfontlist)
     else:
-        content = rng.choice(wordlist, size=rng.integers(32, 64))
+        content = rng.choice(wordlist, size=rng.integers(64, 256))
         font = rng.choice(jpvfontlist)
     content = list(content)
     for _ in range(rng.integers(32)):
         k = int(np.power(10.,rng.uniform(1.,6.)))
         content.append("%d"%k)
 
-    size = int(np.exp(rng.uniform(np.log(48), np.log(128))))
+    size = int(np.exp(rng.uniform(np.log(100), np.log(200))))
 
     italic = rng.random() < 0.1
     bold = rng.random() < 0.2
@@ -937,7 +937,7 @@ def get_random_grid(rng):
         value.append(line_value)
 
     font = rng.choice(jpfontlist)
-    size = int(np.exp(rng.uniform(np.log(20), np.log(128))))
+    size = int(np.exp(rng.uniform(np.log(20), np.log(256))))
 
     italic = rng.random() < 0.1
     bold = rng.random() < 0.2
@@ -999,13 +999,13 @@ def get_random_hendwrite(rng):
 
 def get_random_text(rng):
     p = rng.random()
-    if p < 0.35:
-        # 0.35
+    if p < 0.15:
+        # 0.15
         return get_random_furigana(rng)
-    elif p < 0.5:
+    elif p < 0.3:
         # 0.15
         return get_random_textline(rng)
-    elif p < 0.8:
+    elif p < 0.6:
         # 0.3
         if rng.random() < 0.5:
             # 0.15
@@ -1013,26 +1013,26 @@ def get_random_text(rng):
         else:
             # 0.15
             return get_random_char2(rng)
-    elif p < 0.9:
+    elif p < 0.7:
+        # 0.1
+        return get_random_word(rng)
+    elif p < 0.8:
         # 0.1
         return get_random_kr_char(rng)
     else:
-        # 0.1
+        # 0.2
         p = rng.random()
         if p < 0.25:
-            # 0.025
+            # 0.05
             return get_random_il(rng)
         elif p < 0.5:
-            # 0.025
+            # 0.05
             return get_random_wari(rng)
-        elif rng.random() < 0.7:
-            # 0.02
-            return get_random_word(rng)
-        elif rng.random() < 0.8:
-            # 0.01
+        elif p < 0.75:
+            # 0.05
             return get_random_grid(rng)
         else:
-            # 0.02
+            # 0.05
             return get_random_hendwrite(rng)
 
 if __name__ == '__main__':

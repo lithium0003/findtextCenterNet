@@ -1,10 +1,9 @@
 *.obj
 *.exe
 
+make_traindata/data/*font/
+make_traindata/data/handwritten/
 data/background/
-data/enfont/
-data/jpfont/
-data/handwritten/
 result/
 
 # Byte-compiled / optimized / DLL files

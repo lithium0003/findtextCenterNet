@@ -7,9 +7,10 @@ import webdataset as wds
 from multiprocessing import Pool, Manager
 from pathlib import Path
 from functools import partial
+import os
 
 from render_font.generate_random_txt import get_random_text
-from const import samples_per_file
+samples_per_file = 100
 
 data_path = Path('train_data1')
 data_path.mkdir(exist_ok=True)
@@ -31,6 +32,13 @@ def process(i, semaphore):
             if d['image'].shape[0] >= (1 << 27) or d['image'].shape[1] >= (1 << 27) or d['image'].shape[0] * d['image'].shape[1] >= (1 << 29):
                 continue
             d['i'] = i
+            w = d['image'].shape[1] // 2 * 2
+            h = d['image'].shape[0] // 2 * 2
+            d['image'] = d['image'][:h,:w]
+            d['sep_image'] = np.asarray(Image.fromarray(d['sep_image']).resize((w // 2, h // 2)))
+            d['textline_image'] = np.asarray(Image.fromarray(d['textline_image']).resize((w // 2, h // 2)))
+            d['position'] = d['position'].astype(np.float32)
+            d['code_list'] = d['code_list'].astype(np.int32)
             return d
         except Exception as e:
             print(e,i,'error')
@@ -42,28 +50,17 @@ def create_data(train=True, count=1):
     with Manager() as manager:
         semaphore = manager.Semaphore(1000)
         with wds.ShardWriter(get_filepath(train=train), maxcount=samples_per_file) as sink:
-            with Pool() as p:
+            with Pool(processes=os.cpu_count()*2) as p:
                 for d in p.imap_unordered(partial(process, semaphore=semaphore), range(samples_per_file * count)):
                     print(d['i'],samples_per_file * count)
-                    w = d['image'].shape[1] // 2 * 2
-                    h = d['image'].shape[0] // 2 * 2
-                    d['image'] = d['image'][:h,:w]
-                    sep_image = np.asarray(Image.fromarray(d['sep_image']).resize((w // 2, h // 2)))
-                    textline_image = np.asarray(Image.fromarray(d['textline_image']).resize((w // 2, h // 2)))
-                    image = d['image']
-                    sep_image = sep_image
-                    textline_image = textline_image
-                    position = d['position'].astype(np.float32)
-                    code_list = d['code_list'].astype(np.int32)
-
                     sink.write({
                         "__key__": '%014d'%d['i'],
                         "txt": d['str'],
-                        "image.png": image,
-                        "sepline.png": sep_image,
-                        "textline.png": textline_image,
-                        "position.npy": position,
-                        "code_list.npy": code_list,
+                        "image.png": d['image'],
+                        "sepline.png": d['sep_image'],
+                        "textline.png": d['textline_image'],
+                        "position.npy": d['position'],
+                        "code_list.npy": d['code_list'],
                     })
                     semaphore.release()
 

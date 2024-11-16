@@ -606,7 +606,8 @@ class Canvas:
 
         position = np.zeros([0,4]) # cx, cy, w, h
         code_list = np.zeros([0,2], dtype=int) # utf-32 code, char type
-        ratio_min = max(48.0 / self.fontsize, rng.uniform(0.2, 1.0))
+        ratio_min = 16.0 / self.fontsize
+        ratio_max = 300.0 / self.fontsize
 
         for text in textlist:
             horizontal = rng.random() < 0.5
@@ -627,7 +628,7 @@ class Canvas:
             max_ratio = max(np.max(space_imagex) / x_size, np.max(space_imagey) / y_size)
             if max_ratio < ratio_min:
                 continue
-            max_ratio = min(1/ratio_min, max_ratio)
+            max_ratio = min(ratio_max, max_ratio)
 
             im_buf = resize(im_buf, np.exp(rng.uniform(np.log(ratio_min), np.log(max_ratio))))
             image = im_buf['image']
