@@ -240,7 +240,7 @@ class TextDetectorModel(nn.Module):
         features = torch.permute(features, (0,2,3,1)).flatten(0,-2)
         decoder_outputs = self.decoder(features[fmask])
 
-        return heatmap, decoder_outputs, features
+        return heatmap, decoder_outputs
 
     def get_fmask(self, heatmap, mask) -> Tensor:
         # heatmap: [-1, 11, 128, 128]

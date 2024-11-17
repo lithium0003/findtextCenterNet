@@ -131,22 +131,21 @@ def train():
         'textline_loss',
         'separator_loss',
         'id_loss',
-        'l2_loss',
         *['code%d_loss'%2**(i) for i in range(4)],
     ])
 
     def train_step(image, map, idmap, fmask):
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
-            heatmap, decoder_outputs, features = model(image, fmask)
-            rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs, features)
-            loss = CoWloss(rawloss) + rawloss['l2_loss']
+            heatmap, decoder_outputs = model(image, fmask)
+            rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs)
+            loss = CoWloss(rawloss)
         return loss, rawloss
 
     def test_step(image, map, idmap, fmask):
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
-            heatmap, decoder_outputs, features = model(image, fmask)
-            rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs, features)
-            loss = CoWloss(rawloss) + rawloss['l2_loss']
+            heatmap, decoder_outputs = model(image, fmask)
+            rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs)
+            loss = CoWloss(rawloss)
         return loss, rawloss
 
     if compile:

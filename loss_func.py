@@ -22,7 +22,6 @@ class CoVWeightingLoss(torch.nn.modules.Module):
         self.running_S_l = torch.zeros((self.num_losses,), requires_grad=False, dtype=torch.float32, device=self.device)
         self.running_std_l = None
 
-    @torch.autocast(device_type="cuda", enabled=False)
     def forward(self, losses):
         L = torch.stack([losses[key].clone().detach().to(torch.float32) for key in self.losses])
         L = torch.nan_to_num(L)
@@ -76,7 +75,6 @@ class CoVWeightingLoss(torch.nn.modules.Module):
         loss = sum(weighted_losses)
         return loss
 
-@torch.autocast(device_type="cuda", enabled=False)
 def heatmap_loss(true, logits):
     alpha = 2
     beta = 4
@@ -97,7 +95,7 @@ def heatmap_loss(true, logits):
 
     return loss
 
-def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs, features):
+def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     key_th1 = 0.75
     key_th3 = 0.99
 
@@ -147,9 +145,6 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs, features):
         id1_loss = (id1_loss * weight3).sum() / weight3_count
         id_loss += id1_loss
 
-    l2_loss = features.std(dim=-1)
-    l2_loss = torch.where(l2_loss > 3, l2_loss - 3, 0.).mean()
-
     pred_ids = []
     for decoder_id1 in decoder_outputs:
         pred_id1 = torch.argmax(decoder_id1[mask4,:], dim=-1)
@@ -168,7 +163,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs, features):
     total = torch.ones_like(correct).sum()
     correct = (correct == 3).sum()
 
-    loss = keymap_loss + size_loss + textline_loss + separator_loss + id_loss + l2_loss
+    loss = keymap_loss + size_loss + textline_loss + separator_loss + id_loss
     for c_loss in code_losses.values():
         loss += c_loss
 
@@ -179,7 +174,6 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs, features):
         'textline_loss': textline_loss,
         'separator_loss': separator_loss,
         'id_loss': id_loss,
-        'l2_loss': l2_loss,
         **code_losses,
         'correct': correct,
         'total': total,
