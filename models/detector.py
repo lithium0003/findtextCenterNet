@@ -35,6 +35,7 @@ def load_weight(model: EfficientNet, weight_path: str) -> EfficientNet:
         return model
 
     with np.load(weight_path) as weights:
+        print('loading weights')
         def apply_weights(func, base, tag=None):
             if isinstance(func, Conv2d):
                 state_dict = func.state_dict()
