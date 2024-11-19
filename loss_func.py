@@ -120,7 +120,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     size_loss = size_loss.mean() * 10.
 
     textline_loss = torch.nn.functional.binary_cross_entropy_with_logits(heatmap[:,3,:,:], labelmap[:,3,:,:], pos_weight=torch.tensor([3.], dtype=heatmap.dtype, device=heatmap.device))
-    textline_loss = textline_loss * 100.
+    textline_loss = textline_loss * 10.
     separator_loss = torch.nn.functional.binary_cross_entropy_with_logits(heatmap[:,4,:,:], labelmap[:,4,:,:], pos_weight=torch.tensor([3.], dtype=heatmap.dtype, device=heatmap.device))
     separator_loss = separator_loss * 100.    
 
