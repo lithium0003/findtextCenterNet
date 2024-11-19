@@ -90,7 +90,7 @@ def heatmap_loss(true, logits):
     pos_loss = torch.nn.functional.softplus(-logits) * torch.pow(1 - predict, alpha) * pos_mask
     neg_loss = (logits + torch.nn.functional.softplus(-logits)) * torch.pow(predict, alpha) * neg_weights * neg_mask
 
-    loss = pos_loss.sum() + neg_loss.sum()
+    loss = 3. * pos_loss.sum() + neg_loss.sum()
 
     return loss / float(logits.numel())
 
