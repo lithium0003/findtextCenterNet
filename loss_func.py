@@ -111,24 +111,26 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     weight3 = torch.masked_select(weight3.flatten()[fmask], mask3)
     weight3_count = torch.maximum(torch.tensor(1.), weight3.sum())
 
-    keymap_loss = heatmap_loss(true=keylabel, logits=heatmap[:,0,:,:]) * 100.
+    keymap_loss = heatmap_loss(true=keylabel, logits=heatmap[:,0,:,:]) * 1e3
 
     huber = torch.nn.HuberLoss(reduction='none')
     xsize_loss = huber(torch.masked_select(heatmap[:,1,:,:], mask1), torch.masked_select(labelmap[:,1,:,:], mask1))
     ysize_loss = huber(torch.masked_select(heatmap[:,2,:,:], mask1), torch.masked_select(labelmap[:,2,:,:], mask1))
     size_loss = (xsize_loss + ysize_loss) * weight1
-    size_loss = size_loss.mean()
+    size_loss = size_loss.mean() * 10.
 
     textline_loss = torch.nn.functional.binary_cross_entropy_with_logits(heatmap[:,3,:,:], labelmap[:,3,:,:], pos_weight=torch.tensor([3.], dtype=heatmap.dtype, device=heatmap.device))
+    textline_loss = textline_loss * 100.
     separator_loss = torch.nn.functional.binary_cross_entropy_with_logits(heatmap[:,4,:,:], labelmap[:,4,:,:], pos_weight=torch.tensor([3.], dtype=heatmap.dtype, device=heatmap.device))
-    
+    separator_loss = separator_loss * 100.    
+
     code_losses = {}
     for i in range(4):
         label_map = ((idmap[:,1,:,:] & 2**(i)) > 0).to(torch.float32)
         predict_map = heatmap[:,5+i,:,:]
         weight = torch.ones_like(label_map) + label_map * 3 + weight2 * 2
         code_loss = torch.nn.functional.binary_cross_entropy_with_logits(predict_map, label_map, weight=weight)
-        code_losses['code%d_loss'%2**(i)] = code_loss * 100.
+        code_losses['code%d_loss'%2**(i)] = code_loss * 1e3
     
     target_id = idmap[:,0,:,:].flatten()[fmask]
     target_ids = []
