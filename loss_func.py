@@ -91,12 +91,12 @@ def heatmap_loss(true, logits):
     neg_loss = (logits + torch.nn.functional.softplus(-logits)) * torch.pow(predict, alpha) * neg_weights * neg_mask
 
     loss = pos_loss.sum() + neg_loss.sum()
-    loss = loss / torch.maximum(pos_mask.sum(), torch.tensor(1.0))
 
     return loss
 
 def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     key_th1 = 0.75
+    key_th2 = 0.8
     key_th3 = 0.99
 
     keylabel = labelmap[:,0,:,:]
@@ -106,9 +106,9 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
 
     weight1 = torch.maximum(keylabel - key_th1, torch.tensor(0.)) / (1 - key_th1)
     weight1 = torch.masked_select(weight1, mask1)
+    weight2 = torch.maximum(keylabel - key_th2, torch.tensor(0.)) / (1 - key_th2)
     weight3 = torch.maximum(keylabel - key_th3, torch.tensor(0.)) / (1 - key_th3)
     weight3 = torch.masked_select(weight3.flatten()[fmask], mask3)
-    weight1_count = torch.maximum(torch.tensor(1.), weight1.sum())
     weight3_count = torch.maximum(torch.tensor(1.), weight3.sum())
 
     keymap_loss = heatmap_loss(true=keylabel, logits=heatmap[:,0,:,:])
@@ -117,17 +117,17 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     xsize_loss = huber(torch.masked_select(heatmap[:,1,:,:], mask1), torch.masked_select(labelmap[:,1,:,:], mask1))
     ysize_loss = huber(torch.masked_select(heatmap[:,2,:,:], mask1), torch.masked_select(labelmap[:,2,:,:], mask1))
     size_loss = (xsize_loss + ysize_loss) * weight1
-    size_loss = size_loss.sum() / weight1_count
+    size_loss = size_loss.sum()
 
-    BCEloss = torch.nn.BCEWithLogitsLoss()
-    textline_loss = BCEloss(heatmap[:,3,:,:], labelmap[:,3,:,:])
-    separator_loss = BCEloss(heatmap[:,4,:,:], labelmap[:,4,:,:])
+    textline_loss = torch.nn.functional.binary_cross_entropy_with_logits(heatmap[:,3,:,:], labelmap[:,3,:,:], reduction='sum', pos_weight=torch.tensor([3.], dtype=heatmap.dtype, device=heatmap.device))
+    separator_loss = torch.nn.functional.binary_cross_entropy_with_logits(heatmap[:,4,:,:], labelmap[:,4,:,:], reduction='sum', pos_weight=torch.tensor([3.], dtype=heatmap.dtype, device=heatmap.device))
     
     code_losses = {}
     for i in range(4):
         label_map = ((idmap[:,1,:,:] & 2**(i)) > 0).to(torch.float32)
         predict_map = heatmap[:,5+i,:,:]
-        code_loss = BCEloss(predict_map, label_map)
+        weight = torch.ones_like(label_map) + label_map + weight2 * 2
+        code_loss = torch.nn.functional.binary_cross_entropy_with_logits(predict_map, label_map, weight=weight, reduction='sum')
         code_losses['code%d_loss'%2**(i)] = code_loss
     
     target_id = idmap[:,0,:,:].flatten()[fmask]

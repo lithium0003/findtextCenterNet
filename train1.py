@@ -24,7 +24,7 @@ compile=True
 logstep=100
 iters_to_accumulate=1
 output_iter=None
-scheduler_gamma = 0.95
+scheduler_gamma = 0.98
 continue_train = False
 model_size = 'xl'
 
