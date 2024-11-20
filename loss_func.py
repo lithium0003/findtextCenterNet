@@ -80,23 +80,24 @@ def heatmap_loss(true, logits):
     beta = 4
     pos_th = 1.0
 
-    predict = torch.sigmoid(logits.to(torch.float32))
+    logits32 = logits.to(torch.float32)
+    predict = torch.sigmoid(logits32)
 
     pos_mask = (true >= pos_th).to(torch.float32)
     neg_mask = (true < pos_th).to(torch.float32)
 
     neg_weights = torch.pow(1. - true, beta)
 
-    pos_loss = torch.nn.functional.softplus(-logits) * torch.pow(1 - predict, alpha) * pos_mask
-    neg_loss = (logits + torch.nn.functional.softplus(-logits)) * torch.pow(predict, alpha) * neg_weights * neg_mask
+    pos_loss = torch.nn.functional.softplus(-logits32) * torch.pow(1 - predict, alpha) * pos_mask
+    neg_loss = (logits32 + torch.nn.functional.softplus(-logits32)) * torch.pow(predict, alpha) * neg_weights * neg_mask
 
     loss = 3. * pos_loss.sum() + neg_loss.sum()
 
-    return loss / float(logits.numel())
+    return (loss / float(logits.numel())).to(logits.dtype)
 
 def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     key_th1 = 0.75
-    key_th2 = 0.8
+    key_th2 = 0.75
     key_th3 = 0.99
 
     keylabel = labelmap[:,0,:,:]
@@ -111,7 +112,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     weight3 = torch.masked_select(weight3.flatten()[fmask], mask3)
     weight3_count = torch.maximum(torch.tensor(1.), weight3.sum())
 
-    keymap_loss = heatmap_loss(true=keylabel, logits=heatmap[:,0,:,:]) * 1e3
+    keymap_loss = heatmap_loss(true=keylabel, logits=heatmap[:,0,:,:]) * 1e4
 
     huber = torch.nn.HuberLoss(reduction='none')
     xsize_loss = huber(torch.masked_select(heatmap[:,1,:,:], mask1), torch.masked_select(labelmap[:,1,:,:], mask1))

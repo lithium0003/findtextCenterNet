@@ -17,14 +17,14 @@ from dataset.multi import MultiLoader
 
 upload_objectstorage = False
 
-lr = 1e-3
+lr = 5e-4
 EPOCHS = 40
 batch=4
 compile=True
 logstep=100
 iters_to_accumulate=1
 output_iter=None
-scheduler_gamma = 0.98
+scheduler_gamma = 0.95
 continue_train = False
 model_size = 'xl'
 
