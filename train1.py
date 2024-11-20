@@ -17,7 +17,7 @@ from dataset.multi import MultiLoader
 
 upload_objectstorage = False
 
-lr = 5e-4
+lr = 1e-3
 EPOCHS = 40
 batch=4
 compile=True
