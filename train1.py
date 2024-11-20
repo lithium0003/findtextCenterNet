@@ -115,7 +115,7 @@ def train():
     optimizer = torch.optim.Adam(all_params, lr=lr)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=scheduler_gamma)
 
-    CoWloss = CoVWeightingLoss(momentum=1/100, device=device, losses=[
+    CoWloss = CoVWeightingLoss(momentum=1/1000, device=device, losses=[
         'keymap_loss',
         'size_loss',
         'textline_loss',
