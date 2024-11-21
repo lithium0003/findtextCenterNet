@@ -91,9 +91,11 @@ def heatmap_loss(true, logits):
     pos_loss = - torch.nn.functional.logsigmoid(logits32) * torch.pow(1 - predict, alpha) * pos_mask
     neg_loss = (logits32 + torch.nn.functional.softplus(-logits32)) * torch.pow(predict, alpha) * neg_weights * neg_mask
 
-    loss = pos_loss.sum() + neg_loss.sum()
+    count_pos = pos_mask.sum().clamp_min(1)
+    count_neg = neg_mask.sum().clamp_min(1)
+    loss = pos_loss.sum() / count_pos + neg_loss.sum() / count_neg
 
-    return (loss / float(logits.numel())).to(logits.dtype)
+    return loss.to(logits.dtype)
 
 def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     key_th1 = 0.75
@@ -128,7 +130,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     for i in range(4):
         label_map = ((idmap[:,1,:,:] & 2**(i)) > 0).to(torch.float32)
         predict_map = heatmap[:,5+i,:,:]
-        weight = torch.ones_like(label_map) + label_map * 3 + weight2 * 2
+        weight = torch.ones_like(label_map) + label_map * 3 + weight2 * 10
         code_loss = torch.nn.functional.binary_cross_entropy_with_logits(predict_map, label_map, weight=weight)
         code_losses['code%d_loss'%2**(i)] = code_loss
     
