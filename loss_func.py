@@ -98,20 +98,16 @@ def heatmap_loss(true, logits):
 def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     key_th1 = 0.75
     key_th2 = 0.75
-    key_th3 = 0.99
+    key_th3 = 1.0
 
     keylabel = labelmap[:,0,:,:]
     mask1 = keylabel > key_th1
-    mask3 = keylabel.flatten()[fmask] > key_th3
-    mask4 = keylabel.flatten()[fmask] == 1.0
+    mask3 = keylabel.flatten()[fmask] == key_th3
 
     weight1 = torch.maximum(keylabel - key_th1, torch.tensor(0.)) / (1 - key_th1)
     weight1 = torch.masked_select(weight1, mask1)
     weight1_count = torch.maximum(torch.tensor(1.), weight1.sum())
     weight2 = torch.maximum(keylabel - key_th2, torch.tensor(0.)) / (1 - key_th2)
-    weight3 = torch.maximum(keylabel - key_th3, torch.tensor(0.)) / (1 - key_th3)
-    weight3 = torch.masked_select(weight3.flatten()[fmask], mask3)
-    weight3_count = torch.maximum(torch.tensor(1.), weight3.sum())
 
     keymap_loss = heatmap_loss(true=keylabel, logits=heatmap[:,0,:,:]) * 1e3
 
@@ -142,16 +138,15 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     for target_id1, decoder_id1 in zip(target_ids, decoder_outputs):
         target_id1 = torch.masked_select(target_id1, mask3)
         decoder_id1 = decoder_id1[mask3,:]
-        id1_loss = torch.nn.functional.cross_entropy(decoder_id1, target_id1, reduction='none')
-        id1_loss = (id1_loss * weight3).sum() / weight3_count
+        id1_loss = torch.nn.functional.cross_entropy(decoder_id1, target_id1)
         id_loss += id1_loss
 
     pred_ids = []
     for decoder_id1 in decoder_outputs:
-        pred_id1 = torch.argmax(decoder_id1[mask4,:], dim=-1)
+        pred_id1 = torch.argmax(decoder_id1[mask3,:], dim=-1)
         pred_ids.append(pred_id1)
 
-    target_id = torch.masked_select(target_id, mask4)
+    target_id = torch.masked_select(target_id, mask3)
     target_ids = []
     for modulo in modulo_list:
         target_id1 = target_id % modulo
