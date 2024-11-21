@@ -98,11 +98,12 @@ def heatmap_loss(true, logits):
 def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     key_th1 = 0.75
     key_th2 = 0.75
-    key_th3 = 1.0
+    key_th3 = 0.95
 
     keylabel = labelmap[:,0,:,:]
     mask1 = keylabel > key_th1
-    mask3 = keylabel.flatten()[fmask] == key_th3
+    mask3 = keylabel.flatten()[fmask] < key_th3
+    mask4 = keylabel.flatten()[fmask] == 1.0
 
     weight1 = torch.maximum(keylabel - key_th1, torch.tensor(0.)) / (1 - key_th1)
     weight1 = torch.masked_select(weight1, mask1)
@@ -124,7 +125,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     for i in range(4):
         label_map = ((idmap[:,1,:,:] & 2**(i)) > 0).to(torch.float32)
         predict_map = heatmap[:,5+i,:,:]
-        weight = torch.ones_like(label_map) + label_map * 30 + weight2 * 10
+        weight = torch.ones_like(label_map) + label_map * 3 + weight2 * 10
         code_loss = torch.nn.functional.binary_cross_entropy_with_logits(predict_map, label_map, weight=weight)
         code_losses['code%d_loss'%2**(i)] = code_loss * 10
     
@@ -143,10 +144,10 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
 
     pred_ids = []
     for decoder_id1 in decoder_outputs:
-        pred_id1 = torch.argmax(decoder_id1[mask3,:], dim=-1)
+        pred_id1 = torch.argmax(decoder_id1[mask4,:], dim=-1)
         pred_ids.append(pred_id1)
 
-    target_id = torch.masked_select(target_id, mask3)
+    target_id = torch.masked_select(target_id, mask4)
     target_ids = []
     for modulo in modulo_list:
         target_id1 = target_id % modulo
