@@ -125,7 +125,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     for i in range(4):
         label_map = ((idmap[:,1,:,:] & 2**(i)) > 0).to(torch.float32)
         predict_map = heatmap[:,5+i,:,:]
-        weight = torch.ones_like(label_map) + label_map * 30 + weight2 * 10
+        weight = torch.ones_like(label_map) + label_map * 6 + weight2 * 2
         code_loss = torch.nn.functional.binary_cross_entropy_with_logits(predict_map, label_map, weight=weight)
         code_losses['code%d_loss'%2**(i)] = code_loss * 10
     
