@@ -98,7 +98,7 @@ def heatmap_loss(true, logits):
 def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     key_th1 = 0.75
     key_th2 = 0.75
-    key_th3 = 0.98
+    key_th3 = 0.95
 
     keylabel = labelmap[:,0,:,:]
     mask1 = keylabel > key_th1
@@ -109,8 +109,11 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     weight1 = torch.masked_select(weight1, mask1)
     weight1_count = torch.maximum(torch.tensor(1.), weight1.sum())
     weight2 = torch.maximum(keylabel - key_th2, torch.tensor(0.)) / (1 - key_th2)
+    weight3 = torch.maximum(keylabel.flatten()[fmask] - key_th3, torch.tensor(0.)) / (1 - key_th3)
+    weight3 = torch.masked_select(weight3, mask3)
+    weight3_count = torch.maximum(torch.tensor(1.), weight3.sum())
 
-    keymap_loss = heatmap_loss(true=keylabel, logits=heatmap[:,0,:,:]) * 1e3
+    keymap_loss = heatmap_loss(true=keylabel, logits=heatmap[:,0,:,:])
 
     huber = torch.nn.HuberLoss(reduction='none')
     xsize_loss = huber(torch.masked_select(heatmap[:,1,:,:], mask1), torch.masked_select(labelmap[:,1,:,:], mask1))
@@ -125,7 +128,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     for i in range(4):
         label_map = ((idmap[:,1,:,:] & 2**(i)) > 0).to(torch.float32)
         predict_map = heatmap[:,5+i,:,:]
-        weight = torch.ones_like(label_map) + label_map * 6 + weight2 * 2
+        weight = torch.ones_like(label_map) + label_map * 3 + weight2
         code_loss = torch.nn.functional.binary_cross_entropy_with_logits(predict_map, label_map, weight=weight)
         code_losses['code%d_loss'%2**(i)] = code_loss
     
@@ -139,7 +142,8 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     for target_id1, decoder_id1 in zip(target_ids, decoder_outputs):
         target_id1 = torch.masked_select(target_id1, mask3)
         decoder_id1 = decoder_id1[mask3,:]
-        id1_loss = torch.nn.functional.cross_entropy(decoder_id1, target_id1)
+        id1_loss = torch.nn.functional.cross_entropy(decoder_id1, target_id1, reduction='none')
+        id1_loss = (id1_loss * weight3).sum() / weight3_count
         id_loss += id1_loss
 
     pred_ids = []
