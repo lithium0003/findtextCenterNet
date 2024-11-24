@@ -98,7 +98,7 @@ def heatmap_loss(true, logits):
 def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     key_th1 = 0.75
     key_th2 = 0.8
-    key_th3 = 0.9
+    key_th3 = 0.975
 
     keylabel = labelmap[:,0,:,:]
     mask1 = keylabel > key_th1
@@ -113,7 +113,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     weight3 = torch.masked_select(weight3, mask3)
     weight3_count = torch.maximum(torch.tensor(1.), weight3.sum())
 
-    keymap_loss = heatmap_loss(true=keylabel, logits=heatmap[:,0,:,:])
+    keymap_loss = heatmap_loss(true=keylabel, logits=heatmap[:,0,:,:]) * 10.
 
     huber = torch.nn.HuberLoss(reduction='none')
     xsize_loss = huber(torch.masked_select(heatmap[:,1,:,:], mask1), torch.masked_select(labelmap[:,1,:,:], mask1))
