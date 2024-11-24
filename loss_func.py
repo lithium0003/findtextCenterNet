@@ -97,8 +97,8 @@ def heatmap_loss(true, logits):
 
 def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     key_th1 = 0.75
-    key_th2 = 0.75
-    key_th3 = 0.95
+    key_th2 = 0.5
+    key_th3 = 0.85
 
     keylabel = labelmap[:,0,:,:]
     mask1 = keylabel > key_th1
@@ -128,7 +128,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     for i in range(4):
         label_map = ((idmap[:,1,:,:] & 2**(i)) > 0).to(torch.float32)
         predict_map = heatmap[:,5+i,:,:]
-        weight = torch.ones_like(label_map) + label_map * 3 + weight2
+        weight = torch.ones_like(label_map) + label_map * weight2 * 2 + weight2
         code_loss = torch.nn.functional.binary_cross_entropy_with_logits(predict_map, label_map, weight=weight)
         code_losses['code%d_loss'%2**(i)] = code_loss
     
