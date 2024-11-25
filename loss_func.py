@@ -113,7 +113,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     weight3 = torch.masked_select(weight3, mask3)
     weight3_count = torch.maximum(torch.tensor(1.), weight3.sum())
 
-    keymap_loss = heatmap_loss(true=keylabel, logits=heatmap[:,0,:,:]) * 100.
+    keymap_loss = heatmap_loss(true=keylabel, logits=heatmap[:,0,:,:]) * 1e3
 
     huber = torch.nn.HuberLoss(reduction='none')
     xsize_loss = huber(torch.masked_select(heatmap[:,1,:,:], mask1), torch.masked_select(labelmap[:,1,:,:], mask1))
@@ -128,7 +128,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     for i in range(4):
         label_map = ((idmap[:,1,:,:] & 2**(i)) > 0).to(torch.float32)
         predict_map = heatmap[:,5+i,:,:]
-        weight = torch.ones_like(label_map) + label_map * weight2 * 20 + weight2 * 10
+        weight = torch.ones_like(label_map) + label_map * weight2 * 10 + weight2 * 10
         code_loss = torch.nn.functional.binary_cross_entropy_with_logits(predict_map, label_map, weight=weight)
         code_losses['code%d_loss'%2**(i)] = code_loss
     
