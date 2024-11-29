@@ -66,7 +66,7 @@ def get_dataset(train=True, calib=False):
                 shard_pattern = shard_pattern%(downloader)
     dataset = (
         wds.WebDataset(shard_pattern, shardshuffle=True)
-        .shuffle(100)
+        .shuffle(1000)
         .decode('l8')
         .rename(
             image='image.png', 

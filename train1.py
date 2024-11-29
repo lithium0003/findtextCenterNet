@@ -14,6 +14,8 @@ from models.detector import TextDetectorModel
 from dataset.data_detector import get_dataset
 from loss_func import loss_function, CoVWeightingLoss
 from dataset.multi import MultiLoader
+from criteria import run_check
+from spetial_loss import sp_lossfunc
 
 upload_objectstorage = False
 
@@ -27,6 +29,8 @@ output_iter=None
 scheduler_gamma = 0.95
 continue_train = False
 model_size = 'xl'
+save_best = False
+sploss = False
 
 class RunningLoss(torch.nn.modules.Module):
     def __init__(self, *args, **kwargs) -> None:
@@ -202,8 +206,11 @@ def train():
 
             fmask = model.get_fmask(labelmap, fmask)
             loss, rawloss = train_step(image, labelmap, idmap, fmask)
-            loss.backward()
+            scale_loss = loss / iters_to_accumulate
+            scale_loss.backward()
             if (i + 1) % iters_to_accumulate == 0:
+                if sploss:
+                    sp_lossfunc(model)
                 optimizer.step()
                 optimizer.zero_grad()
 
@@ -223,11 +230,18 @@ def train():
                     upload('log.txt', 'log.txt')
             
             if output_iter is not None and (i + 1) % output_iter == 0:
-                torch.save({
-                    'epoch': epoch,
-                    'step': i,
-                    'model_state_dict': model.state_dict(),
-                    }, 'result1/model.pt')
+                if save_best and run_check(model):
+                    torch.save({
+                        'epoch': epoch,
+                        'step': i,
+                        'model_state_dict': model.state_dict(),
+                        }, 'result1/model-step%d.pt'%(i+1))
+                else:
+                    torch.save({
+                        'epoch': epoch,
+                        'step': i,
+                        'model_state_dict': model.state_dict(),
+                        }, 'result1/model.pt')
 
         CoW_value = losslog['CoWloss'].item()
         loss_value = losslog['loss'].item()
@@ -310,6 +324,10 @@ if __name__=='__main__':
                 continue_train = arg.split('=')[1].lower() == 'true'
             elif arg.startswith('--model'):
                 model_size = arg.split('=')[1].lower()
+            elif arg.startswith('--best'):
+                save_best = arg.split('=')[1].lower() == 'true'
+            elif arg.startswith('--sploss'):
+                sploss = arg.split('=')[1].lower() == 'true'
             else:
                 batch = int(arg)
 

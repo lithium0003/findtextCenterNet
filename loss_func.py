@@ -121,14 +121,14 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
     size_loss = (xsize_loss + ysize_loss) * weight1
     size_loss = size_loss.sum() / weight1_count
 
-    textline_loss = torch.nn.functional.binary_cross_entropy_with_logits(heatmap[:,3,:,:], labelmap[:,3,:,:], pos_weight=torch.tensor([3.], dtype=heatmap.dtype, device=heatmap.device))
-    separator_loss = torch.nn.functional.binary_cross_entropy_with_logits(heatmap[:,4,:,:], labelmap[:,4,:,:], pos_weight=torch.tensor([3.], dtype=heatmap.dtype, device=heatmap.device))
+    textline_loss = torch.nn.functional.binary_cross_entropy_with_logits(heatmap[:,3,:,:], labelmap[:,3,:,:])
+    separator_loss = torch.nn.functional.binary_cross_entropy_with_logits(heatmap[:,4,:,:], labelmap[:,4,:,:])
 
     code_losses = {}
     for i in range(4):
         label_map = ((idmap[:,1,:,:] & 2**(i)) > 0).to(torch.float32)
         predict_map = heatmap[:,5+i,:,:]
-        weight = torch.ones_like(label_map) + label_map * weight2 * 1 + weight2 * 3
+        weight = torch.ones_like(label_map) + label_map * weight2 + weight2
         code_loss = torch.nn.functional.binary_cross_entropy_with_logits(predict_map, label_map, weight=weight)
         code_losses['code%d_loss'%2**(i)] = code_loss
     
