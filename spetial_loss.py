@@ -98,7 +98,6 @@ def sp_lossfunc(model: TextDetectorModel):
                         loss += (target + torch.nn.functional.softplus(-target)).sum()
 
         if loss is not None:
-            loss *= 1e-2
             loss.backward()
 
     model.train()

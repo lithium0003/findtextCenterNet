@@ -21,7 +21,7 @@ upload_objectstorage = False
 
 lr = 1e-3
 EPOCHS = 40
-batch=4
+batch=16
 compile=True
 logstep=100
 iters_to_accumulate=1
