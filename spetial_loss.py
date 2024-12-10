@@ -14,7 +14,8 @@ def sp_lossfunc(model: TextDetectorModel):
             heatmap, features = model.detector(images)
         return heatmap
 
-    transform = ColorJitter(brightness=0.25, contrast=0.25, saturation=0.25, hue=0.5)
+    model.eval()
+    transform = ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5)
     device = next(model.parameters()).device
     for key in check_list:
         im0 = Image.open(key).convert('RGB')
@@ -26,23 +27,27 @@ def sp_lossfunc(model: TextDetectorModel):
         offsety = np.random.randint(pady) if pady > 0 else 0
         padx -= offsetx
         pady -= offsety
-        im0 = np.pad(im0, [[offsety,pady],[offsetx,padx],[0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
+        im1 = np.pad(im0, [[offsety,pady],[offsetx,padx],[0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
 
-        offsetx //= 4
-        offsety //= 4
+        offsetx = (offsetx + 2) // 4
+        offsety = (offsety + 2) // 4
 
-        im = (np.expand_dims(im0, 0) / 255.).astype(np.float32)
+        im1 = (im1 / 255.).astype(np.float32)
+        im = np.expand_dims(im1, 0)
+
         images = torch.from_numpy(im).permute(0,3,1,2).to(device=device)
         images = transform(images)
 
         heatmap = sptrain_step(images)
 
+        loss = None
         keymap = heatmap[0,0,:,:]
+        textline = heatmap[0,3,:,:]
+        sepline = heatmap[0,4,:,:]
         code = []
         for k in range(4):
             code.append(heatmap[0,5+k,:,:])
 
-        loss = None
         for criteria in check_list[key]:
             if criteria['key'] == 'key':
                 target_map = keymap
@@ -54,6 +59,10 @@ def sp_lossfunc(model: TextDetectorModel):
                 target_map = code[2]
             elif criteria['key'] == 'code8':
                 target_map = code[3]
+            elif criteria['key'] == 'textline':
+                target_map = textline
+            elif criteria['key'] == 'sepline':
+                target_map = sepline
 
             x = criteria['x']
             y = criteria['y']
@@ -68,20 +77,31 @@ def sp_lossfunc(model: TextDetectorModel):
             target = target_map[y,x]
 
             if criteria['direction'] == 'high':
-                if loss is None:
-                    loss = -torch.nn.functional.logsigmoid(target).mean()
+                with torch.no_grad():
+                    value = torch.nn.functional.sigmoid(target.float()).max().cpu().numpy()
+                if value > criteria['threshold']:
+                    continue
                 else:
-                    loss += -torch.nn.functional.logsigmoid(target).mean()
+                    if loss is None:
+                        loss = -torch.nn.functional.logsigmoid(target).sum()
+                    else:
+                        loss += -torch.nn.functional.logsigmoid(target).sum()
             elif criteria['direction'] == 'low':
-                if loss is None:
-                    loss = (target + torch.nn.functional.softplus(-target)).mean()
+                with torch.no_grad():
+                    value = torch.nn.functional.sigmoid(target.float()).max().cpu().numpy()
+                if value < criteria['threshold']:
+                    continue
                 else:
-                    loss += (target + torch.nn.functional.softplus(-target)).mean()
-        
-        loss /= len(check_list[key])
-        loss /= len(check_list)
-        loss *= 0.1
-        loss.backward()
+                    if loss is None:
+                        loss = (target + torch.nn.functional.softplus(-target)).sum()
+                    else:
+                        loss += (target + torch.nn.functional.softplus(-target)).sum()
+
+        if loss is not None:
+            loss *= 1e-2
+            loss.backward()
+
+    model.train()
 
 if __name__=='__main__':
     model = TextDetectorModel(pre_weights=False)

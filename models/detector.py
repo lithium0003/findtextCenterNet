@@ -260,7 +260,7 @@ class CenterNetDetector(nn.Module):
         super().__init__(*args, **kwargs)
         self.detector = detector
         self.scale = scale
-        self.minval = torch.tensor(float('-inf'))
+        self.minval = torch.tensor(-1000.)
         
     def forward(self, x):
         if self.scale:
@@ -268,13 +268,9 @@ class CenterNetDetector(nn.Module):
         heatmap, features = self.detector(x)
         keymap = heatmap[:,0:1,:,:]
         # keep local maxima of 3x3, other to -inf
-        local_peak = torch.nn.functional.pad(keymap, (1,1,1,1))
+        local_peak = torch.nn.functional.pad(keymap, (1,1,1,1), value=self.minval.to(dtype=keymap.dtype))
         local_peak = torch.nn.functional.max_pool2d(local_peak, kernel_size=3, stride=1)
-        local_area = torch.nn.functional.pad(keymap, (2,2,2,2))
-        local_area = torch.nn.functional.avg_pool2d(local_area, kernel_size=5, stride=1)
-        p_peak = torch.nn.functional.sigmoid(local_peak)
-        p_area = torch.nn.functional.sigmoid(local_area)
-        detectedkey = torch.where(torch.logical_or(keymap < local_peak, p_peak < p_area * 1.1), self.minval, keymap)
+        detectedkey = torch.where(keymap < local_peak, self.minval.to(dtype=keymap.dtype), keymap)
         return torch.cat([keymap, detectedkey, heatmap[:,1:,:,:]], dim=1), features
 
 class CodeDecoder(nn.Module):
@@ -298,7 +294,7 @@ if __name__=="__main__":
 
     # exit()
 
-    model = CenterNetDetection(model_size='s')
+    model = CenterNetDetection()
     print(model)
     summary(model, input_size=[[1, 3, height, width]])
     with torch.no_grad():

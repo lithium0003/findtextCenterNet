@@ -36,6 +36,8 @@ int main(int argc, const char * argv[]) {
 	}
 	int64_t count = 0;
 	curl_easy_setopt(curl, CURLOPT_URL, argv[1]);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 60L);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 30L);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, onReceive);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &count);

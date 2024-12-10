@@ -266,7 +266,7 @@ cpdef transform_crop(
 
     # augmentation param
     cdef float rotation_angle = np.deg2rad(random_gaussian() * 5.0)
-    cdef float size_x = 0.5 * random_uniform() + 1.0
+    cdef float size_x = 3.0 * random_uniform() + 1.0
     cdef float aspect_ratio = abs(random_gaussian()) + 1.0
     cdef float size_y
     cdef float sh_x = random_gaussian() * 0.01

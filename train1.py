@@ -31,6 +31,7 @@ continue_train = False
 model_size = 'xl'
 save_best = False
 sploss = False
+decoder_only = False
 
 class RunningLoss(torch.nn.modules.Module):
     def __init__(self, *args, **kwargs) -> None:
@@ -115,8 +116,13 @@ def train():
         model.load_state_dict(data['model_state_dict'])
     model.to(device)
 
+    if decoder_only:
+        for param in model.detector.parameters():
+            param.requires_grad_(False)
+        model.detector.eval()
+
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
-    optimizer = torch.optim.Adam(all_params, lr=lr)
+    optimizer = torch.optim.RAdam(all_params, lr=lr)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=scheduler_gamma)
 
     CoWloss = CoVWeightingLoss(momentum=1/1000, device=device, losses=[
@@ -193,6 +199,8 @@ def train():
         model.train()
         CoWloss.train()
         running_loss.train()
+        if decoder_only:
+            model.detector.eval()
 
         optimizer.zero_grad()
         for i, data in enumerate(training_loader):
@@ -235,7 +243,7 @@ def train():
                         'epoch': epoch,
                         'step': i,
                         'model_state_dict': model.state_dict(),
-                        }, 'result1/model-step%d.pt'%(i+1))
+                        }, 'result1/model-epoch%d-step%d.pt'%(epoch+1,i+1))
                 else:
                     torch.save({
                         'epoch': epoch,
@@ -328,6 +336,8 @@ if __name__=='__main__':
                 save_best = arg.split('=')[1].lower() == 'true'
             elif arg.startswith('--sploss'):
                 sploss = arg.split('=')[1].lower() == 'true'
+            elif arg.startswith('--decoder'):
+                decoder_only = arg.split('=')[1].lower() == 'true'
             else:
                 batch = int(arg)
 

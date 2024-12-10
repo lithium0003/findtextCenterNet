@@ -14,6 +14,9 @@ Image.MAX_IMAGE_PIXELS = 1000000000
 rng = np.random.default_rng()
 imagelist = glob.glob('data/background/*', recursive=True)
 
+def random_salt(x, prob=0.05):
+    noise = rng.choice([0,1,np.nan], p=[prob / 2, 1 - prob, prob / 2], size=x.shape).astype(x.dtype)
+    return np.nan_to_num(x * noise, nan=1) 
 
 def random_distortion(im):
     if rng.random() < 0.3:
@@ -29,6 +32,9 @@ def random_distortion(im):
     return im
 
 def transforms3(x):
+    if rng.random() < 0.2:
+        x = random_salt(x, prob=0.05 * rng.random())
+
     if rng.random() < 0.3:
         bgimage = rng.choice(imagelist)
         bgimg = np.asarray(Image.open(bgimage).convert("RGBA"))[:,:,:3]
