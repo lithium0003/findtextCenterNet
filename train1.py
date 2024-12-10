@@ -25,6 +25,7 @@ batch=4
 compile=True
 logstep=100
 iters_to_accumulate=1
+iters_to_sploss=0
 output_iter=None
 scheduler_gamma = 0.95
 continue_train = False
@@ -216,9 +217,9 @@ def train():
             loss, rawloss = train_step(image, labelmap, idmap, fmask)
             scale_loss = loss / iters_to_accumulate
             scale_loss.backward()
+            if iters_to_sploss > 0 and (i + 1) % iters_to_sploss == 0:
+                sp_lossfunc(model)
             if (i + 1) % iters_to_accumulate == 0:
-                if sploss:
-                    sp_lossfunc(model)
                 optimizer.step()
                 optimizer.zero_grad()
 
@@ -334,8 +335,8 @@ if __name__=='__main__':
                 model_size = arg.split('=')[1].lower()
             elif arg.startswith('--best'):
                 save_best = arg.split('=')[1].lower() == 'true'
-            elif arg.startswith('--sploss'):
-                sploss = arg.split('=')[1].lower() == 'true'
+            elif arg.startswith('--spstep'):
+                iters_to_sploss = int(arg.split('=')[1])
             elif arg.startswith('--decoder'):
                 decoder_only = arg.split('=')[1].lower() == 'true'
             else:
