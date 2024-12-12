@@ -15,7 +15,14 @@ rng = np.random.default_rng()
 imagelist = glob.glob('data/background/*', recursive=True)
 
 def random_salt(x, prob=0.05):
-    noise = rng.choice([0,1,np.nan], p=[prob / 2, 1 - prob, prob / 2], size=x.shape).astype(x.dtype)
+    sizex = x.shape[1]
+    sizey = x.shape[0]
+    s = rng.integers(1, 6)
+    shape = ((sizey + s)//s, (sizex + s)//s)
+    noise = rng.choice([0,1,np.nan], p=[prob / 2, 1 - prob, prob / 2], size=shape).astype(x.dtype)
+    noise = np.repeat(noise, s, axis=0)
+    noise = np.repeat(noise, s, axis=1)
+    noise = noise[:sizey, :sizex]
     return np.nan_to_num(x * noise, nan=1) 
 
 def random_distortion(im):

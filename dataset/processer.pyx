@@ -351,19 +351,27 @@ cpdef transform_crop(
 
     # image rotateion
     rx = ry = 0
-    for y in range(height):
-        for x in range(width):
-            vector_dot(rx, ry, inv_affin.data(), <float>x + startx, <float>y + starty)
-            dx = rx - floorf(rx)
-            dy = ry - floorf(ry)
-            w11 = (1-dx) * (1-dy)
-            w21 = dx * (1-dy)
-            w12 = (1-dx) * dy
-            w22 = dx * dy
-            voutimage[y * width + x] = w11 * getpixel(<int>rx, <int>ry, vimage, im_h, im_w)
-            voutimage[y * width + x] += w21 * getpixel(<int>rx+1, <int>ry, vimage, im_h, im_w)
-            voutimage[y * width + x] += w12 * getpixel(<int>rx, <int>ry+1, vimage, im_h, im_w)
-            voutimage[y * width + x] += w22 * getpixel(<int>rx+1, <int>ry+1, vimage, im_h, im_w)
+    if random_uniform() < 0.05:
+        # nearest neighbor
+        for y in range(height):
+            for x in range(width):
+                vector_dot(rx, ry, inv_affin.data(), <float>x + startx, <float>y + starty)
+                voutimage[y * width + x] = getpixel(<int>(rx + 0.5), <int>(ry + 0.5), vimage, im_h, im_w)
+    else:
+        # bilinear
+        for y in range(height):
+            for x in range(width):
+                vector_dot(rx, ry, inv_affin.data(), <float>x + startx, <float>y + starty)
+                dx = rx - floorf(rx)
+                dy = ry - floorf(ry)
+                w11 = (1-dx) * (1-dy)
+                w21 = dx * (1-dy)
+                w12 = (1-dx) * dy
+                w22 = dx * dy
+                voutimage[y * width + x] = w11 * getpixel(<int>rx, <int>ry, vimage, im_h, im_w)
+                voutimage[y * width + x] += w21 * getpixel(<int>rx+1, <int>ry, vimage, im_h, im_w)
+                voutimage[y * width + x] += w12 * getpixel(<int>rx, <int>ry+1, vimage, im_h, im_w)
+                voutimage[y * width + x] += w22 * getpixel(<int>rx+1, <int>ry+1, vimage, im_h, im_w)
 
     # sepimage, lineimage rotation
     for y in range(height//scale):
