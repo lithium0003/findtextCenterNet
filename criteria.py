@@ -5481,6 +5481,70 @@ check_list = {
             'threshold': 0.1,
         },
     ],
+    'testdata/clip63.png': [
+        {
+            'key': 'code2',
+            'x': 24,
+            'y': 17,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code2',
+            'x': 24,
+            'y': 47,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+    ],
+    'testdata/clip64.png': [
+        {
+            'key': 'code2',
+            'x': slice(28,47),
+            'y': slice(7,96),
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code1',
+            'x': slice(28,47),
+            'y': slice(7,96),
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+    ],
+    'testdata/clip65.png': [
+        {
+            'key': 'code2',
+            'x': 39,
+            'y': 19,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code2',
+            'x': 39,
+            'y': 46,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+    ],
+    'testdata/clip66.png': [
+        {
+            'key': 'code2',
+            'x': 40,
+            'y': 25,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code2',
+            'x': 40,
+            'y': 55,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+    ],
 }
 
 def run_check(model: TextDetectorModel, verbose=False, plot=False):
