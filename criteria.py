@@ -5451,6 +5451,36 @@ check_list = {
             'threshold': 0.75,
         },
     ],
+    'testdata/clip62.png': [
+        {
+            'key': 'code2',
+            'x': 25,
+            'y': 50,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code2',
+            'x': 25,
+            'y': 60,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code2',
+            'x': 43,
+            'y': 78,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code2',
+            'x': 100,
+            'y': 71,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+    ],
 }
 
 def run_check(model: TextDetectorModel, verbose=False, plot=False):
