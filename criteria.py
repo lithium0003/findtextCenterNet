@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from PIL import Image, ImageFilter
+import glob
 
 from models.detector import TextDetectorModel
 from util_func import width, height, sigmoid
@@ -217,7 +218,14 @@ check_list = {
         {
             'key': 'code8',
             'x': 19,
-            'y': 19,
+            'y': 18,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 63,
+            'y': 18,
             'direction': 'high',
             'threshold': 0.75,
         },
@@ -234,6 +242,20 @@ check_list = {
             'y': 54,
             'direction': 'low',
             'threshold': 0.1,
+        },
+        {
+            'key': 'code8',
+            'x': 136,
+            'y': 18,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 166,
+            'y': 19,
+            'direction': 'high',
+            'threshold': 0.75,
         },
         {
             'key': 'code2',
@@ -627,8 +649,8 @@ check_list = {
             'key': 'code1',
             'x': 135,
             'y': 144,
-            'direction': 'high',
-            'threshold': 0.75,
+            'direction': 'low',
+            'threshold': 0.1,
         },
         {
             'key': 'code2',
@@ -766,6 +788,13 @@ check_list = {
             'y': 139,
             'direction': 'low',
             'threshold': 0.1,
+        },
+        {
+            'key': 'code8',
+            'x': 203,
+            'y': 82,
+            'direction': 'high',
+            'threshold': 0.75,
         },
         {
             'key': 'code4',
@@ -1348,6 +1377,34 @@ check_list = {
             'threshold': 0.75,
         },
         {
+            'key': 'code8',
+            'x': 96,
+            'y': 77,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 187,
+            'y': 83,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 187,
+            'y': 83,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 233,
+            'y': 202,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
             'key': 'code1',
             'x': 128,
             'y': 141,
@@ -1668,6 +1725,13 @@ check_list = {
             'direction': 'low',
             'threshold': 0.1,
         },
+        {
+            'key': 'code8',
+            'x': 226,
+            'y': 227,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
     ],
     'testdata/clip26.png': [
         {
@@ -1723,15 +1787,29 @@ check_list = {
         },
         {
             'key': 'code8',
-            'x': 52,
-            'y': 32,
+            'x': 51,
+            'y': 31,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 109,
+            'y': 34,
             'direction': 'high',
             'threshold': 0.75,
         },
         {
             'key': 'code8',
             'x': 128,
-            'y': 35,
+            'y': 34,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 201,
+            'y': 37,
             'direction': 'high',
             'threshold': 0.75,
         },
@@ -1802,8 +1880,15 @@ check_list = {
         },
         {
             'key': 'code2',
-            'x': 34,
+            'x': 36,
             'y': 39,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 158,
+            'y': 171,
             'direction': 'high',
             'threshold': 0.75,
         },
@@ -1813,6 +1898,13 @@ check_list = {
             'y': 174,
             'direction': 'low',
             'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 158,
+            'y': 177,
+            'direction': 'high',
+            'threshold': 0.75,
         },
     ],
     'testdata/clip29.png': [
@@ -2027,6 +2119,13 @@ check_list = {
     'testdata/clip32.png': [
         {
             'key': 'key',
+            'x': 76,
+            'y': 104,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
             'x': 87,
             'y': 105,
             'direction': 'low',
@@ -2090,8 +2189,43 @@ check_list = {
         },
         {
             'key': 'code8',
-            'x': 154,
+            'x': 77,
+            'y': 36,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 134,
+            'y': 36,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 208,
+            'y': 38,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 116,
+            'y': 23,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code8',
+            'x': 153,
             'y': 24,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code8',
+            'x': 191,
+            'y': 25,
             'direction': 'low',
             'threshold': 0.1,
         },
@@ -2148,8 +2282,22 @@ check_list = {
         },
         {
             'key': 'code8',
+            'x': 90,
+            'y': 32,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
             'x': 109,
             'y': 32,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 165,
+            'y': 36,
             'direction': 'high',
             'threshold': 0.75,
         },
@@ -2227,14 +2375,14 @@ check_list = {
         },
         {
             'key': 'key',
-            'x': 156,
+            'x': 155,
             'y': 47,
             'direction': 'high',
             'threshold': 0.75,
         },
         {
             'key': 'key',
-            'x': 174,
+            'x': 173,
             'y': 47,
             'direction': 'high',
             'threshold': 0.75,
@@ -2304,15 +2452,71 @@ check_list = {
         },
         {
             'key': 'code8',
-            'x': 174,
-            'y': 48,
+            'x': 47,
+            'y': 47,
             'direction': 'low',
             'threshold': 0.1,
         },
         {
+            'key': 'code8',
+            'x': 101,
+            'y': 49,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code8',
+            'x': 119,
+            'y': 47,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code8',
+            'x': 155,
+            'y': 47,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code8',
+            'x': 173,
+            'y': 47,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code8',
+            'x': 64,
+            'y': 58,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 83,
+            'y': 58,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 137,
+            'y': 58,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 191,
+            'y': 58,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
             'key': 'code2',
-            'x': 193,
-            'y': 172,
+            'x': 192,
+            'y': 171,
             'direction': 'high',
             'threshold': 0.75,
         },
@@ -2329,6 +2533,13 @@ check_list = {
             'y': 66,
             'direction': 'low',
             'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 82,
+            'y': 69,
+            'direction': 'high',
+            'threshold': 0.75,
         },
         {
             'key': 'key',
@@ -2369,7 +2580,7 @@ check_list = {
     'testdata/clip35.png': [
         {
             'key': 'key',
-            'x': 189,
+            'x': 188,
             'y': 226,
             'direction': 'high',
             'threshold': 0.75,
@@ -2576,10 +2787,24 @@ check_list = {
         },
         {
             'key': 'key',
+            'x': 83,
+            'y': 50,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
             'x': 81,
             'y': 62,
             'direction': 'low',
             'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 83,
+            'y': 62,
+            'direction': 'high',
+            'threshold': 0.75,
         },
         {
             'key': 'key',
@@ -2590,10 +2815,17 @@ check_list = {
         },
         {
             'key': 'key',
-            'x': 44,
+            'x': 43,
             'y': 150,
             'direction': 'high',
             'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 43,
+            'y': 154,
+            'direction': 'low',
+            'threshold': 0.1,
         },
         {
             'key': 'key',
@@ -2604,7 +2836,7 @@ check_list = {
         },
         {
             'key': 'key',
-            'x': 172,
+            'x': 171,
             'y': 179,
             'direction': 'high',
             'threshold': 0.75,
@@ -2639,6 +2871,13 @@ check_list = {
         },
         {
             'key': 'code8',
+            'x': 143,
+            'y': 28,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
             'x': 203,
             'y': 30,
             'direction': 'high',
@@ -2648,6 +2887,48 @@ check_list = {
             'key': 'code8',
             'x': 23,
             'y': 12,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code8',
+            'x': 43,
+            'y': 13,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code8',
+            'x': 84,
+            'y': 14,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code8',
+            'x': 103,
+            'y': 14,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code8',
+            'x': 123,
+            'y': 16,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code8',
+            'x': 164,
+            'y': 16,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code8',
+            'x': 182,
+            'y': 17,
             'direction': 'low',
             'threshold': 0.1,
         },
@@ -3047,7 +3328,7 @@ check_list = {
         {
             'key': 'key',
             'x': 97,
-            'y': 44,
+            'y': 43,
             'direction': 'high',
             'threshold': 0.75,
         },
@@ -4199,7 +4480,7 @@ check_list = {
         },
         {
             'key': 'code1',
-            'x': 206,
+            'x': 205,
             'y': 91,
             'direction': 'high',
             'threshold': 0.75,
@@ -4434,14 +4715,14 @@ check_list = {
         },
         {
             'key': 'code1',
-            'x': 97,
+            'x': 96,
             'y': 106,
             'direction': 'high',
             'threshold': 0.75,
         },
         {
             'key': 'code1',
-            'x': 97,
+            'x': 96,
             'y': 126,
             'direction': 'high',
             'threshold': 0.75,
@@ -4801,6 +5082,13 @@ check_list = {
     'testdata/clip54.png': [
         {
             'key': 'key',
+            'x': 47,
+            'y': 176,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
             'x': 59,
             'y': 176,
             'direction': 'high',
@@ -4808,7 +5096,7 @@ check_list = {
         },
         {
             'key': 'key',
-            'x': 55,
+            'x': 53,
             'y': 176,
             'direction': 'low',
             'threshold': 0.1,
@@ -4896,6 +5184,13 @@ check_list = {
             'key': 'code4',
             'x': 118,
             'y': 76,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 12,
+            'y': 62,
             'direction': 'high',
             'threshold': 0.75,
         },
@@ -5000,9 +5295,9 @@ check_list = {
     ],
     'testdata/clip56.png': [
         {
-            'key': 'key',
-            'x': 82,
-            'y': 73,
+            'key': 'code8',
+            'x': 102,
+            'y': 18,
             'direction': 'high',
             'threshold': 0.75,
         },
@@ -5010,6 +5305,27 @@ check_list = {
             'key': 'code8',
             'x': 44,
             'y': 18,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 15,
+            'y': 19,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 117,
+            'y': 9,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 82,
+            'y': 73,
             'direction': 'high',
             'threshold': 0.75,
         },
@@ -5344,6 +5660,13 @@ check_list = {
             'threshold': 0.75,
         },
         {
+            'key': 'code8',
+            'x': 118,
+            'y': 53,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
             'key': 'key',
             'x': 116,
             'y': 118,
@@ -5438,6 +5761,13 @@ check_list = {
         },
         {
             'key': 'code8',
+            'x': 28,
+            'y': 31,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
             'x': 86,
             'y': 30,
             'direction': 'high',
@@ -5496,6 +5826,76 @@ check_list = {
             'direction': 'low',
             'threshold': 0.1,
         },
+        {
+            'key': 'code2',
+            'x': 24,
+            'y': 28,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code2',
+            'x': 24,
+            'y': 37,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code1',
+            'x': 31,
+            'y': 24,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code1',
+            'x': 31,
+            'y': 31,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code1',
+            'x': 31,
+            'y': 39,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 31,
+            'y': 24,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 31,
+            'y': 28,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 31,
+            'y': 31,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 31,
+            'y': 35,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 31,
+            'y': 39,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
     ],
     'testdata/clip64.png': [
         {
@@ -5528,6 +5928,76 @@ check_list = {
             'direction': 'low',
             'threshold': 0.1,
         },
+        {
+            'key': 'code2',
+            'x': 38,
+            'y': 28,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code2',
+            'x': 38,
+            'y': 38,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code1',
+            'x': 46,
+            'y': 26,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code1',
+            'x': 46,
+            'y': 30,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code1',
+            'x': 46,
+            'y': 36,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code1',
+            'x': 46,
+            'y': 41,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 46,
+            'y': 26,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 46,
+            'y': 30,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 46,
+            'y': 36,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 46,
+            'y': 41,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
     ],
     'testdata/clip66.png': [
         {
@@ -5544,171 +6014,1003 @@ check_list = {
             'direction': 'low',
             'threshold': 0.1,
         },
+        {
+            'key': 'code2',
+            'x': 39,
+            'y': 35,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code2',
+            'x': 39,
+            'y': 45,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code1',
+            'x': 47,
+            'y': 32,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code1',
+            'x': 47,
+            'y': 40,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code1',
+            'x': 47,
+            'y': 47,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 47,
+            'y': 32,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 47,
+            'y': 40,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 47,
+            'y': 47,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+    ],
+    'testdata/clip67.png': [
+        {
+            'key': 'key',
+            'x': 6,
+            'y': 9,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 8,
+            'y': 9,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 10,
+            'y': 9,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 25,
+            'y': 9,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 25,
+            'y': 9,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 27,
+            'y': 9,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 29,
+            'y': 9,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 30,
+            'y': 9,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 32,
+            'y': 9,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 41,
+            'y': 9,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 41,
+            'y': 9,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 43,
+            'y': 9,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 45,
+            'y': 9,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code8',
+            'x': 61,
+            'y': 9,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 61,
+            'y': 9,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 63,
+            'y': 9,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 65,
+            'y': 9,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+    ],
+    'testdata/clip68.png': [
+        {
+            'key': 'code2',
+            'x': 71,
+            'y': 242,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code2',
+            'x': 225,
+            'y': 202,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code2',
+            'x': 224,
+            'y': 213,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code2',
+            'x': 13,
+            'y': 98,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code2',
+            'x': 12,
+            'y': 50,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'code2',
+            'x': 12,
+            'y': 38,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+    ],
+    'testdata/clip69.png': [
+        {
+            'key': 'key',
+            'x': 14,
+            'y': 5,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 14,
+            'y': 34,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 6,
+            'y': 5,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 6,
+            'y': 34,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 31,
+            'y': 33,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 31,
+            'y': 37,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': slice(68,70),
+            'y': 5,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 80,
+            'y': 34,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+    ],
+    'testdata/clip70.png': [
+        {
+            'key': 'key',
+            'x': 36,
+            'y': 13,
+            'direction': 'high',
+            'threshold': 0.99,
+        },
+        {
+            'key': 'key',
+            'x': 36,
+            'y': 16,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 36,
+            'y': 10,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 61,
+            'y': 12,
+            'direction': 'high',
+            'threshold': 0.99,
+        },
+        {
+            'key': 'key',
+            'x': 62,
+            'y': 12,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 64,
+            'y': 12,
+            'direction': 'high',
+            'threshold': 0.99,
+        },
+        {
+            'key': 'key',
+            'x': 14,
+            'y': 12,
+            'direction': 'high',
+            'threshold': 0.99,
+        },
+        {
+            'key': 'key',
+            'x': 15,
+            'y': 12,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 17,
+            'y': 12,
+            'direction': 'high',
+            'threshold': 0.99,
+        },
+    ],
+    'testdata/clip71.png': [
+        {
+            'key': 'key',
+            'x': 8,
+            'y': 5,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 8,
+            'y': 9,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 8,
+            'y': 14,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 8,
+            'y': 19,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 8,
+            'y': 24,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 11,
+            'y': 5,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 15,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 11,
+            'y': 25,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+    ],
+    'testdata/clip72.png': [
+        {
+            'key': 'key',
+            'x': 5,
+            'y': 5,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 5,
+            'y': 12,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 5,
+            'y': 18,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 5,
+            'y': 24,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 5,
+            'y': 30,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 5,
+            'y': 36,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 5,
+            'y': 42,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 2,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 4,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 7,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 10,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 12,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 14,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 16,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 18,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 20,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 22,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 24,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 26,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 28,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 30,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 32,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 34,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 37,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 39,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 41,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 44,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'key',
+            'x': 12,
+            'y': 47,
+            'direction': 'high',
+            'threshold': 0.75,
+        },
+    ],
+    'testdata/clip73.png': [
+        {
+            'key': 'key',
+            'x': 27,
+            'y': 22,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 29,
+            'y': 22,
+            'direction': 'high',
+            'threshold': 0.99,
+        },
+        {
+            'key': 'key',
+            'x': 29,
+            'y': 20,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 29,
+            'y': 24,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 55,
+            'y': 22,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 57,
+            'y': 22,
+            'direction': 'high',
+            'threshold': 0.99,
+        },
+        {
+            'key': 'key',
+            'x': 57,
+            'y': 20,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 57,
+            'y': 24,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 84,
+            'y': 22,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 86,
+            'y': 22,
+            'direction': 'high',
+            'threshold': 0.99,
+        },
+        {
+            'key': 'key',
+            'x': 86,
+            'y': 20,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 86,
+            'y': 24,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 109,
+            'y': 22,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 111,
+            'y': 22,
+            'direction': 'high',
+            'threshold': 0.99,
+        },
+        {
+            'key': 'key',
+            'x': 111,
+            'y': 20,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 111,
+            'y': 24,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+    ],
+    'testdata/clip74.png': [
+        {
+            'key': 'key',
+            'x': 13,
+            'y': 11,
+            'direction': 'high',
+            'threshold': 0.99,
+        },
+    ],
+    'testdata/clip75.png': [
+        {
+            'key': 'key',
+            'x': 32,
+            'y': 13,
+            'direction': 'high',
+            'threshold': 0.99,
+        },
+        {
+            'key': 'key',
+            'x': 32,
+            'y': 11,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 32,
+            'y': 15,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 72,
+            'y': 13,
+            'direction': 'high',
+            'threshold': 0.99,
+        },
+        {
+            'key': 'key',
+            'x': 72,
+            'y': 11,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 72,
+            'y': 15,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 108,
+            'y': 13,
+            'direction': 'high',
+            'threshold': 0.99,
+        },
+        {
+            'key': 'key',
+            'x': 108,
+            'y': 11,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+        {
+            'key': 'key',
+            'x': 108,
+            'y': 15,
+            'direction': 'low',
+            'threshold': 0.5,
+        },
+    ],
+    'testdata/empty*.png': [
+        {
+            'key': 'key',
+            'x': slice(0,255),
+            'y': slice(0,255),
+            'direction': 'low',
+            'threshold': 0.001,
+        },
+        {
+            'key': 'code1',
+            'x': slice(0,255),
+            'y': slice(0,255),
+            'direction': 'low',
+            'threshold': 0.001,
+        },
+        {
+            'key': 'code2',
+            'x': slice(0,255),
+            'y': slice(0,255),
+            'direction': 'low',
+            'threshold': 0.001,
+        },
+        {
+            'key': 'code4',
+            'x': slice(0,255),
+            'y': slice(0,255),
+            'direction': 'low',
+            'threshold': 0.001,
+        },
+        {
+            'key': 'code8',
+            'x': slice(0,255),
+            'y': slice(0,255),
+            'direction': 'low',
+            'threshold': 0.001,
+        },
     ],
 }
 
-def run_check(model: TextDetectorModel, verbose=False, plot=False):
-    if plot:
-        import matplotlib.pyplot as plt
-
+def run_check(model: TextDetectorModel, verbose=False):
     model.eval()
     device = next(model.parameters()).device
     passcount = 0
     failcount = 0
     im = []
     for key in check_list:
-        im0 = Image.open(key).convert('RGB')
-        im0 = np.asarray(im0)
+        files = sorted(glob.glob(key))
+        for file in files:
+            im0 = Image.open(file).convert('RGB')
+            im0 = np.asarray(im0)
 
-        padx = max(0, width - im0.shape[1])
-        pady = max(0, height - im0.shape[0])
-        im0 = np.pad(im0, [[0,pady],[0,padx],[0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
-        im.append(im0)
+            if im0.shape[1] > width:
+                im0 = im0[:,:width]
+            if im0.shape[0] > height:
+                im0 = im0[:height,:]
+
+            padx = max(0, width - im0.shape[1])
+            pady = max(0, height - im0.shape[0])
+            im0 = np.pad(im0, [[0,pady],[0,padx],[0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
+            im.append(im0)
 
     im = (np.stack(im, axis=0) / 255.).astype(np.float32)
-    images = torch.from_numpy(im).permute(0,3,1,2).to(device=device)
-    with torch.no_grad():
-        heatmap, features = model.detector(images)
-        heatmap = heatmap.cpu().numpy()
+    heatmap = []
+    for i in range(0, im.shape[0], 16):
+        if verbose:
+            print(i)
+        images = torch.from_numpy(im[i:i+16]).permute(0,3,1,2).to(device=device)
+        with torch.no_grad():
+            heatmap1, features = model.detector(images)
+            heatmap1 = heatmap1.cpu().numpy()
+        heatmap.append(heatmap1)
+    heatmap = np.concatenate(heatmap, axis=0)
 
     with open('result1/checklist.log','w') as wf:
-        for i,key in enumerate(check_list):
-            print(key, file=wf)
-            if verbose:
-                print(key)
-            target = check_list[key]
+        i = 0
+        for key in check_list:
+            files = sorted(glob.glob(key))
+            check_target = check_list[key]
+            for file in files:
+                print(file, file=wf)
+                if verbose:
+                    print(file)
 
-            keymap_p = sigmoid(heatmap[i,0,:,:])
-            textline_p = sigmoid(heatmap[i,3,:,:])
-            sepline_p = sigmoid(heatmap[i,4,:,:])
-            code_p = []
-            for k in range(4):
-                code_p.append(sigmoid(heatmap[i,5+k,:,:]))
+                keymap_p = sigmoid(heatmap[i,0,:,:])
+                textline_p = sigmoid(heatmap[i,3,:,:])
+                sepline_p = sigmoid(heatmap[i,4,:,:])
+                code_p = []
+                for k in range(4):
+                    code_p.append(sigmoid(heatmap[i,5+k,:,:]))
 
-            if plot:
-                plt.figure()
-                plt.imshow(im[i])
-                plt.figure()
-                ax_key = plt.subplot()
-                ax_key.imshow(keymap_p)
-                ax_key.set_title('keymap')
-                plt.figure()
-                ax_txtline = plt.subplot()
-                ax_txtline.imshow(textline_p)
-                ax_txtline.set_title('textline')
-                plt.figure()
-                ax_sepline = plt.subplot()
-                ax_sepline.imshow(sepline_p)
-                ax_sepline.set_title('sepline')
-                plt.figure()
-                ax_code1 = plt.subplot()
-                ax_code1.imshow(code_p[0])
-                ax_code1.set_title('code1')
-                plt.figure()
-                ax_code2 = plt.subplot()
-                ax_code2.imshow(code_p[1])
-                ax_code2.set_title('code2')
-                plt.figure()
-                ax_code4 = plt.subplot()
-                ax_code4.imshow(code_p[2])
-                ax_code4.set_title('code4')
-                plt.figure()
-                ax_code8 = plt.subplot()
-                ax_code8.imshow(code_p[3])
-                ax_code8.set_title('code8')
-
-            for criteria in target:
-                if criteria['key'] == 'key':
-                    target_map = keymap_p
-                elif criteria['key'] == 'code1':
-                    target_map = code_p[0]
-                elif criteria['key'] == 'code2':
-                    target_map = code_p[1]
-                elif criteria['key'] == 'code4':
-                    target_map = code_p[2]
-                elif criteria['key'] == 'code8':
-                    target_map = code_p[3]
-                elif criteria['key'] == 'textline':
-                    target_map = textline_p
-                elif criteria['key'] == 'sepline':
-                    target_map = sepline_p
-
-                x = criteria['x']
-                y = criteria['y']
-                target = target_map[y,x]
-
-                if plot:
+                for criteria in check_target:
                     if criteria['key'] == 'key':
-                        ax = ax_key
+                        target_map = keymap_p
                     elif criteria['key'] == 'code1':
-                        ax = ax_code1
+                        target_map = code_p[0]
                     elif criteria['key'] == 'code2':
-                        ax = ax_code2
+                        target_map = code_p[1]
                     elif criteria['key'] == 'code4':
-                        ax = ax_code4
+                        target_map = code_p[2]
                     elif criteria['key'] == 'code8':
-                        ax = ax_code8
+                        target_map = code_p[3]
                     elif criteria['key'] == 'textline':
-                        ax = ax_txtline
+                        target_map = textline_p
                     elif criteria['key'] == 'sepline':
-                        ax = ax_sepline
-                    
+                        target_map = sepline_p
+
+                    x = criteria['x']
+                    y = criteria['y']
+                    target = target_map[y,x]
+
                     if criteria['direction'] == 'high':
-                        c = 'g'
-                    else:
-                        c = 'r'
-                    if isinstance(x, slice) and isinstance(y, slice):
-                        ax.plot([x.start, x.start, x.stop, x.stop, x.start],[y.start, y.stop, y.stop, y.start, y.start],c)
-                    else:
-                        ax.plot(x,y,c+'.')
-
-                if criteria['direction'] == 'high':
-                    value = np.max(target)
-                    if value > criteria['threshold']:
-                        print(' PASS', value, criteria, file=wf)
-                        if verbose:
-                            print(' PASS', value, criteria)
-                        passcount += 1
-                    else:
-                        print(' fail', value, criteria, file=wf)
-                        if verbose:
-                            print(' fail', value, criteria)
-                        failcount += 1
-                elif criteria['direction'] == 'low':
-                    value = np.max(target)
-                    if value < criteria['threshold']:
-                        print(' PASS', value, criteria, file=wf)
-                        if verbose:
-                            print(' PASS', value, criteria)
-                        passcount += 1
-                    else:
-                        print(' fail', value, criteria, file=wf)
-                        if verbose:
-                            print(' fail', value, criteria)
-                        failcount += 1
-
-            if plot:
-                plt.show()
+                        value = np.max(target)
+                        if value > criteria['threshold']:
+                            print(' PASS', value, criteria, file=wf)
+                            if verbose:
+                                print(' PASS', value, criteria)
+                            passcount += 1
+                        else:
+                            print(' fail', value, criteria, file=wf)
+                            if verbose:
+                                print(' fail', value, criteria)
+                            failcount += 1
+                    elif criteria['direction'] == 'low':
+                        value = np.max(target)
+                        if value < criteria['threshold']:
+                            print(' PASS', value, criteria, file=wf)
+                            if verbose:
+                                print(' PASS', value, criteria)
+                            passcount += 1
+                        else:
+                            print(' fail', value, criteria, file=wf)
+                            if verbose:
+                                print(' fail', value, criteria)
+                            failcount += 1
+                i += 1
 
         print('','passcount:',passcount,'failcount',failcount, file=wf)
         print('','passcount:',passcount,'failcount',failcount)
     model.train()
     return failcount == 0
 
+def test_plot(test_target=None):
+    import matplotlib.pyplot as plt
+    for key in check_list:
+        files = sorted(glob.glob(key))
+        for file in files:
+            if test_target and file != test_target:
+                continue
+            print(file)
+            im0 = Image.open(file).convert('RGB')
+            im0 = np.asarray(im0)
+            target = check_list[key]
+
+            count = {}
+            figs = {}
+            ax = {}
+
+            for key in ['key', 'textline', 'sepline', 'code1', 'code2', 'code4', 'code8']:
+                figs[key] = plt.figure()
+                count[key] = 0
+                ax[key] = plt.subplot()
+                ax[key].imshow(im0)
+                ax[key].set_title(key)
+
+            for criteria in target:
+                x = criteria['x']
+                y = criteria['y']
+
+                if criteria['direction'] == 'high':
+                    c = 'g'
+                else:
+                    c = 'r'
+                if isinstance(x, slice) and isinstance(y, slice):
+                    ax[criteria['key']].plot([x.start*4, x.start*4, (x.stop-1)*4, (x.stop-1)*4, x.start*4],[y.start*4, (y.stop-1)*4, (y.stop-1)*4, y.start*4, y.start*4],c)
+                elif isinstance(x, slice):
+                    ax[criteria['key']].plot([x.start*4, x.start*4, (x.stop-1)*4, (x.stop-1)*4, x.start*4],[y*4]*5,c)
+                elif isinstance(y, slice):
+                    ax[criteria['key']].plot([x*4]*5,[y.start*4, (y.stop-1)*4, (y.stop-1)*4, y.start*4, y.start*4],c)
+                else:
+                    ax[criteria['key']].plot(x*4,y*4,c+'o')
+                count[criteria['key']] += 1
+            
+            for key in count:
+                if count[key] == 0:
+                    plt.close(figs[key])
+        
+            plt.show()
+
 if __name__=='__main__':
-    model = TextDetectorModel(pre_weights=False)
-    data = torch.load('model.pt', map_location="cpu", weights_only=True)
-    model.load_state_dict(data['model_state_dict'])
+    # model = TextDetectorModel(pre_weights=False)
+    # data = torch.load('model.pt', map_location="cpu", weights_only=True)
+    # model.load_state_dict(data['model_state_dict'])
 
-    if torch.cuda.is_available():
-        device = 'cuda'
-    elif torch.backends.mps.is_available():
-        device = 'mps'
+    # if torch.cuda.is_available():
+    #     device = 'cuda'
+    # elif torch.backends.mps.is_available():
+    #     device = 'mps'
+    # else:
+    #     device = 'cpu'
+    # device = torch.device(device)
+    # model.to(device=device)
+
+    # import os
+    # os.makedirs('result1', exist_ok=True)
+    # run_check(model, verbose=True)
+    import sys
+
+    if len(sys.argv) > 1:
+        test_plot(sys.argv[1])
     else:
-        device = 'cpu'
-    device = torch.device(device)
-    model.to(device=device)
-
-    import os
-    os.makedirs('result1', exist_ok=True)
-    run_check(model, verbose=True, plot=True)
+        test_plot()

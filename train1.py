@@ -27,7 +27,7 @@ logstep=100
 iters_to_accumulate=1
 iters_to_sploss=0
 output_iter=None
-scheduler_gamma = 0.95
+scheduler_gamma = 1.0
 continue_train = False
 model_size = 'xl'
 save_best = False
@@ -124,7 +124,8 @@ def train():
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
     optimizer = torch.optim.RAdam(all_params, lr=lr)
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=scheduler_gamma)
+    if 0 < scheduler_gamma < 1.0:
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=scheduler_gamma)
 
     CoWloss = CoVWeightingLoss(momentum=1/1000, device=device, losses=[
         'keymap_loss',
@@ -306,7 +307,8 @@ def train():
 
         running_loss.reset()
 
-        scheduler.step() 
+        if 0 < scheduler_gamma < 1.0:
+            scheduler.step() 
 
 
 if __name__=='__main__':
