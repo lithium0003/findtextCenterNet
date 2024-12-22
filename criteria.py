@@ -6803,6 +6803,29 @@ check_list = {
             'threshold': 0.5,
         },
     ],
+    'testdata/clip76.png': [
+        {
+            'key': 'code2',
+            'x': 15,
+            'y': 36,
+            'direction': 'high',
+            'threshold': 0.99,
+        },
+        {
+            'key': 'code2',
+            'x': 14,
+            'y': 58,
+            'direction': 'high',
+            'threshold': 0.99,
+        },
+        {
+            'key': 'code2',
+            'x': 14,
+            'y': 47,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+    ],
     'testdata/empty*.png': [
         {
             'key': 'key',
