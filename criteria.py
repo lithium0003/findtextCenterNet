@@ -6821,6 +6821,13 @@ check_list = {
         {
             'key': 'code2',
             'x': 14,
+            'y': 24,
+            'direction': 'low',
+            'threshold': 0.1,
+        },
+        {
+            'key': 'code2',
+            'x': 14,
             'y': 47,
             'direction': 'low',
             'threshold': 0.1,
