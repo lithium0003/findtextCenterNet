@@ -6840,7 +6840,7 @@ check_list = {
             'y': slice(0,255),
             'direction': 'low',
             'threshold': 0.001,
-            'weight': 5.,
+            'weight': 2.,
         },
         {
             'key': 'code1',
@@ -6848,7 +6848,7 @@ check_list = {
             'y': slice(0,255),
             'direction': 'low',
             'threshold': 0.001,
-            'weight': 5.,
+            'weight': 2.,
         },
         {
             'key': 'code2',
@@ -6856,7 +6856,7 @@ check_list = {
             'y': slice(0,255),
             'direction': 'low',
             'threshold': 0.001,
-            'weight': 5.,
+            'weight': 2.,
         },
         {
             'key': 'code4',
@@ -6864,7 +6864,7 @@ check_list = {
             'y': slice(0,255),
             'direction': 'low',
             'threshold': 0.001,
-            'weight': 5.,
+            'weight': 2.,
         },
         {
             'key': 'code8',
@@ -6872,7 +6872,7 @@ check_list = {
             'y': slice(0,255),
             'direction': 'low',
             'threshold': 0.001,
-            'weight': 5.,
+            'weight': 2.,
         },
     ],
 }
