@@ -250,6 +250,7 @@ cpdef transform_crop(
     cdef int im_h2 = textline.shape[0]
     cdef int im_w2 = textline.shape[1]
     cdef int position_len = position.shape[0]
+    cdef float minsize = 0
 
     cdef vector[cnp.uint8_t] vimage = covert_image(image)
     cdef vector[cnp.uint8_t] vtextline = covert_image(textline)
@@ -264,13 +265,25 @@ cpdef transform_crop(
 
     cdef int i,j
 
+    # find minimum text size
+    for i in range(position_len):
+        if minsize <= 0:
+            minsize = max(position[i,2], position[i,3])
+        else:
+            minsize = min(minsize, max(position[i,2], position[i,3]))
+        
     # augmentation param
     cdef float rotation_angle = np.deg2rad(random_gaussian() * 5.0)
-    cdef float size_x = 2.0 * abs(random_gaussian()) + 1.0
+    cdef float size_x = 2.0 * random_gaussian() + 1.0
     cdef float aspect_ratio = abs(random_gaussian()) + 1.0
     cdef float size_y
     cdef float sh_x = random_gaussian() * 0.01
     cdef float sh_y = random_gaussian() * 0.01
+    if size_x < 0.5:
+        size_x = 0.5 - size_x
+    if size_x * minsize < 10:
+        size_x = 10 / minsize
+        aspect_ratio = 1
     if random_uniform() < 0.5:
         size_y = size_x * aspect_ratio
     else:
@@ -336,6 +349,7 @@ cpdef transform_crop(
         startx = random_uniform() * <float>width
         starty = random_uniform() * <float>height
 
+    minsize = 0
     # process position array
     for i in range(position_len):
         cx = vposition[i*4 + 0] - startx
@@ -348,6 +362,10 @@ cpdef transform_crop(
             center_map(cx,cy,w,h,vcenter)
             box_map(cx,cy,w,h,vboxmap)
             id_map(cx,cy,w,h,code1,code2,vindexmap)
+            if minsize <= 0:
+                minsize = max(w, h)
+            else:
+                minsize = min(minsize, max(w, h))
 
     # image rotateion
     rx = ry = 0
@@ -407,7 +425,7 @@ cpdef transform_crop(
             indexmap[0,y,x] = vindexmap[y * width//scale + x]
             indexmap[1,y,x] = vindexmap[width//scale * height//scale + y * width//scale + x]
 
-    return outimage, mapimage, indexmap
+    return outimage, mapimage, indexmap, minsize
 
 def process(sample):
     cdef cnp.ndarray[cnp.float32_t, ndim=2] outimage
@@ -418,16 +436,17 @@ def process(sample):
     cdef cnp.ndarray[cnp.uint8_t, ndim=2] sepline 
     cdef cnp.ndarray[cnp.float32_t, ndim=2] position 
     cdef cnp.ndarray[cnp.int32_t, ndim=2] codelist
+    cdef float minsize = 0
 
     if random_uniform() < 0.01:
         outimage = np.zeros((height,width), dtype=np.float32)
         mapimage = np.zeros((5,height//scale,width//scale), dtype=np.float32)
         indexmap = np.zeros((2,height//scale,width//scale), dtype=np.int32)
-        return outimage, mapimage, indexmap
+        return outimage, mapimage, indexmap, minsize
 
     image,textline,sepline,position,codelist = sample
-    outimage, mapimage, indexmap = transform_crop(image, textline, sepline, position, codelist)
-    return outimage, mapimage, indexmap
+    outimage, mapimage, indexmap, minsize = transform_crop(image, textline, sepline, position, codelist)
+    return outimage, mapimage, indexmap, minsize
 
 def random_background(cnp.ndarray[cnp.float32_t, ndim=2] im, cnp.ndarray[cnp.uint8_t, ndim=3] bgimg):
     cdef cnp.ndarray[cnp.float32_t, ndim=3] outimage = np.empty((3, im.shape[0], im.shape[1]), dtype=np.float32)
