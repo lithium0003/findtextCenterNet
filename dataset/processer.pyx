@@ -271,7 +271,10 @@ cpdef transform_crop(
             minsize = max(position[i,2], position[i,3])
         else:
             minsize = min(minsize, max(position[i,2], position[i,3]))
-        
+    
+    if minsize <= 0:
+        minsize = 10
+
     # augmentation param
     cdef float rotation_angle = np.deg2rad(random_gaussian() * 5.0)
     cdef float size_x = 2.0 * random_gaussian() + 1.0
