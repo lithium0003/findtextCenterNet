@@ -284,7 +284,7 @@ cpdef transform_crop(
     cdef float sh_y = random_gaussian() * 0.01
     if size_x < 0.5:
         size_x = 0.5 - size_x
-    if size_x * minsize < 10:
+    if size_x < 1.0 and size_x * minsize < 10:
         size_x = 10 / minsize
         aspect_ratio = 1
     if random_uniform() < 0.5:
