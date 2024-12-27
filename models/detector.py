@@ -156,7 +156,7 @@ class Leafmap(nn.Module):
             in_dims = [48,80,176,1280]
         elif model_size == 's':
             in_dims = [48,64,160,1280]
-        conv_dims = [8,12,32,160]
+        conv_dims = [6,10,24,120]
         upsamplers = []
         for i, (in_dim, o_dim) in enumerate(zip(in_dims, conv_dims)):
             layers = nn.Sequential(
