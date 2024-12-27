@@ -5,7 +5,7 @@ modulo_list = [1091,1093,1097]
 width = 512
 height = 512
 scale = 2
-feature_dim = 64
+feature_dim = 36
 
 def gaussian(x,a,x0,sigma):
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
