@@ -161,7 +161,7 @@ class Leafmap(nn.Module):
         for i, (in_dim, o_dim) in enumerate(zip(in_dims, conv_dims)):
             layers = nn.Sequential(
                 nn.Conv2d(in_dim, o_dim, 3, padding=1),
-                nn.UpsamplingBilinear2d(scale_factor=2**i),
+                nn.UpsamplingBilinear2d(scale_factor=2**(i+1)),
             )
             upsamplers.append(layers)
         self.upsamplers = nn.ModuleList(upsamplers)

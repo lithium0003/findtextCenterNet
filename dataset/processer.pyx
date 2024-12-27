@@ -267,23 +267,22 @@ cpdef transform_crop(
 
     # find minimum text size
     for i in range(position_len):
-        if minsize <= 0:
-            minsize = max(position[i,2], position[i,3])
-        else:
-            minsize = min(minsize, max(position[i,2], position[i,3]))
+        minsize += max(position[i,2], position[i,3])
     
     if minsize <= 0:
         minsize = 10
+    else:
+        minsize /= position_len
 
     # augmentation param
     cdef float rotation_angle = np.deg2rad(random_gaussian() * 5.0)
-    cdef float size_x = 2.0 * random_gaussian() + 1.0
+    cdef float size_x = 1.0 * random_gaussian() + 1.0
     cdef float aspect_ratio = abs(random_gaussian()) + 1.0
     cdef float size_y
     cdef float sh_x = random_gaussian() * 0.01
     cdef float sh_y = random_gaussian() * 0.01
-    if size_x < 0.5:
-        size_x = 0.5 - size_x
+    if size_x < 0.25:
+        size_x = 0.25 - size_x
     if size_x < 1.0 and size_x * minsize < 10:
         size_x = 10 / minsize
         aspect_ratio = 1
@@ -519,6 +518,27 @@ def random_background(cnp.ndarray[cnp.float32_t, ndim=2] im, cnp.ndarray[cnp.uin
             outimage[2,y,x] = max(0, min(1, a * fg_b + (1 - a) * cropbg[2,y,x]))
     return outimage
 
+def random_mono(cnp.ndarray[cnp.float32_t, ndim=2] im):
+    cdef cnp.ndarray[cnp.float32_t, ndim=3] outimage = np.empty((3, im.shape[0], im.shape[1]), dtype=np.float32)
+
+    cdef float fg_i = random_uniform()
+
+    cdef float fg_i_hi = fg_i + 0.5
+    cdef float fg_i_lo = fg_i - 0.5
+    cdef float bg_i = random_uniform()
+    if fg_i > 0.5:
+        bg_i = bg_i * fg_i_lo
+    else:
+        bg_i = 1 - bg_i * (1 - fg_i_hi)
+
+    cdef float a
+    for y in range(height):
+        for x in range(width):
+            a = im[y,x]
+            outimage[0,y,x] = a * fg_i + (1 - a) * bg_i
+            outimage[1,y,x] = a * fg_i + (1 - a) * bg_i
+            outimage[2,y,x] = a * fg_i + (1 - a) * bg_i
+    return outimage
 
 def random_single(cnp.ndarray[cnp.float32_t, ndim=2] im):
     cdef cnp.ndarray[cnp.float32_t, ndim=3] outimage = np.empty((3, im.shape[0], im.shape[1]), dtype=np.float32)

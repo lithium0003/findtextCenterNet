@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image
 from scipy.ndimage import gaussian_filter
 
-from .processer import random_background, random_single, random_double, process
+from .processer import random_background, random_mono, random_single, random_double, process
 
 Image.MAX_IMAGE_PIXELS = 1000000000
 
@@ -49,6 +49,8 @@ def transforms3(x):
         bgimage = rng.choice(imagelist)
         bgimg = np.asarray(Image.open(bgimage).convert("RGBA"))[:,:,:3]
         im = random_background(x1, bgimg)
+    elif rng.random() < 0.5:
+        im = random_mono(x1)
     elif rng.random() < 0.5:
         im = random_single(x1)
     else:
