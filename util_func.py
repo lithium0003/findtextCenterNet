@@ -2,9 +2,9 @@ import numpy as np
 import re
 
 modulo_list = [1091,1093,1097]
-width = 768
-height = 768
-scale = 2
+width = 1024
+height = 1024
+scale = 4
 feature_dim = 36
 
 def gaussian(x,a,x0,sigma):
