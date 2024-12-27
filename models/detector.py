@@ -156,19 +156,19 @@ class Leafmap(nn.Module):
             in_dims = [48,80,176,1280]
         elif model_size == 's':
             in_dims = [48,64,160,1280]
-        conv_dims = [6,10,24,120]
+        conv_dims = [8,8,16,32]
         upsamplers = []
         for i, (in_dim, o_dim) in enumerate(zip(in_dims, conv_dims)):
             layers = nn.Sequential(
                 nn.Conv2d(in_dim, o_dim, 3, padding=1),
-                nn.UpsamplingBilinear2d(scale_factor=2**i),
+                nn.UpsamplingBilinear2d(scale_factor=2**(i+1)),
             )
             upsamplers.append(layers)
         self.upsamplers = nn.ModuleList(upsamplers)
 
         self.top_conv = nn.Sequential(
             nn.GELU(),
-            nn.Conv2d(sum(conv_dims), out_dim, 1),
+            nn.Conv2d(sum(conv_dims), out_dim, 3, padding=1),
         )
 
     def forward(self, x1, x2, x3, x4) -> Tensor:
@@ -211,7 +211,7 @@ class SimpleDecoder(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         blocks = []
-        mid_dim = 1024
+        mid_dim = 2048
         for modulo in modulo_list:
             layer = nn.Sequential(
                 nn.Linear(feature_dim, mid_dim),

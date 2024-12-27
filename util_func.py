@@ -4,7 +4,7 @@ import re
 modulo_list = [1091,1093,1097]
 width = 1024
 height = 1024
-scale = 4
+scale = 2
 feature_dim = 36
 
 def gaussian(x,a,x0,sigma):
