@@ -156,7 +156,7 @@ class Leafmap(nn.Module):
             in_dims = [48,80,176,1280]
         elif model_size == 's':
             in_dims = [48,64,160,1280]
-        conv_dim = 256
+        conv_dim = 64
         upsamplers = []
         self.in_bn = nn.ModuleList(
             [nn.BatchNorm2d(dim) for dim in in_dims]
