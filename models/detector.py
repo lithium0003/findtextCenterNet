@@ -156,30 +156,30 @@ class Leafmap(nn.Module):
             in_dims = [48,80,176,1280]
         elif model_size == 's':
             in_dims = [48,64,160,1280]
-        conv_dim = 128
+        conv_dim = 256
         upsamplers = []
         self.in_bn = nn.ModuleList(
-            [nn.BatchNorm2d(dim, eps=1e-03) for dim in in_dims]
+            [nn.BatchNorm2d(dim) for dim in in_dims]
         )
         for i, in_dim in enumerate(reversed(in_dims)):
             if i == 0:
                 layers = nn.Sequential(
                     nn.Conv2d(in_dim, conv_dim, 3, padding=1, bias=False),
-                    nn.BatchNorm2d(conv_dim, eps=1e-03),
+                    nn.BatchNorm2d(conv_dim),
                     nn.GELU(),
                     nn.UpsamplingBilinear2d(scale_factor=2),
                 )
             elif i > 0 and i < len(in_dims) - 1:
                 layers = nn.Sequential(
                     nn.Conv2d(in_dim + conv_dim, conv_dim, 3, padding=1, bias=False),
-                    nn.BatchNorm2d(conv_dim, eps=1e-03),
+                    nn.BatchNorm2d(conv_dim),
                     nn.GELU(),
                     nn.UpsamplingBilinear2d(scale_factor=2),
                 )
             else:
                 layers = nn.Sequential(
                     nn.Conv2d(in_dim + conv_dim, conv_dim, 3, padding=1, bias=False),
-                    nn.BatchNorm2d(conv_dim, eps=1e-03),
+                    nn.BatchNorm2d(conv_dim),
                     nn.GELU(),
                 )
             upsamplers.append(layers)
@@ -236,9 +236,11 @@ class SimpleDecoder(nn.Module):
         mid_dim = 2048
         for modulo in modulo_list:
             layer = nn.Sequential(
-                nn.Linear(feature_dim, mid_dim),
+                nn.Linear(feature_dim, mid_dim, bias=False),
+                nn.BatchNorm1d(mid_dim),
                 nn.GELU(),
-                nn.Linear(mid_dim, mid_dim),
+                nn.Linear(mid_dim, mid_dim, bias=False),
+                nn.BatchNorm1d(mid_dim),
                 nn.GELU(),
                 nn.Linear(mid_dim, modulo),
             )
