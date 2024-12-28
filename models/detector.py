@@ -161,19 +161,22 @@ class Leafmap(nn.Module):
         for i, in_dim in enumerate(reversed(in_dims)):
             if i == 0:
                 layers = nn.Sequential(
-                    nn.Conv2d(in_dim, conv_dim, 3, padding=1),
+                    nn.Conv2d(in_dim, conv_dim, 3, padding=1, bias=False),
+                    nn.BatchNorm2d(conv_dim, eps=1e-03),
                     nn.GELU(),
                     nn.UpsamplingBilinear2d(scale_factor=2),
                 )
             elif i > 0 and i < len(in_dims) - 1:
                 layers = nn.Sequential(
-                    nn.Conv2d(in_dim + conv_dim, conv_dim, 3, padding=1),
+                    nn.Conv2d(in_dim + conv_dim, conv_dim, 3, padding=1, bias=False),
+                    nn.BatchNorm2d(conv_dim, eps=1e-03),
                     nn.GELU(),
                     nn.UpsamplingBilinear2d(scale_factor=2),
                 )
             else:
                 layers = nn.Sequential(
-                    nn.Conv2d(in_dim + conv_dim, conv_dim, 3, padding=1),
+                    nn.Conv2d(in_dim + conv_dim, conv_dim, 3, padding=1, bias=False),
+                    nn.BatchNorm2d(conv_dim, eps=1e-03),
                     nn.GELU(),
                 )
             upsamplers.append(layers)
@@ -229,9 +232,11 @@ class SimpleDecoder(nn.Module):
         mid_dim = 512
         for modulo in modulo_list:
             layer = nn.Sequential(
-                nn.Linear(feature_dim, mid_dim),
+                nn.Linear(feature_dim, mid_dim, bias=False),
+                nn.BatchNorm1d(mid_dim),
                 nn.GELU(),
-                nn.Linear(mid_dim, mid_dim),
+                nn.Linear(mid_dim, mid_dim, bias=False),
+                nn.BatchNorm1d(mid_dim),
                 nn.GELU(),
                 nn.Linear(mid_dim, modulo),
             )
