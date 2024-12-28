@@ -96,8 +96,8 @@ def heatmap_loss(true, logits):
     return loss.to(logits.dtype)
 
 def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
-    key_th1 = 0.75
-    key_th2 = 0.75
+    key_th1 = 0.85
+    key_th2 = 0.85
     key_th3 = 0.99
 
     keylabel = labelmap[:,0,:,:]
