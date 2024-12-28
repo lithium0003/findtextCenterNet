@@ -156,27 +156,42 @@ class Leafmap(nn.Module):
             in_dims = [48,80,176,1280]
         elif model_size == 's':
             in_dims = [48,64,160,1280]
-        conv_dims = [8,8,16,32]
+        conv_dim = 128
         upsamplers = []
-        for i, (in_dim, o_dim) in enumerate(zip(in_dims, conv_dims)):
-            layers = nn.Sequential(
-                nn.Conv2d(in_dim, o_dim, 3, padding=1),
-                nn.UpsamplingBilinear2d(scale_factor=2**i),
-            )
+        for i, in_dim in enumerate(reversed(in_dims)):
+            if i == 0:
+                layers = nn.Sequential(
+                    nn.Conv2d(in_dim, conv_dim, 3, padding=1),
+                    nn.GELU(),
+                    nn.UpsamplingBilinear2d(scale_factor=2),
+                )
+            elif i > 0 and i < len(in_dims) - 1:
+                layers = nn.Sequential(
+                    nn.Conv2d(in_dim + conv_dim, conv_dim, 3, padding=1),
+                    nn.GELU(),
+                    nn.UpsamplingBilinear2d(scale_factor=2),
+                )
+            else:
+                layers = nn.Sequential(
+                    nn.Conv2d(in_dim + conv_dim, conv_dim, 3, padding=1),
+                    nn.GELU(),
+                )
             upsamplers.append(layers)
         self.upsamplers = nn.ModuleList(upsamplers)
 
         self.top_conv = nn.Sequential(
-            nn.GELU(),
-            nn.Conv2d(sum(conv_dims), out_dim, 3, padding=1),
+            nn.Conv2d(conv_dim, out_dim, 3, padding=1),
         )
 
     def forward(self, x1, x2, x3, x4) -> Tensor:
-        y = []
-        for x, up in zip([x1,x2,x3,x4], self.upsamplers):
-            y.append(up(x))
-        x = torch.cat(y, dim=1)
-        return self.top_conv(x)
+        y = None
+        for x, up in zip(reversed([x1,x2,x3,x4]), self.upsamplers):
+            if y is None:
+                y = up(x)
+            else:
+                x = torch.cat([y,x], dim=1)
+                y = up(x)
+        return self.top_conv(y)
 
 class CenterNetDetection(nn.Module):
     def __init__(self, pre_weights=True, model_size='xl', **kwargs) -> None:
@@ -244,7 +259,7 @@ class TextDetectorModel(nn.Module):
         return heatmap, decoder_outputs
 
     def get_fmask(self, heatmap, mask) -> Tensor:
-        # heatmap: [-1, 11, 128, 128]
+        # heatmap: [-1, 9, 192, 192]
         batch_dim = heatmap.shape[0]
         labelmaps = heatmap[:,0,:,:]
         labelmaps = labelmaps.flatten()
