@@ -211,7 +211,7 @@ class SimpleDecoder(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         blocks = []
-        mid_dim = 2048
+        mid_dim = 512
         for modulo in modulo_list:
             layer = nn.Sequential(
                 nn.Linear(feature_dim, mid_dim),
