@@ -5,7 +5,6 @@ from torch.utils.tensorboard.writer import SummaryWriter
 # from torch.utils.data import DataLoader
 import os
 import sys
-import glob
 import datetime
 
 torch.set_float32_matmul_precision('high')
@@ -14,24 +13,17 @@ from models.detector import TextDetectorModel
 from dataset.data_detector import get_dataset
 from loss_func import loss_function, CoVWeightingLoss
 from dataset.multi import MultiLoader
-from criteria import run_check
-from spetial_loss import sp_lossfunc
-
-upload_objectstorage = False
 
 lr = 1e-3
 EPOCHS = 40
-batch=16
-compile=True
-logstep=100
+batch=32
+logstep=10
 iters_to_accumulate=1
 iters_to_sploss=0
 output_iter=None
-scheduler_gamma = 1.0
+scheduler_gamma = 0.95
 continue_train = False
 model_size = 'xl'
-save_best = False
-sploss = False
 decoder_only = False
 
 class RunningLoss(torch.nn.modules.Module):
@@ -60,12 +52,6 @@ class RunningLoss(torch.nn.modules.Module):
         for key in ret:
             name = 'train/'+key if self.training else 'val/'+key
             self.writer.add_scalar(name, ret[key], self.step)
-
-        if upload_objectstorage:
-            self.writer.flush()
-            log = sorted(glob.glob('result1/logs/*'))
-            if len(log) > 0:
-                upload(log[0], 'logs')
 
         return ret
 
@@ -108,8 +94,6 @@ def train():
     print('using device:', device, flush=True)
     with open('log.txt','w') as wf:
         print(datetime.datetime.now(), 'using device:', device, file=wf, flush=True)
-    if upload_objectstorage:
-        upload('log.txt', 'log.txt')
 
     model = TextDetectorModel(model_size=model_size)
     if os.path.exists('result1/model.pt'):
@@ -146,6 +130,7 @@ def train():
         *['code%d_loss'%2**(i) for i in range(4)],
     ])
 
+    @torch.compile
     def train_step(image, map, idmap, fmask):
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             heatmap, decoder_outputs = model(image, fmask)
@@ -153,27 +138,13 @@ def train():
             loss = CoWloss(rawloss)
         return loss, rawloss
 
+    @torch.compile
     def test_step(image, map, idmap, fmask):
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             heatmap, decoder_outputs = model(image, fmask)
             rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs)
             loss = CoWloss(rawloss)
         return loss, rawloss
-
-    if compile:
-        print('compile', flush=True)
-        with open('log.txt','a') as wf:
-            print('compile', file=wf, flush=True)
-        if upload_objectstorage:
-            upload('log.txt', 'log.txt')
-        train_step = torch.compile(train_step)
-        test_step = torch.compile(test_step)
-    else:
-        print('no compile', flush=True)
-        with open('log.txt','a') as wf:
-            print('no compile', file=wf, flush=True)
-        if upload_objectstorage:
-            upload('log.txt', 'log.txt')
 
     print('model', model_size, flush=True)
     print('batch', batch, flush=True)
@@ -184,8 +155,6 @@ def train():
         print('batch', batch, file=wf, flush=True)
         print('logstep', logstep, file=wf, flush=True)
         print('lr', lr, file=wf, flush=True)
-    if upload_objectstorage:
-        upload('log.txt', 'log.txt')
 
     last_epoch = 0
     fmask = None
@@ -195,8 +164,6 @@ def train():
         with open('log.txt','a') as wf:
             print(datetime.datetime.now(), 'epoch', epoch, file=wf, flush=True)
             print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], file=wf, flush=True)
-        if upload_objectstorage:
-            upload('log.txt', 'log.txt')
 
         model.train()
         CoWloss.train()
@@ -218,8 +185,6 @@ def train():
             loss, rawloss = train_step(image, labelmap, idmap, fmask)
             scale_loss = loss / iters_to_accumulate
             scale_loss.backward()
-            if iters_to_sploss > 0 and (i + 1) % iters_to_sploss == 0:
-                sp_lossfunc(model)
             if (i + 1) % iters_to_accumulate == 0:
                 optimizer.step()
                 optimizer.zero_grad()
@@ -236,22 +201,12 @@ def train():
                 with open('log.txt','a') as wf:
                     print(epoch, i+1, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
-                if upload_objectstorage:
-                    upload('log.txt', 'log.txt')
-            
             if output_iter is not None and (i + 1) % output_iter == 0:
-                if save_best and run_check(model):
-                    torch.save({
-                        'epoch': epoch,
-                        'step': i,
-                        'model_state_dict': model.state_dict(),
-                        }, 'result1/model-epoch%d-step%d.pt'%(epoch+1,i+1))
-                else:
-                    torch.save({
-                        'epoch': epoch,
-                        'step': i,
-                        'model_state_dict': model.state_dict(),
-                        }, 'result1/model.pt')
+                torch.save({
+                    'epoch': epoch,
+                    'step': i,
+                    'model_state_dict': model.state_dict(),
+                    }, 'result1/model.pt')
 
         CoW_value = losslog['CoWloss'].item()
         loss_value = losslog['loss'].item()
@@ -260,18 +215,12 @@ def train():
         with open('log.txt','a') as wf:
             print(epoch, i+1, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
-        if upload_objectstorage:
-            upload('log.txt', 'log.txt')
-
         running_loss.reset()
 
         torch.save({
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
             }, 'result1/model.pt')
-
-        if upload_objectstorage:
-            upload('result1/model.pt', 'epoch%04d.pt'%epoch)
 
         model.eval()
         CoWloss.eval()
@@ -302,9 +251,6 @@ def train():
         with open('log.txt','a') as wf:
             print(epoch, 'val', datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
-        if upload_objectstorage:
-            upload('log.txt', 'log.txt')
-
         running_loss.reset()
 
         if 0 < scheduler_gamma < 1.0:
@@ -315,9 +261,7 @@ if __name__=='__main__':
     if len(sys.argv) > 1:
         argv = sys.argv[1:]
         for arg in argv:
-            if arg.startswith('--compile'):
-                compile = arg.split('=')[1].lower() == 'true'
-            elif arg.startswith('--epoch'):
+            if arg.startswith('--epoch'):
                 EPOCHS = int(arg.split('=')[1])
             elif arg.startswith('--accumulate'):
                 iters_to_accumulate = int(arg.split('=')[1])
@@ -325,8 +269,6 @@ if __name__=='__main__':
                 lr = float(arg.split('=')[1])
             elif arg.startswith('--logstep'):
                 logstep = int(arg.split('=')[1])
-            elif arg.startswith('--upload'):
-                upload_objectstorage = arg.split('=')[1].lower() == 'true'
             elif arg.startswith('--output'):
                 output_iter = int(arg.split('=')[1])
             elif arg.startswith('--gamma'):
@@ -335,16 +277,9 @@ if __name__=='__main__':
                 continue_train = arg.split('=')[1].lower() == 'true'
             elif arg.startswith('--model'):
                 model_size = arg.split('=')[1].lower()
-            elif arg.startswith('--best'):
-                save_best = arg.split('=')[1].lower() == 'true'
-            elif arg.startswith('--spstep'):
-                iters_to_sploss = int(arg.split('=')[1])
             elif arg.startswith('--decoder'):
                 decoder_only = arg.split('=')[1].lower() == 'true'
             else:
                 batch = int(arg)
-
-    if upload_objectstorage:
-        from put_object import upload
 
     train()

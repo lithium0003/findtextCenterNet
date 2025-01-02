@@ -206,6 +206,29 @@ cdef inline float getpixel(int x, int y, vector[cnp.uint8_t]& image, int im_h, i
         return <float>image[y * im_w + x] / 255
     return 0.
 
+cdef inline float getpixelcolor(int x, int y, int c, vector[cnp.uint8_t]& image, int im_h, int im_w) noexcept nogil:
+    if x >= 0 and x < im_w and y >= 0 and y < im_h:
+        return <float>image[y * im_w * 3 + x * 3 + c] / 255
+    return 0.
+
+cdef inline float getpixelclip(int x, int y, vector[cnp.uint8_t]& image, int im_h, int im_w) noexcept nogil:
+    if x >= 0 and x < im_w and y >= 0 and y < im_h:
+        if image[y * im_w + x] > 30:
+            return <float>image[y * im_w + x] / 255
+    return 0.
+
+cdef vector[cnp.uint8_t] covert_colorimage(cnp.ndarray[cnp.uint8_t, ndim=3] image):
+    cdef int im_h = image.shape[0]
+    cdef int im_w = image.shape[1]
+    cdef int im_c = image.shape[2]
+    cdef vector[cnp.uint8_t] vimage = vector[cnp.uint8_t](im_h * im_w * im_c)
+    cdef int x,y,c
+    for y in range(im_h):
+        for x in range(im_w):
+            for c in range(im_c):
+                vimage[y * im_w * im_c + x * im_c + c] = image[y,x,c]
+    return vimage
+
 cdef vector[cnp.uint8_t] covert_image(cnp.ndarray[cnp.uint8_t, ndim=2] image):
     cdef int im_h = image.shape[0]
     cdef int im_w = image.shape[1]
@@ -430,6 +453,190 @@ cpdef transform_crop(
 
     return outimage, mapimage, indexmap, minsize
 
+cpdef transform_crop2(
+    cnp.ndarray[cnp.uint8_t, ndim=3] image, 
+    cnp.ndarray[cnp.uint8_t, ndim=2] textline, 
+    cnp.ndarray[cnp.uint8_t, ndim=2] sepline, 
+    cnp.ndarray[cnp.float32_t, ndim=2] position, 
+    cnp.ndarray[cnp.int32_t, ndim=2] codelist):
+
+    cdef cnp.ndarray[cnp.float32_t, ndim=3] outimage = np.empty((3,height,width), dtype=np.float32)
+    cdef cnp.ndarray[cnp.float32_t, ndim=3] mapimage = np.empty((5,height//scale,width//scale), dtype=np.float32)
+    cdef cnp.ndarray[cnp.int32_t, ndim=3] indexmap = np.empty((2,height//scale,width//scale), dtype=np.int32)
+
+    cdef int im_h = image.shape[0]
+    cdef int im_w = image.shape[1]
+    cdef int im_h2 = textline.shape[0]
+    cdef int im_w2 = textline.shape[1]
+    cdef int position_len = position.shape[0]
+    cdef float minsize = 0
+
+    cdef vector[cnp.uint8_t] vimage = covert_colorimage(image)
+    cdef vector[cnp.uint8_t] vtextline = covert_image(textline)
+    cdef vector[cnp.uint8_t] vsepline = covert_image(sepline)
+    cdef vector[float] vposition = covert_position(position)
+    cdef vector[cnp.int32_t] vcodelist = covert_codelist(codelist)
+    cdef vector[float] vcenter = vector[float](height//scale * width//scale)
+    cdef vector[float] vboxmap = vector[float](2 * height//scale * width//scale, np.inf)
+    cdef vector[cnp.int32_t] vindexmap = vector[cnp.int32_t](2 * height//scale * width//scale)
+    cdef vector[float] voutimage = vector[float](3 * height * width)
+    cdef vector[float] vmapimage = vector[float](2 * height//scale * width//scale)
+
+    cdef int i,j
+
+    # find minimum text size
+    for i in range(position_len):
+        minsize += max(position[i,2], position[i,3])
+    
+    if minsize <= 0:
+        minsize = 10
+    else:
+        minsize /= position_len
+
+    # augmentation param
+    cdef float rotation_angle = np.deg2rad(random_gaussian() * 1.0)
+    cdef float size_x = 1.0 * abs(random_gaussian()) + 1.0
+    cdef float aspect_ratio = 0.1 * abs(random_gaussian()) + 1.0
+    cdef float size_y
+    cdef float sh_x = random_gaussian() * 0.01
+    cdef float sh_y = random_gaussian() * 0.01
+    if random_uniform() < 0.5:
+        size_y = size_x * aspect_ratio
+    else:
+        size_y = size_x / aspect_ratio
+
+    # get rotate matrix
+    cdef vector[float] rotation_matrix = GetMatrix(im_w / 2, im_h / 2, rotation_angle, size_x, size_y, sh_x, sh_y)
+    cdef vector[float] rotation_matrix2 = GetMatrix(im_w2 / 2, im_h2 / 2, rotation_angle, size_x, size_y, sh_x, sh_y)
+    cdef vector[float] inv_affin = vector[float](9)
+    cdef vector[float] inv_affin2 = vector[float](9)
+    cdef cnp.ndarray[cnp.float32_t, ndim=2] tmp1 = np.empty((3,3), dtype=np.float32)
+    cdef cnp.ndarray[cnp.float32_t, ndim=2] tmp2
+    for i in range(3):
+        for j in range(3):
+            tmp1[i,j] = rotation_matrix[i * 3 + j]
+    tmp2 = np.linalg.inv(tmp1)
+    for i in range(3):
+        for j in range(3):
+            inv_affin[i * 3 + j] = tmp2[i,j]
+    for i in range(3):
+        for j in range(3):
+            tmp1[i,j] = rotation_matrix2[i * 3 + j]
+    tmp2 = np.linalg.inv(tmp1)
+    for i in range(3):
+        for j in range(3):
+            inv_affin2[i * 3 + j] = tmp2[i,j]
+
+    cdef float x1,y1,x2,y2
+    cdef float xr1,yr1,xr2,yr2
+    cdef int cidx
+    cdef float woffset, hoffset, startx, starty
+    cdef float cx,cy,w,h
+    cdef int code1,code2
+    cdef int x, y, c
+    cdef float rx, ry
+    cdef float dx, dy
+    cdef float w11, w21, w12, w22
+    cdef float val
+
+    # rotate postion array
+    xr1 = yr1 = xr2 = yr2 = 0
+    for i in range(position_len):
+        x1 = vposition[i*4 + 0] - vposition[i*4 + 2] / 2
+        y1 = vposition[i*4 + 1] - vposition[i*4 + 3] / 2
+        x2 = vposition[i*4 + 0] + vposition[i*4 + 2] / 2
+        y2 = vposition[i*4 + 1] + vposition[i*4 + 3] / 2
+        vector_dot(xr1, yr1, rotation_matrix.data(), x1, y1)
+        vector_dot(xr2, yr2, rotation_matrix.data(), x2, y2)
+        vposition[i*4 + 0] = (xr1 + xr2) / 2
+        vposition[i*4 + 1] = (yr1 + yr2) / 2
+        vposition[i*4 + 2] = xr2 - xr1
+        vposition[i*4 + 3] = yr2 - yr1
+
+    # set center point
+    if position_len > 0:
+        cidx = <int>(random_uniform() * <float>position_len)
+        woffset = random_uniform() * <float>width * 0.75 + <float>width / 8
+        hoffset = random_uniform() * <float>height * 0.75 + <float>height / 8
+        startx = vposition[cidx*4 + 0] - woffset
+        starty = vposition[cidx*4 + 1] - hoffset
+    else:
+        startx = random_uniform() * <float>width
+        starty = random_uniform() * <float>height
+
+    minsize = 0
+    # process position array
+    for i in range(position_len):
+        cx = vposition[i*4 + 0] - startx
+        cy = vposition[i*4 + 1] - starty
+        w = vposition[i*4 + 2]
+        h = vposition[i*4 + 3]
+        code1 = vcodelist[i*2 + 0]
+        code2 = vcodelist[i*2 + 1]
+        if cx > 0 and cx < width and cy > 0 and cy < height:
+            center_map(cx,cy,w,h,vcenter)
+            box_map(cx,cy,w,h,vboxmap)
+            id_map(cx,cy,w,h,code1,code2,vindexmap)
+            if minsize <= 0:
+                minsize = max(w, h)
+            else:
+                minsize = min(minsize, max(w, h))
+
+    # image rotateion
+    rx = ry = 0
+    # bilinear
+    for y in range(height):
+        for x in range(width):
+            vector_dot(rx, ry, inv_affin.data(), <float>x + startx, <float>y + starty)
+            dx = rx - floorf(rx)
+            dy = ry - floorf(ry)
+            w11 = (1-dx) * (1-dy)
+            w21 = dx * (1-dy)
+            w12 = (1-dx) * dy
+            w22 = dx * dy
+            for c in range(3):
+                voutimage[(y * width + x) * 3 + c] = w11 * getpixelcolor(<int>rx, <int>ry, c, vimage, im_h, im_w)
+                voutimage[(y * width + x) * 3 + c] += w21 * getpixelcolor(<int>rx+1, <int>ry, c, vimage, im_h, im_w)
+                voutimage[(y * width + x) * 3 + c] += w12 * getpixelcolor(<int>rx, <int>ry+1, c, vimage, im_h, im_w)
+                voutimage[(y * width + x) * 3 + c] += w22 * getpixelcolor(<int>rx+1, <int>ry+1, c, vimage, im_h, im_w)
+
+    # sepimage, lineimage rotation
+    for y in range(height//scale):
+        for x in range(width//scale):
+            vector_dot(rx, ry, inv_affin2.data(), <float>x + startx/scale, <float>y + starty/scale)
+            dx = rx - floorf(rx)
+            dy = ry - floorf(ry)
+            w11 = (1-dx) * (1-dy)
+            w21 = dx * (1-dy)
+            w12 = (1-dx) * dy
+            w22 = dx * dy
+            vmapimage[y * width//scale + x] = w11 * getpixelclip(<int>rx, <int>ry, vtextline, im_h2, im_w2)
+            vmapimage[y * width//scale + x] += w21 * getpixelclip(<int>rx+1, <int>ry, vtextline, im_h2, im_w2)
+            vmapimage[y * width//scale + x] += w12 * getpixelclip(<int>rx, <int>ry+1, vtextline, im_h2, im_w2)
+            vmapimage[y * width//scale + x] += w22 * getpixelclip(<int>rx+1, <int>ry+1, vtextline, im_h2, im_w2)
+            vmapimage[width//scale * height//scale + y * width//scale + x] = w11 * getpixelclip(<int>rx, <int>ry, vsepline, im_h2, im_w2)
+            vmapimage[width//scale * height//scale + y * width//scale + x] += w21 * getpixelclip(<int>rx+1, <int>ry, vsepline, im_h2, im_w2)
+            vmapimage[width//scale * height//scale + y * width//scale + x] += w12 * getpixelclip(<int>rx, <int>ry+1, vsepline, im_h2, im_w2)
+            vmapimage[width//scale * height//scale + y * width//scale + x] += w22 * getpixelclip(<int>rx+1, <int>ry+1, vsepline, im_h2, im_w2)
+
+    for y in range(height):
+        for x in range(width):
+            for c in range(3):
+                outimage[c,y,x] = voutimage[(y * width + x) * 3 + c]
+
+    for y in range(height//scale):
+        for x in range(width//scale):
+            mapimage[0,y,x] = vcenter[y * width//scale + x]
+            mapimage[1,y,x] = vboxmap[y * width//scale + x] if isfinite(vboxmap[y * width//scale + x]) else 0
+            mapimage[2,y,x] = vboxmap[width//scale * height//scale + y * width//scale + x] if isfinite(vboxmap[width//scale * height//scale + y * width//scale + x]) else 0
+            mapimage[3,y,x] = vmapimage[y * width//scale + x]
+            mapimage[4,y,x] = vmapimage[width//scale * height//scale + y * width//scale + x]
+
+            indexmap[0,y,x] = vindexmap[y * width//scale + x]
+            indexmap[1,y,x] = vindexmap[width//scale * height//scale + y * width//scale + x]
+
+    return outimage, mapimage, indexmap
+
 def process(sample):
     cdef cnp.ndarray[cnp.float32_t, ndim=2] outimage
     cdef cnp.ndarray[cnp.float32_t, ndim=3] mapimage
@@ -652,6 +859,15 @@ def random_double(cnp.ndarray[cnp.float32_t, ndim=2] im):
                 outimage[1,y,x] = a * fg1_g + (1 - a) * bg_g
                 outimage[2,y,x] = a * fg1_b + (1 - a) * bg_b
     return outimage
+
+def process2(cnp.ndarray[cnp.uint8_t, ndim=3] image, 
+    cnp.ndarray[cnp.uint8_t, ndim=2] textline, 
+    cnp.ndarray[cnp.uint8_t, ndim=2] sepline,
+    cnp.ndarray[cnp.float32_t, ndim=2] position,
+    cnp.ndarray[cnp.int32_t, ndim=2] codelist):
+
+    return transform_crop2(image, textline, sepline, position, codelist)
+
 
 srand(time(NULL))
 rand()

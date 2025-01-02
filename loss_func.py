@@ -102,8 +102,8 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
 
     keylabel = labelmap[:,0,:,:]
     mask1 = keylabel > key_th1
-    mask3 = keylabel.flatten()[fmask] > key_th3
-    mask4 = keylabel.flatten()[fmask] == 1.0
+    mask3 = torch.logical_and(keylabel.flatten()[fmask] > key_th3, idmap[:,0,:,:].flatten()[fmask] > 0)
+    mask4 = torch.logical_and(keylabel.flatten()[fmask] == 1, idmap[:,0,:,:].flatten()[fmask] > 0)
 
     weight1 = torch.maximum(keylabel - key_th1, torch.tensor(0.)) / (1 - key_th1)
     weight1 = torch.masked_select(weight1, mask1)
