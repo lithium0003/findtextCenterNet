@@ -20,7 +20,6 @@ lr = 1e-4
 EPOCHS = 40
 batch=4
 logstep=10
-iters_to_accumulate=1
 output_iter=None
 scheduler_gamma = 1.0
 continue_train = False
@@ -186,8 +185,13 @@ def train():
             fmask = model.get_fmask(labelmap, fmask)
             image = transform(image)
             loss, rawloss = train_step(image, labelmap, idmap, fmask)
-            scale_loss = loss / iters_to_accumulate
-            scale_loss.backward()
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+
+            rawloss['CoWloss'] = loss
+            rawloss['lr'] = optimizer.param_groups[0]['lr']
+            losslog = running_loss(rawloss)
 
             image, labelmap, idmap = next(base_loader)
             image = torch.tensor(image, dtype=torch.float, device=device)
@@ -197,17 +201,11 @@ def train():
             fmask = model.get_fmask(labelmap, fmask)
             image = transform(image)
             loss, rawloss = train_step(image, labelmap, idmap, fmask)
-            scale_loss = loss / iters_to_accumulate
-            scale_loss.backward()
+            loss *= 0.1
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
 
-            if (i + 1) % iters_to_accumulate == 0:
-                optimizer.step()
-                optimizer.zero_grad()
-
-            # Gather data and report
-            rawloss['CoWloss'] = loss
-            rawloss['lr'] = optimizer.param_groups[0]['lr']
-            losslog = running_loss(rawloss)
             if (i + 1) % logstep == 0 or i == 0:
                 CoW_value = losslog['CoWloss'].item()
                 loss_value = losslog['loss'].item()
@@ -275,8 +273,6 @@ if __name__=='__main__':
         for arg in argv:
             if arg.startswith('--epoch'):
                 EPOCHS = int(arg.split('=')[1])
-            elif arg.startswith('--accumulate'):
-                iters_to_accumulate = int(arg.split('=')[1])
             elif arg.startswith('--lr'):
                 lr = float(arg.split('=')[1])
             elif arg.startswith('--logstep'):
