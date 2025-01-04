@@ -554,15 +554,8 @@ cpdef transform_crop2(
         vposition[i*4 + 3] = yr2 - yr1
 
     # set center point
-    if position_len > 0:
-        cidx = <int>(random_uniform() * <float>position_len)
-        woffset = random_uniform() * <float>width * 0.75 + <float>width / 8
-        hoffset = random_uniform() * <float>height * 0.75 + <float>height / 8
-        startx = vposition[cidx*4 + 0] - woffset
-        starty = vposition[cidx*4 + 1] - hoffset
-    else:
-        startx = random_uniform() * <float>width
-        starty = random_uniform() * <float>height
+    startx = random_uniform() * <float>width
+    starty = random_uniform() * <float>height
 
     minsize = 0
     # process position array
