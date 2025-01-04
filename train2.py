@@ -85,13 +85,13 @@ def train():
         download()
 
     training_dataset = FixDataDataset('train_data2', 1000)
-    training_loader = DataLoader(training_dataset, batch_size=batch, shuffle=True, num_workers=8)
+    training_loader = DataLoader(training_dataset, batch_size=batch, shuffle=True, num_workers=8, drop_last=True)
 
     training_dataset2 = get_dataset(train=True)
     training_loader2 = MultiLoader(training_dataset2.batched(batch, partial=False), workers=8)
 
     validation_dataset = FixDataDataset('train_data2', 100)
-    validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=8)
+    validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=8, drop_last=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('using device:', device, flush=True)
