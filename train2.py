@@ -87,8 +87,8 @@ def train():
     training_dataset = FixDataDataset('train_data2', 1000)
     training_loader = DataLoader(training_dataset, batch_size=batch, shuffle=True, num_workers=8, drop_last=True)
 
-    # training_dataset2 = get_dataset(train=True)
-    # training_loader2 = MultiLoader(training_dataset2.batched(batch, partial=False), workers=8)
+    training_dataset2 = get_dataset(train=True)
+    training_loader2 = MultiLoader(training_dataset2.batched(batch, partial=False), workers=8)
 
     validation_dataset = FixDataDataset('train_data2', 100)
     validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=8, drop_last=True)
@@ -175,8 +175,18 @@ def train():
             model.detector.eval()
 
         optimizer.zero_grad()
-        # base_loader = iter(training_loader2)
+        base_loader = iter(training_loader2)
         for i, data in enumerate(training_loader):
+            image, labelmap, idmap = next(base_loader)
+            image = torch.tensor(image, dtype=torch.float, device=device)
+            labelmap = torch.tensor(labelmap, dtype=torch.float, device=device)
+            idmap = torch.tensor(idmap, dtype=torch.long, device=device)
+
+            fmask = model.get_fmask(labelmap, fmask)
+            image = transform(image)
+            loss, rawloss = train_step(image, labelmap, idmap, fmask)
+            loss.backward()
+
             image, labelmap, idmap = data
             image = image.to(device=device)
             labelmap = labelmap.to(device=device)
@@ -192,23 +202,6 @@ def train():
             rawloss['CoWloss'] = loss
             rawloss['lr'] = optimizer.param_groups[0]['lr']
             losslog = running_loss(rawloss)
-
-            # image, labelmap, idmap = next(base_loader)
-            # image = torch.tensor(image, dtype=torch.float, device=device)
-            # labelmap = torch.tensor(labelmap, dtype=torch.float, device=device)
-            # idmap = torch.tensor(idmap, dtype=torch.long, device=device)
-
-            # fmask = model.get_fmask(labelmap, fmask)
-            # image = transform(image)
-            # loss, rawloss = train_step(image, labelmap, idmap, fmask)
-            # loss *= 0.01
-            # loss.backward()
-            # optimizer.step()
-            # optimizer.zero_grad()
-
-            # rawloss['CoWloss'] = loss
-            # rawloss['lr'] = optimizer.param_groups[0]['lr']
-            # losslog = running_loss(rawloss)
 
             if (i + 1) % logstep == 0 or i == 0:
                 CoW_value = losslog['CoWloss'].item()
