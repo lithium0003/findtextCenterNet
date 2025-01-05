@@ -206,9 +206,9 @@ def train():
             optimizer.step()
             optimizer.zero_grad()
 
-            rawloss['CoWloss'] = loss
-            rawloss['lr'] = optimizer.param_groups[0]['lr']
-            losslog = running_loss(rawloss)
+            # rawloss['CoWloss'] = loss
+            # rawloss['lr'] = optimizer.param_groups[0]['lr']
+            # losslog = running_loss(rawloss)
 
             if (i + 1) % logstep == 0 or i == 0:
                 CoW_value = losslog['CoWloss'].item()
