@@ -201,10 +201,13 @@ def train():
             fmask = model.get_fmask(labelmap, fmask)
             image = transform(image)
             loss, rawloss = train_step(image, labelmap, idmap, fmask)
-            loss *= 0.1
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
+
+            rawloss['CoWloss'] = loss
+            rawloss['lr'] = optimizer.param_groups[0]['lr']
+            losslog = running_loss(rawloss)
 
             if (i + 1) % logstep == 0 or i == 0:
                 CoW_value = losslog['CoWloss'].item()
