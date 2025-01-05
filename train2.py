@@ -201,6 +201,7 @@ def train():
             fmask = model.get_fmask(labelmap, fmask)
             image = transform(image)
             loss, rawloss = train_step(image, labelmap, idmap, fmask)
+            loss *= 0.01
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
