@@ -12,7 +12,7 @@ torch.set_float32_matmul_precision('high')
 
 from models.detector import TextDetectorModel
 from dataset.data_fixdata import FixDataDataset
-from loss_func import loss_function
+from loss_func import loss_function, CoVWeightingLoss
 
 lr = 1e-4
 EPOCHS = 40
@@ -109,6 +109,14 @@ def train():
     if 0 < scheduler_gamma < 1.0:
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=scheduler_gamma)
 
+    CoWloss = CoVWeightingLoss(momentum=1/20, device=device, losses=[
+        'keymap_loss',
+        'size_loss',
+        'textline_loss',
+        'separator_loss',
+        'id_loss',
+        *['code%d_loss'%2**(i) for i in range(4)],
+    ])
     running_loss = RunningLoss(device=device, runningcount=100, losses=[
         'loss',
         'keymap_loss',
@@ -124,7 +132,7 @@ def train():
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             heatmap, decoder_outputs = model(image, fmask)
             rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs)
-            loss = rawloss['loss']
+            loss = CoWloss(rawloss)
         return loss, rawloss
 
     @torch.compile
@@ -132,7 +140,7 @@ def train():
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             heatmap, decoder_outputs = model(image, fmask)
             rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs)
-            loss = rawloss['loss']
+            loss = CoWloss(rawloss)
         return loss, rawloss
 
     print('model', model_size, flush=True)
@@ -155,6 +163,7 @@ def train():
             print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], file=wf, flush=True)
 
         model.train()
+        CoWloss.train()
         running_loss.train()
         if decoder_only:
             model.detector.eval()
@@ -173,15 +182,18 @@ def train():
             optimizer.step()
             optimizer.zero_grad()
 
+            # Gather data and report
+            rawloss['CoWloss'] = loss
             rawloss['lr'] = optimizer.param_groups[0]['lr']
             losslog = running_loss(rawloss)
 
             if (i + 1) % logstep == 0 or i == 0:
+                CoW_value = losslog['CoWloss'].item()
                 loss_value = losslog['loss'].item()
                 acc_value = losslog['accuracy'].item()
-                print(epoch, i+1, datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, flush=True)
+                print(epoch, i+1, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
                 with open('log.txt','a') as wf:
-                    print(epoch, i+1, datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
+                    print(epoch, i+1, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
             if output_iter is not None and (i + 1) % output_iter == 0:
                 torch.save({
@@ -190,11 +202,12 @@ def train():
                     'model_state_dict': model.state_dict(),
                     }, 'result2/model.pt')
 
+        CoW_value = losslog['CoWloss'].item()
         loss_value = losslog['loss'].item()
         acc_value = losslog['accuracy'].item()
-        print(epoch, i+1, datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, flush=True)
+        print(epoch, i+1, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
         with open('log.txt','a') as wf:
-            print(epoch, i+1, datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
+            print(epoch, i+1, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
         running_loss.reset()
 
@@ -204,6 +217,7 @@ def train():
             }, 'result2/model.pt')
 
         model.eval()
+        CoWloss.eval()
         running_loss.eval()
 
         with torch.no_grad():
@@ -216,15 +230,17 @@ def train():
                 fmask = model.get_fmask(labelmap, fmask)
                 loss, rawloss = test_step(image, labelmap, idmap, fmask)
 
+                rawloss['CoWloss'] = loss
                 running_loss(rawloss)
 
         losslog = running_loss.write()
 
+        CoW_value = losslog['CoWloss'].item()
         loss_value = losslog['loss'].item()
         acc_value = losslog['accuracy'].item()
-        print(epoch, 'val', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, flush=True)
+        print(epoch, 'val', datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, flush=True)
         with open('log.txt','a') as wf:
-            print(epoch, 'val', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
+            print(epoch, 'val', datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
         running_loss.reset()
 
