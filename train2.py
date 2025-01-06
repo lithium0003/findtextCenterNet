@@ -129,7 +129,6 @@ def train():
 
     @torch.compile
     def train_step(image, map, idmap, fmask):
-        image = transform(image)
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             heatmap, decoder_outputs = model(image, fmask)
             rawloss = loss_function(fmask, map, idmap, heatmap, decoder_outputs)
@@ -172,6 +171,7 @@ def train():
         optimizer.zero_grad()
         for i, data in enumerate(training_loader):
             image, labelmap, idmap = data
+            image = transform(image)
             image = image.to(device=device)
             labelmap = labelmap.to(device=device)
             idmap = idmap.to(dtype=torch.long, device=device)
