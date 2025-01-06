@@ -72,12 +72,16 @@ class FixDataDataset(torch.utils.data.Dataset):
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
+    from torchvision.transforms import ColorJitter
 
-    dataset = FixDataDataset('train_data2',1)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1)
+    transform = ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5)
+
+    dataset = FixDataDataset('train_data2',100)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
 
     for sample in dataloader:
         image, labelmap, idmap = sample
+        image = transform(image)
 
         plt.figure()
         if len(image[0].shape) > 2:
