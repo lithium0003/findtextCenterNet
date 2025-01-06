@@ -119,6 +119,7 @@ def train():
     ])
     running_loss = RunningLoss(device=device, runningcount=100, losses=[
         'loss',
+        'CoWloss',
         'keymap_loss',
         'size_loss',
         'textline_loss',
