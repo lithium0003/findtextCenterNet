@@ -173,9 +173,9 @@ def train():
         for i, data in enumerate(training_loader):
             image, labelmap, idmap = data
             image = transform(image)
-            image = image.to(device=device)
-            labelmap = labelmap.to(device=device)
-            idmap = idmap.to(dtype=torch.long, device=device)
+            image = image.to(device=device, non_blocking=True)
+            labelmap = labelmap.to(device=device, non_blocking=True)
+            idmap = idmap.to(dtype=torch.long, device=device, non_blocking=True)
 
             fmask = model.get_fmask(labelmap, fmask)
             loss, rawloss = train_step(image, labelmap, idmap, fmask)
@@ -224,9 +224,9 @@ def train():
         with torch.no_grad():
             for vdata in validation_loader:
                 image, labelmap, idmap = vdata
-                image = image.to(device=device)
-                labelmap = labelmap.to(device=device)
-                idmap = idmap.to(dtype=torch.long, device=device)
+                image = image.to(device=device, non_blocking=True)
+                labelmap = labelmap.to(device=device, non_blocking=True)
+                idmap = idmap.to(dtype=torch.long, device=device, non_blocking=True)
 
                 fmask = model.get_fmask(labelmap, fmask)
                 loss, rawloss = test_step(image, labelmap, idmap, fmask)
