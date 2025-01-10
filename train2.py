@@ -13,6 +13,8 @@ torch.set_float32_matmul_precision('high')
 from models.detector import TextDetectorModel
 from dataset.data_fixdata import FixDataDataset
 from loss_func import loss_function, CoVWeightingLoss
+from dataset.multi import MultiLoader
+from dataset.data_detector import get_dataset
 
 lr = 1e-4
 EPOCHS = 40
@@ -85,7 +87,10 @@ def train():
     training_dataset = FixDataDataset('train_data2', 1000)
     training_loader = DataLoader(training_dataset, batch_size=batch, shuffle=True, num_workers=8, drop_last=True)
 
-    validation_dataset = FixDataDataset('train_data2', 100)
+    training_dataset2 = get_dataset(train=True)
+    training_loader2 = MultiLoader(training_dataset2.repeat().batched(batch, partial=False), workers=8)
+
+    validation_dataset = FixDataDataset('train_data2', 10)
     validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=8, drop_last=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -156,6 +161,7 @@ def train():
 
     last_epoch = 0
     fmask = None
+    training_iter = iter(training_loader2)
     for epoch in range(last_epoch, EPOCHS):
         print(datetime.datetime.now(), 'epoch', epoch, flush=True)
         print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], flush=True)
@@ -171,6 +177,17 @@ def train():
 
         optimizer.zero_grad()
         for i, data in enumerate(training_loader):
+            image, labelmap, idmap = next(training_iter)
+            image = torch.tensor(image, dtype=torch.float, device=device)
+            labelmap = torch.tensor(labelmap, dtype=torch.float, device=device)
+            idmap = torch.tensor(idmap, dtype=torch.long, device=device)
+
+            fmask = model.get_fmask(labelmap, fmask)
+            loss, rawloss = train_step(image, labelmap, idmap, fmask)
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+
             image, labelmap, idmap = data
             image = transform(image)
             image = image.to(device=device, non_blocking=True)
