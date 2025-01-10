@@ -155,11 +155,15 @@ def train():
     print('batch', batch, flush=True)
     print('logstep', logstep, flush=True)
     print('lr', lr, flush=True)
+    print('weight1', weight1, flush=True)
+    print('weight2', weight2, flush=True)
     with open('log.txt','a') as wf:
         print('model', model_size, file=wf, flush=True)
         print('batch', batch, file=wf, flush=True)
         print('logstep', logstep, file=wf, flush=True)
         print('lr', lr, file=wf, flush=True)
+        print('weight1', weight1, file=wf, flush=True)
+        print('weight2', weight2, file=wf, flush=True)
 
     last_epoch = 0
     fmask = None
