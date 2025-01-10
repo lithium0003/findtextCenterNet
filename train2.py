@@ -21,6 +21,8 @@ EPOCHS = 40
 batch=4
 logstep=10
 output_iter=None
+weight1=1
+weight2=1
 scheduler_gamma = 1.0
 continue_train = False
 model_size = 'xl'
@@ -184,6 +186,7 @@ def train():
 
             fmask = model.get_fmask(labelmap, fmask)
             loss, rawloss = train_step(image, labelmap, idmap, fmask)
+            loss *= weight1
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -196,6 +199,7 @@ def train():
 
             fmask = model.get_fmask(labelmap, fmask)
             loss, rawloss = train_step(image, labelmap, idmap, fmask)
+            loss *= weight2
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -280,6 +284,10 @@ if __name__=='__main__':
                 output_iter = int(arg.split('=')[1])
             elif arg.startswith('--gamma'):
                 scheduler_gamma = float(arg.split('=')[1])
+            elif arg.startswith('--weight1'):
+                weight1 = float(arg.split('=')[1])
+            elif arg.startswith('--weight2'):
+                weight2 = float(arg.split('=')[1])
             elif arg.startswith('--continue'):
                 continue_train = arg.split('=')[1].lower() == 'true'
             elif arg.startswith('--model'):
