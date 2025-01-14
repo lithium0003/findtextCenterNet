@@ -4,9 +4,9 @@ import torch
 
 import numpy as np
 import sys
-from PIL import Image
+import os
+from PIL import Image, ImageFilter
 import itertools
-import json
 
 try:
     from pillow_heif import register_heif_opener
@@ -14,22 +14,30 @@ try:
 except ImportError:
     pass
 
+from matplotlib.font_manager import FontProperties
+import matplotlib.pyplot as plt
+
 from util_func import calc_predid, width, height, scale, feature_dim, sigmoid
 from models.detector import TextDetectorModel, CenterNetDetector, CodeDecoder
 
 if len(sys.argv) < 2:
-    print(sys.argv[0],'target.png','(twopass)')
+    print(sys.argv[0],'target.png')
     exit(1)
 
+fprop = FontProperties(fname='data/jpfont/NotoSerifJP-Regular.otf')
+
 target_file = sys.argv[1]
+twopass = False
 model_size = 'xl'
 resize = 1.0
-cutoff = 0.4
 if len(sys.argv) > 2:
     for arg in sys.argv[2:]:
-        if arg.startswith('cutoff='):
-            cutoff = float(arg.split('=')[1])
-            print('cutoff: ', cutoff)
+        if arg == 'twopass':
+            twopass = True
+            print('twopass')
+        elif arg == 'kr':
+            fprop = FontProperties(fname='data/krfont/NotoSerifKR-Regular.otf')
+            print('kr font')
         elif arg == 's':
             model_size = 's'
             print('model s')
@@ -63,12 +71,17 @@ decoder.to(device=device)
 detector.eval()
 decoder.eval()
 
-def eval(ds, org_img, cut_off = 0.5):
+# with torch.no_grad():
+#     print(detector.detector.keyheatmap.top_conv[-1].bias)
+#     detector.detector.keyheatmap.top_conv[-1].bias.copy_(detector.detector.keyheatmap.top_conv[-1].bias - 1.0)
+
+def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
     print(org_img.shape)
     print("test")
 
     locations = [np.zeros(5+4)]
     glyphfeatures = [np.zeros(feature_dim, dtype=np.float32)]
+    keymap_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale])
     lines_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale])
     seps_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale])
     code_all = []
@@ -97,12 +110,14 @@ def eval(ds, org_img, cut_off = 0.5):
         y_max = int(y_s * 7 / 8) + 1 if y_i + height < org_img.shape[0] else y_s
         mask[y_min:y_max, x_min:x_max] = True
 
+        keymap_p = sigmoid(heatmap[0,0,:,:])
         line_p = sigmoid(heatmap[0,4,:,:])
         seps_p = sigmoid(heatmap[0,5,:,:])
         code_p = []
         for k in range(4):
             code_p.append(sigmoid(heatmap[0,6+k,:,:]))
 
+        keymap_all[y_is:y_is+y_s,x_is:x_is+x_s] = np.maximum(keymap_p * mask, keymap_all[y_is:y_is+y_s,x_is:x_is+x_s])
         lines_all[y_is:y_is+y_s,x_is:x_is+x_s] = np.maximum(line_p * mask, lines_all[y_is:y_is+y_s,x_is:x_is+x_s])
         seps_all[y_is:y_is+y_s,x_is:x_is+x_s] = np.maximum(seps_p * mask, seps_all[y_is:y_is+y_s,x_is:x_is+x_s])
         for k in range(4):
@@ -131,7 +146,11 @@ def eval(ds, org_img, cut_off = 0.5):
             glyphfeatures.append(features[0,:,y,x])
 
     locations = np.array(locations)
+    if locations0 is not None:
+        locations = np.concatenate([locations, locations0])
     glyphfeatures = np.array(glyphfeatures)
+    if glyphfeatures0 is not None:
+        glyphfeatures = np.concatenate([glyphfeatures, glyphfeatures0])
 
     idx = np.argsort(-locations[:,0])
     done_area = np.zeros([0,4])
@@ -191,7 +210,7 @@ def eval(ds, org_img, cut_off = 0.5):
         x = int(cx / scale)
         y = int(cy / scale)
         if x >= 0 and x < org_img.shape[1] // scale and y >= 0 and y < org_img.shape[0] // scale:
-            if seps_all[y,x] > 0.1:
+            if seps_all[y,x] > 0.5:
                 continue
         selected_idx.append(i)
 
@@ -223,7 +242,30 @@ def eval(ds, org_img, cut_off = 0.5):
             for k in range(4):
                 locations[i,5+k] = max(np.max(code_all[k][y_min:y_max,x_min:x_max]), locations[i,5+k])
 
-    return locations, glyphfeatures, lines_all, seps_all
+    plt.figure()
+    plt.imshow(keymap_all,interpolation='none',vmin=0.,vmax=1.)
+    plt.title('keymap')
+
+    plt.figure()
+    plt.imshow(lines_all,interpolation='none',vmin=0.,vmax=1.)
+    plt.title('textline')
+    
+    plt.figure()
+    plt.imshow(seps_all,interpolation='none',vmin=0.,vmax=1.)
+    plt.title('separator')
+    
+    title_str = [
+        'ruby',
+        'rubybase',
+        'emphasis',
+        'space',
+    ]
+    for k in range(4):
+        plt.figure()
+        plt.imshow(code_all[k],interpolation='none',vmin=0.,vmax=1.)
+        plt.title('code%d '%(2**k) + title_str[k])
+
+    return locations, glyphfeatures
 
 def decode(glyphfeatures):
     print("decode")
@@ -271,6 +313,29 @@ padx = max(0, (width - im0.shape[1]) % stepx, width - im0.shape[1])
 pady = max(0, (height - im0.shape[0]) % stepy, height - im0.shape[0])
 im0 = np.pad(im0, [[0,pady],[0,padx],[0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
 
+if twopass and (im0.shape[1] / stepx > 2 or im0.shape[0] / stepy > 2):
+    print('two-pass')
+    s = max(im0.shape[1], im0.shape[0]) / max(width, height)
+    im1 = Image.fromarray(im0).resize((int(im0.shape[1] / s), int(im0.shape[0] / s)), resample=Image.BILINEAR)
+    im1 = np.asarray(im1)
+    padx = max(0, width - im1.shape[1])
+    pady = max(0, height - im1.shape[0])
+    im1 = np.pad(im1, [[0,pady],[0,padx],[0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
+
+    im = im1.astype(np.float32)
+
+    ds1 = []
+    ds1.append({
+        'input': np.expand_dims(im, 0),
+        'offsetx': 0,
+        'offsety': 0,
+        })
+
+    locations0, glyphfeatures0 = eval(ds1, im, cut_off=0.4)
+    locations0[:,1:] = locations0[:,1:] * s
+else:
+    locations0, glyphfeatures0 = None, None
+
 im = im0.astype(np.float32)
 
 ds0 = []
@@ -282,46 +347,83 @@ for y in range(0, im0.shape[0] - height + 1, stepy):
             'offsety': y,
         })
 
-locations, glyphfeatures, lines_all, seps_all = eval(ds0, im, cut_off=cutoff)
+locations, glyphfeatures = eval(ds0, im, cut_off=0.4,
+        locations0=locations0, glyphfeatures0=glyphfeatures0)
 glyphids, glyphprobs = decode(glyphfeatures)
 
-linesfile = target_file + '.lines.png'
-lines_all = (lines_all * 255).astype(np.uint8)
-Image.fromarray(lines_all).save(linesfile)
+plt.figure()
+plt.hist(np.reshape(glyphfeatures,[-1]), bins=50)
+plt.title('features')
 
-sepsfile = target_file + '.seps.png'
-seps_all = (seps_all * 255).astype(np.uint8)
-Image.fromarray(seps_all).save(sepsfile)
+fig = plt.figure()
+plt.imshow(im0)
+fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
 
-out_dict = {}
-out_dict['textbox'] = []
 for i, loc in enumerate(locations):
-    p_loc = loc[0]
     cx = loc[1]
     cy = loc[2]
     w = loc[3]
     h = loc[4]
     codes = loc[5:]
     cid = glyphids[i]
-    p_chr = glyphprobs[i]
+    p = glyphprobs[i]
+    g = glyphfeatures[i]
+
+    points = [
+        [cx - w / 2, cy - h / 2],
+        [cx + w / 2, cy - h / 2],
+        [cx + w / 2, cy + h / 2],
+        [cx - w / 2, cy + h / 2],
+        [cx - w / 2, cy - h / 2],
+    ]
+    points = np.array(points)
+    if codes[3] > 0.5:
+        c = 'red'
+    else:
+        c = 'cyan'
+    plt.plot(points[:,0], points[:,1],color=c)
+    if codes[1] > 0.5:
+        points = [
+            [cx - w / 2 - 1, cy - h / 2 - 1],
+            [cx + w / 2 + 1, cy - h / 2 - 1],
+            [cx + w / 2 + 1, cy + h / 2 + 1],
+            [cx - w / 2 - 1, cy + h / 2 + 1],
+            [cx - w / 2 - 1, cy - h / 2 - 1],
+        ]
+        points = np.array(points)
+        plt.plot(points[:,0], points[:,1],color='yellow')
+    if codes[0] > 0.5:
+        points = [
+            [cx - w / 2 + 1, cy - h / 2 + 1],
+            [cx + w / 2 - 1, cy - h / 2 + 1],
+            [cx + w / 2 - 1, cy + h / 2 - 1],
+            [cx - w / 2 + 1, cy + h / 2 - 1],
+            [cx - w / 2 + 1, cy - h / 2 + 1],
+        ]
+        points = np.array(points)
+        plt.plot(points[:,0], points[:,1],color='magenta')
+    if codes[2] > 0.5:
+        points = [
+            [cx - w / 2 + 2, cy - h / 2 + 2],
+            [cx + w / 2 - 2, cy - h / 2 + 2],
+            [cx + w / 2 - 2, cy + h / 2 - 2],
+            [cx - w / 2 + 2, cy + h / 2 - 2],
+            [cx - w / 2 + 2, cy - h / 2 + 2],
+        ]
+        points = np.array(points)
+        plt.plot(points[:,0], points[:,1],color='blue')
+
     if cid < 0x10FFFF:
         pred_char = chr(cid)
     else:
         pred_char = None
+    if pred_char:
+        if codes[0] > 0.5:
+            c = 'green'
+        else:
+            c = 'blue'
+        plt.gca().text(cx, cy, pred_char, fontsize=28, color=c, fontproperties=fprop)
+    plt.gca().text(cx - w/2, cy + h/2, '%.2f'%(p*100), color='green')
+    #print(pred_char,cx,cy,w,h,p)
 
-    out_dict['textbox'].append({
-        'cx': float(cx),
-        'cy': float(cy),
-        'w': float(w),
-        'h': float(h),
-        'text': pred_char,
-        'p_loc': float(p_loc),
-        'p_chr': float(p_chr),
-        'p_code1': float(codes[0]),
-        'p_code2': float(codes[1]),
-        'p_code4': float(codes[2]),
-        'p_code8': float(codes[3]),
-    })
-
-with open(target_file+'.json', 'w', encoding='utf-8') as file:
-    json.dump(out_dict, file, indent=2, ensure_ascii=False)
+plt.show()

@@ -5,6 +5,12 @@ import sys
 from PIL import Image
 import json
 
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
+
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -62,7 +68,7 @@ class SubWindow(tk.Frame):
                 self.ruby_base = pos['p_code2'] > 0.5
                 self.emphasis = pos['p_code4'] > 0.5
                 self.space = pos['p_code8'] > 0.5
-                text = pos['text']
+                text = pos.get('text', None)
 
                 im1 = im0.copy().crop((cx - w, cy - h, cx + w, cy + h))
                 self.ax_im.imshow(im1)
@@ -231,10 +237,18 @@ class Application(tk.Frame):
         self.target_file = target_file
         root.title(target_file)
         self.im0 = Image.open(target_file).convert('RGB')
+        self.im0_width = self.im0.width
+        self.im0_height = self.im0.height
+        self.im = np.asarray(self.im0) / 255 * 0.75
         self.sub = None
 
         with open(target_file+'.json', 'r', encoding='utf-8') as file:
-            self.dict = json.load(file)
+            dict = json.load(file)
+
+        self.dict = {'textbox': []}
+        for box in dict['textbox']:
+            box['text'] = box.get('text', None)
+            self.dict['textbox'].append(box)
 
         self.gen_mpl_graph(root)
 
@@ -267,7 +281,7 @@ class Application(tk.Frame):
         root.bind('<Left>', lambda e: self.canvas.xview_scroll(-1, 'pages'))
         root.bind('<Right>', lambda e: self.canvas.xview_scroll(1, 'pages'))
 
-        fig = plt.figure(figsize=(self.im0.width/dpi, self.im0.height/dpi))
+        fig = plt.figure(figsize=(self.im0_width/dpi, self.im0_height/dpi))
         fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         self.ax_im = fig.add_subplot(111)
         self.im1 = FigureCanvasTkAgg(fig, frame)
@@ -305,14 +319,14 @@ class Application(tk.Frame):
 
     def plot_image(self):
         self.ax_im.cla()
-        self.ax_im.imshow(self.im0)
+        self.ax_im.imshow(self.im)
 
         for pos in self.dict['textbox']:
             cx = pos['cx']
             cy = pos['cy']
             w = pos['w']
             h = pos['h']
-            text = pos['text']
+            text = pos.get('text', None)
 
             points = [
                 [cx - w / 2, cy - h / 2],
@@ -365,7 +379,7 @@ class Application(tk.Frame):
                 if pos['p_code1'] > 0.5:
                     c = 'green'
                 else:
-                    c = 'blue'
+                    c = 'yellow'
                 self.ax_im.text(cx, cy, text, fontsize=16, color=c, fontproperties=fprop)
         self.im1.draw_idle()
 

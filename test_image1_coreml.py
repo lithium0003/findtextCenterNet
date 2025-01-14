@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-import torch
+import coremltools as ct
 
 import numpy as np
 import sys
-from PIL import Image
+import os
+from PIL import Image, ImageFilter, ImageEnhance
 import itertools
-import json
 
 try:
     from pillow_heif import register_heif_opener
@@ -14,61 +14,53 @@ try:
 except ImportError:
     pass
 
-from util_func import calc_predid, width, height, scale, feature_dim, sigmoid
-from models.detector import TextDetectorModel, CenterNetDetector, CodeDecoder
+from matplotlib.font_manager import FontProperties
+import matplotlib.pyplot as plt
+
+from util_func import calc_predid, width, height, scale, feature_dim, modulo_list, sigmoid
 
 if len(sys.argv) < 2:
     print(sys.argv[0],'target.png','(twopass)')
     exit(1)
 
-target_file = sys.argv[1]
-model_size = 'xl'
-resize = 1.0
+fprop = FontProperties(fname='data/jpfont/NotoSerifJP-Regular.otf')
 cutoff = 0.4
+codecutoff = 0.5
+
+target_file = sys.argv[1]
+twopass = False
+resize = 1.0
+offsetx = 0
+offsety = 0
 if len(sys.argv) > 2:
     for arg in sys.argv[2:]:
-        if arg.startswith('cutoff='):
-            cutoff = float(arg.split('=')[1])
-            print('cutoff: ', cutoff)
-        elif arg == 's':
-            model_size = 's'
-            print('model s')
-        elif arg == 'm':
-            model_size = 'm'
-            print('model m')
-        elif arg == 'l':
-            model_size = 'l'
-            print('model l')
-        elif arg == 'xl':
-            model_size = 'xl'
-            print('model xl')
+        if arg == 'twopass':
+            twopass = True
+            print('twopass')
+        elif arg == 'kr':
+            fprop = FontProperties(fname='data/krfont/NotoSerifKR-Regular.otf')
+            print('kr font')
         elif arg.startswith('x'):
             resize = float(arg[1:])
             print('resize: ', resize)
+        elif arg.startswith('offsetx'):
+            offsetx = int(arg[7:])
+            print('offsetx: ', offsetx)
+        elif arg.startswith('offsety'):
+            offsety = int(arg[7:])
+            print('offsety: ', offsety)
 
-model = TextDetectorModel(model_size=model_size)
-data = torch.load('model.pt', map_location="cpu", weights_only=True)
-model.load_state_dict(data['model_state_dict'])
-detector = CenterNetDetector(model.detector)
-decoder = CodeDecoder(model.decoder)
-if torch.cuda.is_available():
-    device = 'cuda'
-elif torch.backends.mps.is_available():
-    device = 'mps'
-else:
-    device = 'cpu'
-device = torch.device(device)
-detector.to(device=device)
-decoder.to(device=device)
-detector.eval()
-decoder.eval()
+print('load')
+mlmodel_detector = ct.models.MLModel('TextDetector.mlpackage')
+mlmodel_decoder = ct.models.MLModel('CodeDecoder.mlpackage')
 
-def eval(ds, org_img, cut_off = 0.5):
+def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
     print(org_img.shape)
     print("test")
 
     locations = [np.zeros(5+4)]
     glyphfeatures = [np.zeros(feature_dim, dtype=np.float32)]
+    keymap_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale])
     lines_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale])
     seps_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale])
     code_all = []
@@ -84,11 +76,15 @@ def eval(ds, org_img, cut_off = 0.5):
         x_s = width // scale
         y_s = height // scale
 
-        images = torch.from_numpy(inputs['input'] / 255.).permute(0,3,1,2).to(device=device)
-        with torch.no_grad():
-            heatmap, features = detector(images)
-            heatmap = heatmap.cpu().numpy()
-            features = features.cpu().numpy()
+        input_image = Image.fromarray(inputs['input'], mode="RGB")
+        # plt.figure()
+        # plt.imshow(input_image)
+        # plt.show()
+        # input_image.save('tmp%08d.png'%n)
+
+        output = mlmodel_detector.predict({'image': input_image})
+        heatmap = output['heatmap']
+        features = output['feature']
 
         mask = np.zeros([y_s, x_s], dtype=bool)
         x_min = int(x_s * 1 / 8) if x_i > 0 else 0
@@ -97,12 +93,14 @@ def eval(ds, org_img, cut_off = 0.5):
         y_max = int(y_s * 7 / 8) + 1 if y_i + height < org_img.shape[0] else y_s
         mask[y_min:y_max, x_min:x_max] = True
 
+        keymap_p = sigmoid(heatmap[0,0,:,:])
         line_p = sigmoid(heatmap[0,4,:,:])
         seps_p = sigmoid(heatmap[0,5,:,:])
         code_p = []
         for k in range(4):
             code_p.append(sigmoid(heatmap[0,6+k,:,:]))
 
+        keymap_all[y_is:y_is+y_s,x_is:x_is+x_s] = np.maximum(keymap_p * mask, keymap_all[y_is:y_is+y_s,x_is:x_is+x_s])
         lines_all[y_is:y_is+y_s,x_is:x_is+x_s] = np.maximum(line_p * mask, lines_all[y_is:y_is+y_s,x_is:x_is+x_s])
         seps_all[y_is:y_is+y_s,x_is:x_is+x_s] = np.maximum(seps_p * mask, seps_all[y_is:y_is+y_s,x_is:x_is+x_s])
         for k in range(4):
@@ -131,7 +129,11 @@ def eval(ds, org_img, cut_off = 0.5):
             glyphfeatures.append(features[0,:,y,x])
 
     locations = np.array(locations)
+    if locations0 is not None:
+        locations = np.concatenate([locations, locations0])
     glyphfeatures = np.array(glyphfeatures)
+    if glyphfeatures0 is not None:
+        glyphfeatures = np.concatenate([glyphfeatures, glyphfeatures0])
 
     idx = np.argsort(-locations[:,0])
     done_area = np.zeros([0,4])
@@ -177,7 +179,7 @@ def eval(ds, org_img, cut_off = 0.5):
                 p1y = int(max(cy1 - h1/2, cy - h/2) - (cy - h/2))+1
                 p2y = int(min(cy1 + h1/2, cy + h/2) - (cy - h/2))+1
                 fill_map[p1x:p2x,p1y:p2y] = True
-            if np.mean(fill_map) > 0.5:
+            if np.mean(fill_map) > 0.7:
                 continue
 
         done_area = np.vstack([done_area, np.array([cx, cy, w, h])])
@@ -191,7 +193,7 @@ def eval(ds, org_img, cut_off = 0.5):
         x = int(cx / scale)
         y = int(cy / scale)
         if x >= 0 and x < org_img.shape[1] // scale and y >= 0 and y < org_img.shape[0] // scale:
-            if seps_all[y,x] > 0.1:
+            if seps_all[y,x] > 0.25:
                 continue
         selected_idx.append(i)
 
@@ -209,12 +211,12 @@ def eval(ds, org_img, cut_off = 0.5):
         cy = locations[i,2]
         w = locations[i,3]
         h = locations[i,4]
-        x = int(cx / scale)
-        y = int(cy / scale)
         x_min = int(cx / scale - 1)
         y_min = int(cy / scale - 1)
         x_max = int(cx / scale + 1) + 1
         y_max = int(cy / scale + 1) + 1
+        x = int(cx / scale)
+        y = int(cy / scale)
         if x >= 0 and x < org_img.shape[1] // scale and y >= 0 and y < org_img.shape[0] // scale:
             x_min = max(0, x_min)
             y_min = max(0, y_min)
@@ -223,19 +225,41 @@ def eval(ds, org_img, cut_off = 0.5):
             for k in range(4):
                 locations[i,5+k] = max(np.max(code_all[k][y_min:y_max,x_min:x_max]), locations[i,5+k])
 
-    return locations, glyphfeatures, lines_all, seps_all
+    plt.figure()
+    plt.imshow(keymap_all,interpolation='none',vmin=0.,vmax=1.)
+    plt.title('keymap')
+
+    plt.figure()
+    plt.imshow(lines_all,interpolation='none',vmin=0.,vmax=1.)
+    plt.title('textline')
+    
+    plt.figure()
+    plt.imshow(seps_all,interpolation='none',vmin=0.,vmax=1.)
+    plt.title('separator')
+    
+    title_str = [
+        'ruby',
+        'rubybase',
+        'emphasis',
+        'space',
+    ]
+    for k in range(4):
+        plt.figure()
+        plt.imshow(code_all[k],interpolation='none',vmin=0.,vmax=1.)
+        plt.title('code%d '%(2**k) + title_str[k])
+
+    return locations, glyphfeatures
 
 def decode(glyphfeatures):
     print("decode")
     glyphids = []
     glyphprobs = []
     for data in glyphfeatures:
-        with torch.no_grad():
-            decode_outputs = decoder(torch.from_numpy(data).to(device=device).unsqueeze(0))
+        decode_output = mlmodel_decoder.predict({'feature_input': np.expand_dims(data,0)})
         p = []
         id = []
-        for k,prob in enumerate(decode_outputs):
-            prob = prob[0].cpu().numpy()
+        for k,m in enumerate(modulo_list):
+            prob = decode_output['modulo_%d'%m][0]
             idx = np.where(prob > 0.01)[0]
             if len(idx) == 0:
                 idx = [np.argmax(prob)]
@@ -253,75 +277,146 @@ def decode(glyphfeatures):
         glyphids.append(idx)
         glyphprobs.append(prob)
 
-    glyphids = np.atleast_1d(glyphids)
-    glyphprobs = np.atleast_1d(glyphprobs)
+    if len(glyphids) > 0:
+        glyphids = np.stack(glyphids)
+        glyphprobs = np.stack(glyphprobs)
     
     return  glyphids, glyphprobs
 
-stepx = width * 1 // 2
-stepy = height * 1 // 2
+stepx = width * 3 // 4
+stepy = height * 3 // 4
 
 im0 = Image.open(target_file).convert('RGB')
 if resize != 1.0:
     im0 = im0.resize((int(im0.width * resize), int(im0.height * resize)), resample=Image.Resampling.BILINEAR)
-#im0 = im0.filter(ImageFilter.SHARPEN)
+# im0 = im0.resize((im0.width // 2, im0.height // 2), resample=Image.Resampling.BILINEAR)
+# im0 = im0.filter(ImageFilter.UnsharpMask(radius=20, percent=500, threshold=30))
+# im0 = im0.resize((im0.width * 2, im0.height * 2), resample=Image.Resampling.BILINEAR)
+# im0 = im0.filter(ImageFilter.SHARPEN)
+# im0 = im0.filter(ImageFilter.UnsharpMask(radius=20, percent=500, threshold=30))
+# enhancer = ImageEnhance.Brightness(im0)
+# im0 = enhancer.enhance(1.5)
+# enhancer = ImageEnhance.Contrast(im0)
+# im0 = enhancer.enhance(1.5)
 im0 = np.asarray(im0)
+im_ave = np.median(im0, axis=(0,1), keepdims=True)
+im0 = np.pad(im0, [[offsety,0],[offsetx,0],[0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
 
 padx = max(0, (width - im0.shape[1]) % stepx, width - im0.shape[1])
 pady = max(0, (height - im0.shape[0]) % stepy, height - im0.shape[0])
 im0 = np.pad(im0, [[0,pady],[0,padx],[0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
 
-im = im0.astype(np.float32)
+im1 = np.empty_like(im0)
+im1[:,:,:] = im_ave
+im1[offsety:-(pady+1),offsetx:-(padx+1),:] = im0[offsety:-(pady+1),offsetx:-(padx+1),:]
+im0 = im1
+
+if twopass and (im0.shape[1] / stepx > 2 or im0.shape[0] / stepy > 2):
+    print('two-pass')
+    s = max(im0.shape[1], im0.shape[0]) / max(width, height)
+    im1 = Image.fromarray(im0).resize((int(im0.shape[1] / s), int(im0.shape[0] / s)), resample=Image.BILINEAR)
+    im1 = np.asarray(im1)
+    padx = max(0, width - im1.shape[1])
+    pady = max(0, height - im1.shape[0])
+    im1 = np.pad(im1, [[0,pady],[0,padx],[0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
+
+    ds1 = []
+    ds1.append({
+        'input': im1,
+        'offsetx': 0,
+        'offsety': 0,
+        })
+
+    locations0, glyphfeatures0 = eval(ds1, im1, cut_off=cutoff)
+    locations0[:,1:] = locations0[:,1:] * s
+else:
+    locations0, glyphfeatures0 = None, None
 
 ds0 = []
 for y in range(0, im0.shape[0] - height + 1, stepy):
     for x in range(0, im0.shape[1] - width + 1, stepx):
         ds0.append({
-            'input': np.expand_dims(im[y:y+height,x:x+width,:], 0),
+            'input': im0[y:y+height,x:x+width,:],
             'offsetx': x,
             'offsety': y,
         })
-
-locations, glyphfeatures, lines_all, seps_all = eval(ds0, im, cut_off=cutoff)
+locations, glyphfeatures = eval(ds0, im0, cut_off=cutoff,
+        locations0=locations0, glyphfeatures0=glyphfeatures0)
 glyphids, glyphprobs = decode(glyphfeatures)
 
-linesfile = target_file + '.lines.png'
-lines_all = (lines_all * 255).astype(np.uint8)
-Image.fromarray(lines_all).save(linesfile)
+plt.figure()
+plt.hist(np.reshape(glyphfeatures,[-1]), bins=50)
+plt.title('features')
 
-sepsfile = target_file + '.seps.png'
-seps_all = (seps_all * 255).astype(np.uint8)
-Image.fromarray(seps_all).save(sepsfile)
+fig = plt.figure()
+plt.imshow(im0 / 255 * 0.3)
+fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
 
-out_dict = {}
-out_dict['textbox'] = []
 for i, loc in enumerate(locations):
-    p_loc = loc[0]
     cx = loc[1]
     cy = loc[2]
     w = loc[3]
     h = loc[4]
     codes = loc[5:]
     cid = glyphids[i]
-    p_chr = glyphprobs[i]
+    p = glyphprobs[i]
+    g = glyphfeatures[i]
+
+    points = [
+        [cx - w / 2, cy - h / 2],
+        [cx + w / 2, cy - h / 2],
+        [cx + w / 2, cy + h / 2],
+        [cx - w / 2, cy + h / 2],
+        [cx - w / 2, cy - h / 2],
+    ]
+    points = np.array(points)
+    linewidth = 0.5 if p > 0.75 else 2
+    plt.plot(points[:,0], points[:,1],color='cyan',linewidth=linewidth)
+    if codes[3] > codecutoff:
+        plt.plot(points[:,0], points[:,1],color='red')
+    if codes[1] > codecutoff:
+        points = [
+            [cx - w / 2 - 1, cy - h / 2 - 1],
+            [cx + w / 2 + 1, cy - h / 2 - 1],
+            [cx + w / 2 + 1, cy + h / 2 + 1],
+            [cx - w / 2 - 1, cy + h / 2 + 1],
+            [cx - w / 2 - 1, cy - h / 2 - 1],
+        ]
+        points = np.array(points)
+        plt.plot(points[:,0], points[:,1],color='yellow')
+    if codes[0] > codecutoff:
+        points = [
+            [cx - w / 2 + 1, cy - h / 2 + 1],
+            [cx + w / 2 - 1, cy - h / 2 + 1],
+            [cx + w / 2 - 1, cy + h / 2 - 1],
+            [cx - w / 2 + 1, cy + h / 2 - 1],
+            [cx - w / 2 + 1, cy - h / 2 + 1],
+        ]
+        points = np.array(points)
+        plt.plot(points[:,0], points[:,1],color='magenta')
+    if codes[2] > codecutoff:
+        points = [
+            [cx - w / 2 + 2, cy - h / 2 + 2],
+            [cx + w / 2 - 2, cy - h / 2 + 2],
+            [cx + w / 2 - 2, cy + h / 2 - 2],
+            [cx - w / 2 + 2, cy + h / 2 - 2],
+            [cx - w / 2 + 2, cy - h / 2 + 2],
+        ]
+        points = np.array(points)
+        plt.plot(points[:,0], points[:,1],color='blue')
+
     if cid < 0x10FFFF:
         pred_char = chr(cid)
     else:
         pred_char = None
+    if pred_char:
+        if codes[0] > codecutoff:
+            # c = 'green'
+            c = 'lightgreen'
+        else:
+            c = 'white'
+        plt.gca().text(cx, cy, pred_char, fontsize=28, color=c, fontproperties=fprop)
+    plt.gca().text(cx - w/2, cy + h/2, '%.2f'%(p*100), color='green')
+    #print(pred_char,cx,cy,w,h,p)
 
-    out_dict['textbox'].append({
-        'cx': float(cx),
-        'cy': float(cy),
-        'w': float(w),
-        'h': float(h),
-        'text': pred_char,
-        'p_loc': float(p_loc),
-        'p_chr': float(p_chr),
-        'p_code1': float(codes[0]),
-        'p_code2': float(codes[1]),
-        'p_code4': float(codes[2]),
-        'p_code8': float(codes[3]),
-    })
-
-with open(target_file+'.json', 'w', encoding='utf-8') as file:
-    json.dump(out_dict, file, indent=2, ensure_ascii=False)
+plt.show()

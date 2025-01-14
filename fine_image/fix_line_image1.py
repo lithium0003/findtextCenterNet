@@ -3,7 +3,12 @@
 import numpy as np
 import sys
 from PIL import Image, ImageDraw
-import json
+
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
 
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
@@ -40,6 +45,8 @@ class Application(tk.Frame):
         self.linesfile = linesfile
         self.lines_all = Image.open(linesfile)
         self.lines_draw = ImageDraw.Draw(self.lines_all)
+        self.v_line = False
+        self.h_line = False
 
         self.gen_mpl_graph(root)
 
@@ -67,8 +74,15 @@ class Application(tk.Frame):
                 self.fig.canvas.mpl_disconnect(self.cid)
                 self.cid = None
                 self.btn0.configure(text='new line')
+                self.btn2.configure(text='new vline')
+                self.btn3.configure(text='new hline')
 
-                self.lines_draw.line(self.newpoints, fill=255, width=3)
+                if self.h_line:
+                    self.lines_draw.line((self.newpoints[0][0],self.newpoints[0][1],self.newpoints[1][0],self.newpoints[0][1]), fill=255, width=3)
+                elif self.v_line:
+                    self.lines_draw.line((self.newpoints[0][0],self.newpoints[0][1],self.newpoints[0][0],self.newpoints[1][1]), fill=255, width=3)
+                else:
+                    self.lines_draw.line(self.newpoints, fill=255, width=3)
                 self.plot_image()
             else:
                 self.fig.canvas.draw_idle()
@@ -94,10 +108,14 @@ class Application(tk.Frame):
         def btn_click0():
             if self.cid is None:
                 self.newpoints = []
+                self.v_line = False
+                self.h_line = False
                 self.cid = self.fig.canvas.mpl_connect('button_press_event', onclick1)
                 self.btn0.configure(text='<new line>')
             else:
                 self.fig.canvas.mpl_disconnect(self.cid)
+                self.v_line = False
+                self.h_line = False
                 self.cid = None
                 self.btn0.configure(text='new line')
 
@@ -111,11 +129,45 @@ class Application(tk.Frame):
                 self.cid = None
                 self.btn1.configure(text='remove area')
 
+        def btn_click2():
+            if self.cid is None:
+                self.newpoints = []
+                self.v_line = True
+                self.h_line = False
+                self.cid = self.fig.canvas.mpl_connect('button_press_event', onclick1)
+                self.btn2.configure(text='<new vline>')
+            else:
+                self.fig.canvas.mpl_disconnect(self.cid)
+                self.v_line = False
+                self.h_line = False
+                self.cid = None
+                self.btn2.configure(text='new vline')
+
+        def btn_click3():
+            if self.cid is None:
+                self.newpoints = []
+                self.v_line = False
+                self.h_line = True
+                self.cid = self.fig.canvas.mpl_connect('button_press_event', onclick1)
+                self.btn3.configure(text='<new hline>')
+            else:
+                self.fig.canvas.mpl_disconnect(self.cid)
+                self.v_line = False
+                self.h_line = False
+                self.cid = None
+                self.btn3.configure(text='new hline')
+
         self.btn0 = tk.Button(frame2, text='new line', command=btn_click0)
         self.btn0.pack(side=tk.LEFT)
 
         self.btn1 = tk.Button(frame2, text='remove area', command=btn_click1)
         self.btn1.pack(side=tk.LEFT)
+
+        self.btn2 = tk.Button(frame2, text='new vline', command=btn_click2)
+        self.btn2.pack(side=tk.LEFT)
+
+        self.btn3 = tk.Button(frame2, text='new hline', command=btn_click3)
+        self.btn3.pack(side=tk.LEFT)
 
         frame2.pack(side=tk.BOTTOM, fill=tk.X)
         frame1.pack(expand=True, fill=tk.BOTH)

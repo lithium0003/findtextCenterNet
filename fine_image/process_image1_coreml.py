@@ -7,6 +7,13 @@ import sys
 from PIL import Image
 import itertools
 import json
+import glob
+
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
 
 from util_func import calc_predid, width, height, scale, feature_dim, modulo_list, sigmoid
 
@@ -14,18 +21,14 @@ if len(sys.argv) < 2:
     print(sys.argv[0],'target.png','(twopass)')
     exit(1)
 
-target_file = sys.argv[1]
+target_files = []
 model_size = 'xl'
 resize = 1.0
 cutoff = 0.4
-if len(sys.argv) > 2:
-    for arg in sys.argv[2:]:
-        if arg.startswith('cutoff='):
-            cutoff = float(arg.split('=')[1])
-            print('cutoff: ', cutoff)
-        elif arg.startswith('x'):
-            resize = float(arg[1:])
-            print('resize: ', resize)
+for arg in sys.argv[1:]:
+    target_files += glob.glob(arg)
+
+target_files = sorted(target_files)
 
 print('load')
 mlmodel_detector = ct.models.MLModel('TextDetector.mlpackage')
@@ -59,10 +62,10 @@ def eval(ds, org_img, cut_off = 0.5):
         features = output['feature']
 
         mask = np.zeros([y_s, x_s], dtype=bool)
-        x_min = int(x_s * 1 / 16) if x_i > 0 else 0
-        x_max = int(x_s * 15 / 16) if x_i + width < org_img.shape[1] else x_s
-        y_min = int(y_s * 1 / 16) if y_i > 0 else 0
-        y_max = int(y_s * 15 / 16) if y_i + height < org_img.shape[0] else y_s
+        x_min = int(x_s * 1 / 8) if x_i > 0 else 0
+        x_max = int(x_s * 7 / 8) + 1 if x_i + width < org_img.shape[1] else x_s
+        y_min = int(y_s * 1 / 8) if y_i > 0 else 0
+        y_max = int(y_s * 7 / 8) + 1 if y_i + height < org_img.shape[0] else y_s
         mask[y_min:y_max, x_min:x_max] = True
 
         line_p = sigmoid(heatmap[0,4,:,:])
@@ -129,11 +132,11 @@ def eval(ds, org_img, cut_off = 0.5):
                 continue
             if inter_vol.max() > area0_vol * 0.75:
                 continue
-            dx = done_area[:,0] - cx
-            dy = done_area[:,1] - cy
-            d = np.sqrt(dx * dx + dy * dy)
-            if d.min() < max(8, min(w,h)/2):
-                continue
+            # dx = done_area[:,0] - cx
+            # dy = done_area[:,1] - cy
+            # d = np.sqrt(dx * dx + dy * dy)
+            # if d.min() < max(8, min(w,h)/2):
+            #     continue
             idx_overlap = np.where(iou > 0)[0]
             for j in idx_overlap:
                 cx1 = done_area[j,0]
@@ -145,7 +148,7 @@ def eval(ds, org_img, cut_off = 0.5):
                 p1y = int(max(cy1 - h1/2, cy - h/2) - (cy - h/2))+1
                 p2y = int(min(cy1 + h1/2, cy + h/2) - (cy - h/2))+1
                 fill_map[p1x:p2x,p1y:p2y] = True
-            if np.mean(fill_map) > 0.7:
+            if np.mean(fill_map) > 0.5:
                 continue
 
         done_area = np.vstack([done_area, np.array([cx, cy, w, h])])
@@ -226,69 +229,72 @@ def decode(glyphfeatures):
     
     return  glyphids, glyphprobs
 
-stepx = width * 1 // 2
-stepy = height * 1 // 2
+stepx = width * 3 // 4
+stepy = height * 3 // 4
 
-im0 = Image.open(target_file).convert('RGB')
-if resize != 1.0:
-    im0 = im0.resize((int(im0.width * resize), int(im0.height * resize)), resample=Image.Resampling.BILINEAR)
-im0 = np.asarray(im0)
+for target_file in target_files:
+    print(target_file)
 
-padx = max(0, (width - im0.shape[1]) % stepx, width - im0.shape[1])
-pady = max(0, (height - im0.shape[0]) % stepy, height - im0.shape[0])
-im0 = np.pad(im0, [[0,pady],[0,padx],[0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
+    im0 = Image.open(target_file).convert('RGB')
+    if resize != 1.0:
+        im0 = im0.resize((int(im0.width * resize), int(im0.height * resize)), resample=Image.Resampling.BILINEAR)
+    im0 = np.asarray(im0)
 
-im = im0
+    padx = max(0, (width - im0.shape[1]) % stepx, width - im0.shape[1])
+    pady = max(0, (height - im0.shape[0]) % stepy, height - im0.shape[0])
+    im0 = np.pad(im0, [[0,pady],[0,padx],[0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
 
-ds0 = []
-for y in range(0, im0.shape[0] - height + 1, stepy):
-    for x in range(0, im0.shape[1] - width + 1, stepx):
-        ds0.append({
-            'input': im[y:y+height,x:x+width,:],
-            'offsetx': x,
-            'offsety': y,
+    im = im0
+
+    ds0 = []
+    for y in range(0, im0.shape[0] - height + 1, stepy):
+        for x in range(0, im0.shape[1] - width + 1, stepx):
+            ds0.append({
+                'input': im[y:y+height,x:x+width,:],
+                'offsetx': x,
+                'offsety': y,
+            })
+
+    locations, glyphfeatures, lines_all, seps_all = eval(ds0, im, cut_off=cutoff)
+    glyphids, glyphprobs = decode(glyphfeatures)
+
+    linesfile = target_file + '.lines.png'
+    lines_all = (lines_all * 255).astype(np.uint8)
+    Image.fromarray(lines_all).save(linesfile)
+
+    sepsfile = target_file + '.seps.png'
+    seps_all = (seps_all * 255).astype(np.uint8)
+    Image.fromarray(seps_all).save(sepsfile)
+
+    out_dict = {}
+    out_dict['textbox'] = []
+    for i, loc in enumerate(locations):
+        p_loc = loc[0]
+        cx = loc[1]
+        cy = loc[2]
+        w = loc[3]
+        h = loc[4]
+        codes = loc[5:]
+        cid = glyphids[i]
+        p_chr = glyphprobs[i]
+        if cid < 0x10FFFF:
+            pred_char = chr(cid)
+        else:
+            pred_char = None
+
+        out_dict['textbox'].append({
+            'cx': float(cx),
+            'cy': float(cy),
+            'w': float(w),
+            'h': float(h),
+            'text': pred_char,
+            'p_loc': float(p_loc),
+            'p_chr': float(p_chr),
+            'p_code1': float(codes[0]),
+            'p_code2': float(codes[1]),
+            'p_code4': float(codes[2]),
+            'p_code8': float(codes[3]),
         })
 
-locations, glyphfeatures, lines_all, seps_all = eval(ds0, im, cut_off=cutoff)
-glyphids, glyphprobs = decode(glyphfeatures)
-
-linesfile = target_file + '.lines.png'
-lines_all = (lines_all * 255).astype(np.uint8)
-Image.fromarray(lines_all).save(linesfile)
-
-sepsfile = target_file + '.seps.png'
-seps_all = (seps_all * 255).astype(np.uint8)
-Image.fromarray(seps_all).save(sepsfile)
-
-out_dict = {}
-out_dict['textbox'] = []
-for i, loc in enumerate(locations):
-    p_loc = loc[0]
-    cx = loc[1]
-    cy = loc[2]
-    w = loc[3]
-    h = loc[4]
-    codes = loc[5:]
-    cid = glyphids[i]
-    p_chr = glyphprobs[i]
-    if cid < 0x10FFFF:
-        pred_char = chr(cid)
-    else:
-        pred_char = None
-
-    out_dict['textbox'].append({
-        'cx': float(cx),
-        'cy': float(cy),
-        'w': float(w),
-        'h': float(h),
-        'text': pred_char,
-        'p_loc': float(p_loc),
-        'p_chr': float(p_chr),
-        'p_code1': float(codes[0]),
-        'p_code2': float(codes[1]),
-        'p_code4': float(codes[2]),
-        'p_code8': float(codes[3]),
-    })
-
-with open(target_file+'.json', 'w', encoding='utf-8') as file:
-    json.dump(out_dict, file, indent=2, ensure_ascii=False)
+    with open(target_file+'.json', 'w', encoding='utf-8') as file:
+        json.dump(out_dict, file, indent=2, ensure_ascii=False)
