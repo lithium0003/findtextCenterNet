@@ -5,6 +5,12 @@ import json
 from PIL import Image
 import numpy as np
 
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
+
 from .processer import process2
 Image.MAX_IMAGE_PIXELS = 1000000000
 
