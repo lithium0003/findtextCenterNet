@@ -481,6 +481,7 @@ cpdef transform_crop2(
     cdef vector[cnp.int32_t] vindexmap = vector[cnp.int32_t](2 * height//scale * width//scale)
     cdef vector[float] voutimage = vector[float](3 * height * width)
     cdef vector[float] vmapimage = vector[float](2 * height//scale * width//scale)
+    cdef vector[cnp.int32_t] code2ref = vector[cnp.int32_t](position_len)
 
     cdef int i,j
 
@@ -530,6 +531,7 @@ cpdef transform_crop2(
     cdef float x1,y1,x2,y2
     cdef float xr1,yr1,xr2,yr2
     cdef int cidx
+    cdef int code_count
     cdef float woffset, hoffset, startx, starty
     cdef float cx,cy,w,h
     cdef int code1,code2
@@ -554,7 +556,20 @@ cpdef transform_crop2(
         vposition[i*4 + 3] = yr2 - yr1
 
     # set center point
-    if position_len > 0 and random_uniform() < 0.5:
+    code_count = -1
+    for i in range(position_len):
+        code2 = vcodelist[i*2 + 1]
+        if code2 > 0:
+            code_count += 1
+            code2ref[code_count] = i
+    if code_count > 0 and random_uniform() < 0.5:
+        cidx = <int>(random_uniform() * <float>code_count)
+        cidx = code2ref[cidx]
+        woffset = random_uniform() * <float>width * 0.75 + <float>width / 8
+        hoffset = random_uniform() * <float>height * 0.75 + <float>height / 8
+        startx = vposition[cidx*4 + 0] - woffset
+        starty = vposition[cidx*4 + 1] - hoffset
+    elif position_len > 0 and random_uniform() < 0.5:
         cidx = <int>(random_uniform() * <float>position_len)
         woffset = random_uniform() * <float>width * 0.75 + <float>width / 8
         hoffset = random_uniform() * <float>height * 0.75 + <float>height / 8

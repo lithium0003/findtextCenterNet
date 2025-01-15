@@ -56,6 +56,7 @@ class FixDataDataset(torch.utils.data.Dataset):
                 code4 = 4 if pos['p_code4'] > 0.5 else 0
                 code8 = 8 if pos['p_code8'] > 0.5 else 0
                 code = code1 + code2 + code4 + code8
+                assert text is None or len(text) == 1, f"{text}{c}"
                 codelist[i,0] = c
                 codelist[i,1] = code
             self.positions.append(position)
