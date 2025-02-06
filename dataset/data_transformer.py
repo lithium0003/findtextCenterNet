@@ -268,105 +268,106 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         self.codes = codes
         self.charparam = charparam
 
-        self.npyfiles = sorted(glob.glob(os.path.join(train_data4, '*.npy')))
         self.realdata = []
-        for i,filename in enumerate(self.npyfiles):
-            basename = os.path.splitext(filename)[0]
-            print(i, '/', len(self.npyfiles), basename)
-            feat = np.load(filename)
-            print(feat.shape)
-            with open(basename+'.json', 'r', encoding='utf-8') as file:
-                data = json.load(file)
+        if train:
+            npyfiles = sorted(glob.glob(os.path.join(train_data4, '*.npy')))
+            for i,filename in enumerate(npyfiles):
+                basename = os.path.splitext(filename)[0]
+                print(i, '/', len(self.npyfiles), basename)
+                feat = np.load(filename)
+                print(feat.shape)
+                with open(basename+'.json', 'r', encoding='utf-8') as file:
+                    data = json.load(file)
 
-            prev_block = 0
-            prev_line = 0
-            feature_values = []
-            target_text = ""
-            feature_idx = []
-            vertical = 0
-            ruby_state = 0
-            for box in data['boxlist']:
-                boxid = box['boxid']
-                blockid = box['blockid']
-                lineid = box['lineid']
-                subidx = box['subidx']
-                subtype = box['subtype']
-                text = box['text']
+                prev_block = 0
+                prev_line = 0
+                feature_values = []
+                target_text = ""
+                feature_idx = []
+                vertical = 0
+                ruby_state = 0
+                for box in data['boxlist']:
+                    boxid = box['boxid']
+                    blockid = box['blockid']
+                    lineid = box['lineid']
+                    subidx = box['subidx']
+                    subtype = box['subtype']
+                    text = box['text']
 
-                if prev_block != blockid:
-                    prev_block = blockid
-                    g = np.zeros([encoder_dim], np.float16)
-                    g[feature_dim+0] = 5 * vertical
-                    g[-1] = 5
-                    feature_values.append(g)
-                    feature_idx.append(len(target_text))
-                    target_text += '\n'
-                    prev_line = -1
-                if prev_line != lineid:
-                    prev_line = lineid
-                    g = np.zeros([encoder_dim], np.float16)
-                    g[feature_dim+0] = 5 * vertical
-                    g[-1] = 5
-                    feature_values.append(g)
-                    feature_idx.append(len(target_text))
-                    target_text += '\n'
+                    if prev_block != blockid:
+                        prev_block = blockid
+                        g = np.zeros([encoder_dim], np.float16)
+                        g[feature_dim+0] = 5 * vertical
+                        g[-1] = 5
+                        feature_values.append(g)
+                        feature_idx.append(len(target_text))
+                        target_text += '\n'
+                        prev_line = -1
+                    if prev_line != lineid:
+                        prev_line = lineid
+                        g = np.zeros([encoder_dim], np.float16)
+                        g[feature_dim+0] = 5 * vertical
+                        g[-1] = 5
+                        feature_values.append(g)
+                        feature_idx.append(len(target_text))
+                        target_text += '\n'
 
-                cur_idx = len(target_text)
-                if subtype & 8 == 8:
-                    space = 1
-                    if is_ascii(text):
-                        target_text += ' '
+                    cur_idx = len(target_text)
+                    if subtype & 8 == 8:
+                        space = 1
+                        if is_ascii(text):
+                            target_text += ' '
+                        else:
+                            target_text += '　'
                     else:
-                        target_text += '　'
-                else:
-                    space = 0
+                        space = 0
 
-                if subtype & (2+4) == 2+4:
-                    if ruby_state == 1:
-                        target_text += '\uFFFA'
-                    ruby_state = 2
-                elif subtype & (2+4) == 2:
+                    if subtype & (2+4) == 2+4:
+                        if ruby_state == 1:
+                            target_text += '\uFFFA'
+                        ruby_state = 2
+                    elif subtype & (2+4) == 2:
+                        if ruby_state == 0:
+                            target_text += '\uFFF9'
+                        ruby_state = 1
+                    elif subtype & (2+4) == 0:
+                        if ruby_state == 2:
+                            target_text += '\uFFFB'
+                        ruby_state = 0
+
+                    if subtype & 16 == 16:
+                        emphasis = 1
+                    else:
+                        emphasis = 0
+
+                    if subtype & 1 == 0:
+                        vertical = 0
+                    else:
+                        vertical = 1
+
                     if ruby_state == 0:
-                        target_text += '\uFFF9'
-                    ruby_state = 1
-                elif subtype & (2+4) == 0:
-                    if ruby_state == 2:
-                        target_text += '\uFFFB'
-                    ruby_state = 0
+                        rubybase = 0
+                        ruby = 0
+                    elif ruby_state == 1:
+                        rubybase = 1
+                        ruby = 0
+                    elif ruby_state == 2:
+                        rubybase = 0
+                        ruby = 1
 
-                if subtype & 16 == 16:
-                    emphasis = 1
-                else:
-                    emphasis = 0
+                    g = np.concatenate([feat[boxid], 5*np.array([vertical,rubybase,ruby,space,emphasis,0], np.float16)])
+                    feature_values.append(g)
+                    feature_idx.append(cur_idx)
+                    if text is None:
+                        target_text += '\uFFFD'
+                    else:
+                        target_text += text
 
-                if subtype & 1 == 0:
-                    vertical = 0
-                else:
-                    vertical = 1
-
-                if ruby_state == 0:
-                    rubybase = 0
-                    ruby = 0
-                elif ruby_state == 1:
-                    rubybase = 1
-                    ruby = 0
-                elif ruby_state == 2:
-                    rubybase = 0
-                    ruby = 1
-
-                g = np.concatenate([feat[boxid], 5*np.array([vertical,rubybase,ruby,space,emphasis,0], np.float16)])
-                feature_values.append(g)
-                feature_idx.append(cur_idx)
-                if text is None:
-                    target_text += '\uFFFD'
-                else:
-                    target_text += text
-
-            self.realdata.append({
-                'feature': np.array(feature_values, dtype=np.float16),
-                'index': np.array(feature_idx),
-                'text': target_text,
-            })
+                self.realdata.append({
+                    'feature': np.array(feature_values, dtype=np.float16),
+                    'index': np.array(feature_idx),
+                    'text': target_text,
+                })
 
         self.text = {}
         for i,filename in enumerate(self.txtfile):
