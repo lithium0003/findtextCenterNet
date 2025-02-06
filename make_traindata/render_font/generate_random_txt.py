@@ -109,12 +109,24 @@ for c in range(0x2300, 0x2400):
 for c in range(0x2460, 0x2500):
     glyphs[c] = chr(c)
 
+#罫線素片
+for c in range(0x2500, 0x2600):
+    glyphs[c] = chr(c)
+
 #その他の記号
 for c in range(0x2600, 0x2700):
     glyphs[c] = chr(c)
 
 #装飾記号
 for c in range(0x2700, 0x27C0):
+    glyphs[c] = chr(c)
+
+#点字図形
+for c in range(0x2800, 0x2900):
+    glyphs[c] = chr(c)
+
+
+for c in range(0x2900, 0x2B00):
     glyphs[c] = chr(c)
 
 #CJKの記号及び句読点
@@ -129,6 +141,13 @@ for c in range(0x309D, 0x30A0):
 
 #片仮名
 for c in range(0x30FD, 0x3100):
+    glyphs[c] = chr(c)
+
+for c in range(0x31F0, 0x3200):
+    glyphs[c] = chr(c)
+
+#踊り字
+for c in [0x303B, 0x3033, 0x3034, 0x3035, 0x4EDD]:
     glyphs[c] = chr(c)
 
 #囲みCJK文字・月
@@ -161,6 +180,12 @@ for c in range(0x27F0, 0x2800):
     glyphs[c] = chr(c)
 
 for c in ['•','◦','●','○','◎','◉','▲','△','﹅','﹆','〰']:
+    glyphs[ord(c)] = c
+
+for c in [0x3099,0x309A,0x309B,0x309C]:
+    glyphs[c] = chr(c)
+
+for c in ['￥','￡','̀','́','¨','´','￣']:
     glyphs[ord(c)] = c
 
 kakko_list = '''
@@ -1034,6 +1059,11 @@ def get_random_text(rng):
         else:
             # 0.05
             return get_random_hendwrite(rng)
+
+def get_random_text2(rng):
+    if rng.random() < 0.9:
+        return get_random_char(rng)
+    return get_random_hendwrite(rng)
 
 if __name__ == '__main__':
     from matplotlib import rcParams

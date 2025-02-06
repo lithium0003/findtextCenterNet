@@ -8,6 +8,7 @@ from PIL import Image
 import itertools
 import json
 import glob
+import subprocess
 
 try:
     from pillow_heif import register_heif_opener
@@ -34,17 +35,59 @@ print('load')
 mlmodel_detector = ct.models.MLModel('TextDetector.mlpackage')
 mlmodel_decoder = ct.models.MLModel('CodeDecoder.mlpackage')
 
+def cluster_dist(hist):
+    sum_y = np.sum(hist)
+    if sum_y == 0:
+        return 0
+
+    i = np.arange(hist.shape[0])
+    v = hist * i
+    mean_y = np.sum(v) / sum_y
+    s1 = np.sum(hist[:int(mean_y+0.5)])
+    s2 = np.sum(hist[int(mean_y+0.5):])
+    if s1 == 0:
+        return 0
+    if s2 == 0:
+        return 0
+    g1 = v[:int(mean_y+0.5)]
+    g2 = v[int(mean_y+0.5):]
+    k1 = np.sum(g1) / s1
+    k2 = np.sum(g2) / s2
+    dist1 = 256.0
+    dist2 = abs(k1 - k2)
+    while dist1 != dist2:
+        dist1 = dist2
+        s1 = np.sum(hist[np.abs(i - k1) < np.abs(i - k2)])
+        s2 = np.sum(hist[np.abs(i - k1) >= np.abs(i - k2)])
+        if s1 == 0:
+            return 0
+        if s2 == 0:
+            return 0
+        g1 = v[np.abs(i - k1) < np.abs(i - k2)]
+        g2 = v[np.abs(i - k1) >= np.abs(i - k2)]
+        k1 = np.sum(g1) / s1
+        k2 = np.sum(g2) / s2
+        dist2 = abs(k1 - k2)
+    return dist1
+
+def imageHist(im):
+    maxPeakDiff = -1
+    maxPeakDiff = max(maxPeakDiff, cluster_dist(np.histogram(im[:,:,0], bins=256, range=(0,256))[0]))
+    maxPeakDiff = max(maxPeakDiff, cluster_dist(np.histogram(im[:,:,1], bins=256, range=(0,256))[0]))
+    maxPeakDiff = max(maxPeakDiff, cluster_dist(np.histogram(im[:,:,2], bins=256, range=(0,256))[0]))
+    return maxPeakDiff
+
 def eval(ds, org_img, cut_off = 0.5):
     print(org_img.shape)
     print("test")
 
     locations = [np.zeros(5+4)]
     glyphfeatures = [np.zeros(feature_dim, dtype=np.float32)]
-    lines_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale])
-    seps_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale])
+    lines_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale], dtype=np.float32)
+    seps_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale], dtype=np.float32)
     code_all = []
     for _ in range(4):
-        code_all.append(np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale]))
+        code_all.append(np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale], dtype=np.float32))
 
     for n, inputs in enumerate(ds):
         print(n, '/', len(ds))
@@ -104,8 +147,25 @@ def eval(ds, org_img, cut_off = 0.5):
     locations = np.array(locations)
     glyphfeatures = np.array(glyphfeatures)
 
+    hists = []
+    for i in range(locations.shape[0]):
+        p = locations[i,0]
+        if p < cut_off:
+            continue
+        cx = locations[i,1]
+        cy = locations[i,2]
+        w = locations[i,3]
+        h = locations[i,4]
+        x_min = int(cx - w/2) - 1
+        x_max = int(cx + w/2) + 2
+        y_min = int(cy - h/2) - 1
+        y_max = int(cy + h/2) + 2
+        hists.append(imageHist(org_img[y_min:y_max,x_min:x_max,:]))
+    th_hist = np.median(hists) / 10
+
     idx = np.argsort(-locations[:,0])
-    done_area = np.zeros([0,4])
+    donefill_map = np.empty([org_img.shape[0], org_img.shape[1]], dtype=int)
+    donefill_map.fill(-1)
     selected_idx = []
     for i in idx:
         p = locations[i,0]
@@ -115,43 +175,51 @@ def eval(ds, org_img, cut_off = 0.5):
         cy = locations[i,2]
         w = locations[i,3]
         h = locations[i,4]
+        x_min = max(0, int(cx - w/2))
+        x_max = min(org_img.shape[1] - 1, int(cx + w/2) + 1)
+        y_min = max(0, int(cy - h/2))
+        y_max = min(org_img.shape[0] - 1, int(cy + h/2) + 1)
+        if imageHist(org_img[y_min:y_max,x_min:x_max,:]) < th_hist:
+            continue
         area0_vol = w * h
-        fill_map = np.zeros([int(w), int(h)], dtype=bool)
-        if done_area.size > 0:
-            area1_vol = done_area[:,2] * done_area[:,3]
-            inter_xmin = np.maximum(cx - w / 2, done_area[:,0] - done_area[:,2] / 2)
-            inter_ymin = np.maximum(cy - h / 2, done_area[:,1] - done_area[:,3] / 2)
-            inter_xmax = np.minimum(cx + w / 2, done_area[:,0] + done_area[:,2] / 2)
-            inter_ymax = np.minimum(cy + h / 2, done_area[:,1] + done_area[:,3] / 2)
-            inter_w = np.maximum(inter_xmax - inter_xmin, 0.)
-            inter_h = np.maximum(inter_ymax - inter_ymin, 0.)
+        positive_count = np.sum(np.abs(org_img[y_min:y_max,x_min:x_max,:] - np.mean(org_img[y_min:y_max,x_min:x_max,:], axis=(0,1), keepdims=True)) > th_hist) / org_img.shape[2]
+        if positive_count / area0_vol < 0.1:
+            continue
+        valid = True
+        for di in np.unique(donefill_map[y_min:y_max,x_min:x_max]):
+            if di < 0:
+                continue
+            p_cx = locations[di,1]
+            p_cy = locations[di,2]
+            p_w = locations[di,3]
+            p_h = locations[di,4]
+
+            area1_vol = p_w * p_h
+            inter_xmin = max(cx - w / 2, p_cx - p_w / 2)
+            inter_ymin = max(cy - h / 2, p_cy - p_h / 2)
+            inter_xmax = min(cx + w / 2, p_cx + p_w / 2)
+            inter_ymax = min(cy + h / 2, p_cy + p_h / 2)
+            inter_w = max(inter_xmax - inter_xmin, 0.)
+            inter_h = max(inter_ymax - inter_ymin, 0.)
             inter_vol = inter_w * inter_h
             union_vol = area0_vol + area1_vol - inter_vol
-            iou = np.where(union_vol > 0., inter_vol / union_vol, 0.)
-            if iou.max() > 0.5:
-                continue
-            if inter_vol.max() > area0_vol * 0.75:
-                continue
-            # dx = done_area[:,0] - cx
-            # dy = done_area[:,1] - cy
-            # d = np.sqrt(dx * dx + dy * dy)
-            # if d.min() < max(8, min(w,h)/2):
-            #     continue
-            idx_overlap = np.where(iou > 0)[0]
-            for j in idx_overlap:
-                cx1 = done_area[j,0]
-                cy1 = done_area[j,1]
-                w1 = done_area[j,2]
-                h1 = done_area[j,3]
-                p1x = int(max(cx1 - w1/2, cx - w/2) - (cx - w/2))
-                p2x = int(min(cx1 + w1/2, cx + w/2) - (cx - w/2))
-                p1y = int(max(cy1 - h1/2, cy - h/2) - (cy - h/2))+1
-                p2y = int(min(cy1 + h1/2, cy + h/2) - (cy - h/2))+1
-                fill_map[p1x:p2x,p1y:p2y] = True
-            if np.mean(fill_map) > 0.5:
-                continue
+            if union_vol > 0:
+                iou = inter_vol / union_vol
+            else:
+                iou = 0
 
-        done_area = np.vstack([done_area, np.array([cx, cy, w, h])])
+            if iou > 0.25:
+                valid = False
+                break
+            if inter_vol > area0_vol * 0.95:
+                valid = False
+                break
+            if np.sum(donefill_map[y_min:y_max,x_min:x_max] == di) > area1_vol * 0.95:
+                valid = False
+                break
+        if not valid:
+            continue
+        donefill_map[y_min:y_max,x_min:x_max] = np.where(donefill_map[y_min:y_max,x_min:x_max] < 0, i, donefill_map[y_min:y_max,x_min:x_max])
         selected_idx.append(i)
 
     idx = selected_idx
@@ -194,7 +262,7 @@ def eval(ds, org_img, cut_off = 0.5):
             for k in range(4):
                 locations[i,5+k] = max(np.max(code_all[k][y_min:y_max,x_min:x_max]), locations[i,5+k])
 
-    return locations, glyphfeatures, lines_all, seps_all
+    return locations.astype(np.float32), glyphfeatures, lines_all, seps_all
 
 def decode(glyphfeatures):
     print("decode")
@@ -255,32 +323,98 @@ for target_file in target_files:
                 'offsety': y,
             })
 
-    locations, glyphfeatures, lines_all, seps_all = eval(ds0, im, cut_off=cutoff)
+    locations, glyphfeatures, lines, seps = eval(ds0, im, cut_off=cutoff)
     glyphids, glyphprobs = decode(glyphfeatures)
 
     linesfile = target_file + '.lines.png'
-    lines_all = (lines_all * 255).astype(np.uint8)
+    lines_all = (lines * 255).astype(np.uint8)
     Image.fromarray(lines_all).save(linesfile)
 
     sepsfile = target_file + '.seps.png'
-    seps_all = (seps_all * 255).astype(np.uint8)
+    seps_all = (seps * 255).astype(np.uint8)
     Image.fromarray(seps_all).save(sepsfile)
+
+    print('construct data')
+    h, w = lines.shape
+    input_binary = int(0).to_bytes(4, 'little')
+    input_binary += int(w).to_bytes(4, 'little')
+    input_binary += int(h).to_bytes(4, 'little')
+    input_binary += lines.tobytes()
+    input_binary += seps.tobytes()
+    input_binary += int(locations.shape[0]).to_bytes(4, 'little')
+    input_binary += locations[:,1:].tobytes()
+
+    print('run')
+    result = subprocess.run('textline_detect/linedetect', input=input_binary, stdout=subprocess.PIPE).stdout
+    detected_boxes = []
+    p = 0
+    max_block = 0
+    count = int.from_bytes(result[p:p+4], byteorder='little')
+    p += 4
+    for i in range(count):
+        id = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        p += 4
+        block = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        max_block = max(max_block, block)
+        p += 4
+        idx = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        p += 4
+        subidx = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        p += 4
+        subtype = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        p += 4
+        detected_boxes.append((id,block,idx,subidx,subtype))
+
+    print(detected_boxes)
 
     out_dict = {}
     out_dict['textbox'] = []
-    for i, loc in enumerate(locations):
-        p_loc = loc[0]
-        cx = loc[1]
-        cy = loc[2]
-        w = loc[3]
-        h = loc[4]
-        codes = loc[5:]
-        cid = glyphids[i]
-        p_chr = glyphprobs[i]
+    for id, block, idx, subidx, subtype in detected_boxes:
+        if id < 0:
+            continue
+        p_loc = locations[id, 0]
+        cx = locations[id, 1]
+        cy = locations[id, 2]
+        w = locations[id, 3]
+        h = locations[id, 4]
+        codes = locations[id, 5:]
+        cid = glyphids[id]
+        p_chr = glyphprobs[id]
+        g = glyphfeatures[id]
         if cid < 0x10FFFF:
             pred_char = chr(cid)
         else:
             pred_char = None
+
+        if subtype & 2+4 == 2:
+            if codes[1] < 0.5:
+                codes[1] = 1
+            if codes[0] > 0.5:
+                codes[0] = 0
+        elif subtype & 2+4 == 2+4:
+            if codes[0] < 0.5:
+                codes[0] = 1
+            if codes[1] > 0.5:
+                codes[1] = 0
+        else:
+            if codes[0] > 0.5:
+                codes[0] = 0
+            if codes[1] > 0.5:
+                codes[1] = 0
+
+        if subtype & 8 == 8:
+            if codes[3] < 0.5:
+                codes[3] = 1
+        else:
+            if codes[3] > 0.5:
+                codes[3] = 0
+
+        if subtype & 16 == 16:
+            if codes[2] < 0.5:
+                codes[2] = 1
+        else:
+            if codes[2] > 0.5:
+                codes[2] = 0
 
         out_dict['textbox'].append({
             'cx': float(cx),

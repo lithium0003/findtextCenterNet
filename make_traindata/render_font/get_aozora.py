@@ -18,9 +18,11 @@ with open('data/codepoints.csv') as f:
         d2 = int(d2)
         d3 = int(d3)
         c = row[1]
-        txt = ''
-        for i in range(len(c) // 4):
-            txt += chr(int(c[i*4:(i+1)*4], 16))
+        c = int(c, 16)
+        if c > 0x10FFFF:
+            txt = chr((c & 0xFFFF0000) >> 16) + chr((c & 0xFFFF))
+        else:
+            txt = chr(c)
         code_list['%d-%02d-%02d'%(d1,d2,d3)] = txt
 
 def get_aozora_urls():
@@ -42,7 +44,7 @@ def get_aozora_urls():
                     continue
                 if row[idx].startswith('https://www.aozora.gr.jp/cards/'):
                     xhtml_urls.append(row[idx])
-    return xhtml_urls
+    return sorted(set(xhtml_urls))
 
 class MyHTMLParser(HTMLParser):
     def __init__(self, *args, **kwargs):
@@ -86,6 +88,8 @@ def get_contents(url):
             else:
                 maintext.append(line)
     maintext = '\n'.join(maintext)
+    maintext = re.sub(r'／″＼', '〴〵', maintext)
+    maintext = re.sub(r'／＼', '〳〵', maintext)
     maintext = re.sub(r'<ruby><rb>(.*?)</rb>.*?<rt>(.*?)</rt>.*?</ruby>', '\uFFF9\\1\uFFFA\\2\uFFFB', maintext)
     m = True
     while m:

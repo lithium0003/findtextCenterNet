@@ -5,18 +5,16 @@ import urllib.request
 import os
 
 # Wikipedia API
-WIKI_URL_JP = "https://ja.wikipedia.org/w/api.php?"
-WIKI_URL_EN = "https://en.wikipedia.org/w/api.php?"
-WIKI_URL_KO = "https://ko.wikipedia.org/w/api.php?"
+WIKI_URL = "https://%s.wikipedia.org/w/api.php?"
 
 # 記事を1件、ランダムに取得するクエリのパラメータを生成する
-def set_url_random():
+def set_url_random(count=1):
     params = {
         'action': 'query',
         'format': 'json',
         'list': 'random', #ランダムに取得
         'rnnamespace': 0, #標準名前空間を指定する
-        'rnlimit': 1 #結果数の上限を1にする(Default: 1)
+        'rnlimit': count, #結果数の上限
     }
     return params
 
@@ -32,26 +30,16 @@ def set_url_extract(pageid):
     return params
 
 #ランダムな記事IDを取得
-def get_random_wordid(en=False,ko=False):
-    if en:
-        request_url = WIKI_URL_EN
-    elif ko:
-        request_url = WIKI_URL_KO
-    else:
-        request_url = WIKI_URL_JP
-    request_url += urllib.parse.urlencode(set_url_random())
+def get_random_wordid(lang='ja', count=1):
+    request_url = WIKI_URL%lang
+    request_url += urllib.parse.urlencode(set_url_random(count))
     html = urllib.request.urlopen(request_url, timeout=10)
     html_json = json.loads(html.read().decode('utf-8'))
-    pageid = (html_json['query']['random'][0])['id']
+    pageid = [page['id'] for page in html_json['query']['random']]
     return pageid
 
-def get_word_content(pageid, en=False,ko=False):
-    if en:
-        request_url = WIKI_URL_EN
-    elif ko:
-        request_url = WIKI_URL_KO
-    else:
-        request_url = WIKI_URL_JP
+def get_word_content(pageid, lang='ja'):
+    request_url = WIKI_URL%lang
     request_url += urllib.parse.urlencode(set_url_extract(pageid))
     html = urllib.request.urlopen(request_url, timeout=10)
     html_json = json.loads(html.read().decode('utf-8'))
@@ -59,7 +47,7 @@ def get_word_content(pageid, en=False,ko=False):
     return explaintext
 
 if __name__ == '__main__':
-    pageid = get_random_wordid()
-    extract = get_word_content(pageid)
+    pageid = get_random_wordid(count=1)
+    extract = get_word_content(pageid[0])
     print(extract)
 

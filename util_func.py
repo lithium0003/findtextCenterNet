@@ -1,5 +1,6 @@
 import numpy as np
 import re
+import torch
 
 modulo_list = [1091,1093,1097]
 width = 768
@@ -78,6 +79,16 @@ def calcHist(im):
 
     return maxPeakDiff
 
+def pow_mod(a, b, n):
+    x = 1
+    y = a
+    while b > 0:
+        if b % 2 == 1:
+            x = (x * y) % n
+        y = (y * y) % n
+        b //= 2
+    return x % n
+
 def calc_predid(*args):
     m = modulo_list
     b = args
@@ -87,7 +98,10 @@ def calc_predid(*args):
     for k in range(len(m)):
         u = 0
         for j in range(k):
-            w = t[j]
+            if torch.is_tensor(t[j]):
+                w = t[j].clone()
+            else:
+                w = t[j]
             for i in range(j):
                 w *= m[i]
             u += w

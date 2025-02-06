@@ -1,56 +1,16 @@
-#!/usr/bin/env python3
-
 import torch
-
 import numpy as np
-import sys
-from PIL import Image
-import itertools
-import json
+import subprocess
 
-try:
-    from pillow_heif import register_heif_opener
-    register_heif_opener()
-except ImportError:
-    pass
+from util_func import width, height, scale, feature_dim, sigmoid
+from models.detector import TextDetectorModel, CenterNetDetector
 
-from util_func import calc_predid, width, height, scale, feature_dim, sigmoid
-from models.detector import TextDetectorModel, CenterNetDetector, CodeDecoder
-
-if len(sys.argv) < 2:
-    print(sys.argv[0],'target.png','(twopass)')
-    exit(1)
-
-target_file = sys.argv[1]
-model_size = 'xl'
-resize = 1.0
-cutoff = 0.4
-if len(sys.argv) > 2:
-    for arg in sys.argv[2:]:
-        if arg.startswith('cutoff='):
-            cutoff = float(arg.split('=')[1])
-            print('cutoff: ', cutoff)
-        elif arg == 's':
-            model_size = 's'
-            print('model s')
-        elif arg == 'm':
-            model_size = 'm'
-            print('model m')
-        elif arg == 'l':
-            model_size = 'l'
-            print('model l')
-        elif arg == 'xl':
-            model_size = 'xl'
-            print('model xl')
-        elif arg.startswith('x'):
-            resize = float(arg[1:])
-            print('resize: ', resize)
-
-model = TextDetectorModel(model_size=model_size)
+print('load')
+model = TextDetectorModel()
 data = torch.load('model.pt', map_location="cpu", weights_only=True)
 model.load_state_dict(data['model_state_dict'])
+
 detector = CenterNetDetector(model.detector)
-decoder = CodeDecoder(model.decoder)
 if torch.cuda.is_available():
     device = 'cuda'
 elif torch.backends.mps.is_available():
@@ -59,9 +19,10 @@ else:
     device = 'cpu'
 device = torch.device(device)
 detector.to(device=device)
-decoder.to(device=device)
 detector.eval()
-decoder.eval()
+
+stepx = width * 3 // 4
+stepy = height * 3 // 4
 
 def cluster_dist(hist):
     sum_y = np.sum(hist)
@@ -111,11 +72,11 @@ def eval(ds, org_img, cut_off = 0.5):
 
     locations = [np.zeros(5+4)]
     glyphfeatures = [np.zeros(feature_dim, dtype=np.float32)]
-    lines_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale])
-    seps_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale])
+    lines_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale], dtype=np.float32)
+    seps_all = np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale], dtype=np.float32)
     code_all = []
     for _ in range(4):
-        code_all.append(np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale]))
+        code_all.append(np.zeros([org_img.shape[0] // scale, org_img.shape[1] // scale], dtype=np.float32))
 
     for n, inputs in enumerate(ds):
         print(n, '/', len(ds))
@@ -126,11 +87,13 @@ def eval(ds, org_img, cut_off = 0.5):
         x_s = width // scale
         y_s = height // scale
 
-        images = torch.from_numpy(inputs['input'] / 255.).permute(0,3,1,2).to(device=device)
+        # t_start: float = perf_counter()
+        images = torch.from_numpy(inputs['input']).permute(0,3,1,2).to(device=device)
         with torch.no_grad():
             heatmap, features = detector(images)
             heatmap = heatmap.cpu().numpy()
             features = features.cpu().numpy()
+        # print(f"Time : {(perf_counter() - t_start) * 1.0e3} ms")
 
         mask = np.zeros([y_s, x_s], dtype=bool)
         x_min = int(x_s * 1 / 8) if x_i > 0 else 0
@@ -250,18 +213,6 @@ def eval(ds, org_img, cut_off = 0.5):
         donefill_map[y_min:y_max,x_min:x_max] = np.where(donefill_map[y_min:y_max,x_min:x_max] < 0, i, donefill_map[y_min:y_max,x_min:x_max])
         selected_idx.append(i)
 
-    idx = selected_idx
-    selected_idx = []
-    for i in idx:
-        cx = locations[i,1]
-        cy = locations[i,2]
-        x = int(cx / scale)
-        y = int(cy / scale)
-        if x >= 0 and x < org_img.shape[1] // scale and y >= 0 and y < org_img.shape[0] // scale:
-            if seps_all[y,x] > 0.1:
-                continue
-        selected_idx.append(i)
-
     if len(selected_idx) > 0:
         selected_idx = np.array(selected_idx)
 
@@ -276,12 +227,12 @@ def eval(ds, org_img, cut_off = 0.5):
         cy = locations[i,2]
         w = locations[i,3]
         h = locations[i,4]
-        x = int(cx / scale)
-        y = int(cy / scale)
         x_min = int(cx / scale - 1)
         y_min = int(cy / scale - 1)
         x_max = int(cx / scale + 1) + 1
         y_max = int(cy / scale + 1) + 1
+        x = int(cx / scale)
+        y = int(cy / scale)
         if x >= 0 and x < org_img.shape[1] // scale and y >= 0 and y < org_img.shape[0] // scale:
             x_min = max(0, x_min)
             y_min = max(0, y_min)
@@ -290,105 +241,66 @@ def eval(ds, org_img, cut_off = 0.5):
             for k in range(4):
                 locations[i,5+k] = max(np.max(code_all[k][y_min:y_max,x_min:x_max]), locations[i,5+k])
 
-    return locations, glyphfeatures, lines_all, seps_all
+    return locations.astype(np.float32), glyphfeatures, lines_all, seps_all
 
-def decode(glyphfeatures):
-    print("decode")
-    glyphids = []
-    glyphprobs = []
-    for data in glyphfeatures:
-        with torch.no_grad():
-            decode_outputs = decoder(torch.from_numpy(data).to(device=device).unsqueeze(0))
-        p = []
-        id = []
-        for k,prob in enumerate(decode_outputs):
-            prob = prob[0].cpu().numpy()
-            idx = np.where(prob > 0.01)[0]
-            if len(idx) == 0:
-                idx = [np.argmax(prob)]
-            if k == 0:
-                for i in idx[:3]:
-                    id.append([i])
-                    p.append([prob[i]])
-            else:
-                id = [i1 + [i2] for i1, i2 in itertools.product(id, idx[:3])]
-                p = [i1 + [prob[i2]] for i1, i2 in itertools.product(p, idx[:3])]
-        p = [np.exp(np.mean([np.log(prob) for prob in probs])) for probs in p]
-        i = [calc_predid(*ids) for ids in id]
-        g = sorted([(prob, id) for prob,id in zip(p,i)], key=lambda x: x[0] if x[1] <= 0x10FFFF else 0, reverse=True)
-        prob,idx = g[0]
-        glyphids.append(idx)
-        glyphprobs.append(prob)
+def call_model(im):
+    if im.shape[0] == 3:
+        im = im.transpose(1,2,0)
+    padx = max(0, (width - im.shape[1]) % stepx, width - im.shape[1])
+    pady = max(0, (height - im.shape[0]) % stepy, height - im.shape[0])
+    im = np.pad(im, [[0,pady],[0,padx],[0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
+    im = im.astype(np.float32)
 
-    glyphids = np.atleast_1d(glyphids)
-    glyphprobs = np.atleast_1d(glyphprobs)
-    
-    return  glyphids, glyphprobs
+    ds0 = []
+    for y in range(0, im.shape[0] - height + 1, stepy):
+        for x in range(0, im.shape[1] - width + 1, stepx):
+            ds0.append({
+                'input': np.expand_dims(im[y:y+height,x:x+width,:], 0),
+                'offsetx': x,
+                'offsety': y,
+            })
 
-stepx = width * 1 // 2
-stepy = height * 1 // 2
+    locations, glyphfeatures, lines, seps = eval(ds0, im, cut_off=0.4)
 
-im0 = Image.open(target_file).convert('RGB')
-if resize != 1.0:
-    im0 = im0.resize((int(im0.width * resize), int(im0.height * resize)), resample=Image.Resampling.BILINEAR)
-#im0 = im0.filter(ImageFilter.SHARPEN)
-im0 = np.asarray(im0)
+    print('construct data')
+    h, w = lines.shape
+    input_binary = int(0).to_bytes(4, 'little')
+    input_binary += int(w).to_bytes(4, 'little')
+    input_binary += int(h).to_bytes(4, 'little')
+    input_binary += lines.tobytes()
+    input_binary += seps.tobytes()
+    input_binary += int(locations.shape[0]).to_bytes(4, 'little')
+    input_binary += locations[:,1:].tobytes()
 
-padx = max(0, (width - im0.shape[1]) % stepx, width - im0.shape[1])
-pady = max(0, (height - im0.shape[0]) % stepy, height - im0.shape[0])
-im0 = np.pad(im0, [[0,pady],[0,padx],[0,0]], 'constant', constant_values=((255,255),(255,255),(255,255)))
+    print('run')
+    result = subprocess.run('../textline_detect/linedetect', input=input_binary, stdout=subprocess.PIPE).stdout
+    detected_boxes = []
+    p = 0
+    max_block = 0
+    count = int.from_bytes(result[p:p+4], byteorder='little')
+    p += 4
+    for i in range(count):
+        id = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        p += 4
+        block = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        max_block = max(max_block, block)
+        p += 4
+        idx = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        p += 4
+        subidx = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        p += 4
+        subtype = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        p += 4
+        detected_boxes.append((id,block,idx,subidx,subtype))
 
-im = im0.astype(np.float32)
+    glyph = []
+    loc = []
+    vert = []
+    for id, block, idx, subidx, subtype in detected_boxes:
+        if id < 0:
+            continue
+        loc.append(locations[id])
+        glyph.append(glyphfeatures[id])
+        vert.append(1 if (subtype & 1) == 1 else 0)
 
-ds0 = []
-for y in range(0, im0.shape[0] - height + 1, stepy):
-    for x in range(0, im0.shape[1] - width + 1, stepx):
-        ds0.append({
-            'input': np.expand_dims(im[y:y+height,x:x+width,:], 0),
-            'offsetx': x,
-            'offsety': y,
-        })
-
-locations, glyphfeatures, lines_all, seps_all = eval(ds0, im, cut_off=cutoff)
-glyphids, glyphprobs = decode(glyphfeatures)
-
-linesfile = target_file + '.lines.png'
-lines_all = (lines_all * 255).astype(np.uint8)
-Image.fromarray(lines_all).save(linesfile)
-
-sepsfile = target_file + '.seps.png'
-seps_all = (seps_all * 255).astype(np.uint8)
-Image.fromarray(seps_all).save(sepsfile)
-
-out_dict = {}
-out_dict['textbox'] = []
-for i, loc in enumerate(locations):
-    p_loc = loc[0]
-    cx = loc[1]
-    cy = loc[2]
-    w = loc[3]
-    h = loc[4]
-    codes = loc[5:]
-    cid = glyphids[i]
-    p_chr = glyphprobs[i]
-    if cid < 0x10FFFF:
-        pred_char = chr(cid)
-    else:
-        pred_char = None
-
-    out_dict['textbox'].append({
-        'cx': float(cx),
-        'cy': float(cy),
-        'w': float(w),
-        'h': float(h),
-        'text': pred_char,
-        'p_loc': float(p_loc),
-        'p_chr': float(p_chr),
-        'p_code1': float(codes[0]),
-        'p_code2': float(codes[1]),
-        'p_code4': float(codes[2]),
-        'p_code8': float(codes[3]),
-    })
-
-with open(target_file+'.json', 'w', encoding='utf-8') as file:
-    json.dump(out_dict, file, indent=2, ensure_ascii=False)
+    return np.array(loc), np.array(glyph), np.array(vert)

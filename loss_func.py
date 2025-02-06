@@ -179,3 +179,40 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
         'correct': correct,
         'total': total,
     }
+
+def loss_function3(outputs, labelcode, smoothing=0.1):
+    target_ids = []
+    for modulo in modulo_list:
+        target_id1 = labelcode % modulo
+        target_ids.append(target_id1)
+
+    mask = labelcode > 0
+    loss = 0.
+    for target_id1, decoder_id1 in zip(target_ids, outputs):
+        id1_loss = torch.nn.functional.cross_entropy(decoder_id1.permute(0,2,1), target_id1, reduction='none', label_smoothing=smoothing)
+        loss += torch.masked_select(id1_loss, mask).mean()
+
+    pred_ids = []
+    for decoder_id1 in outputs:
+        pred_id1 = torch.argmax(decoder_id1, dim=-1)
+        pred_id1 = torch.masked_select(pred_id1, mask)
+        pred_ids.append(pred_id1)
+
+    target_ids = []
+    for modulo in modulo_list:
+        target_id1 = labelcode % modulo
+        target_id1 = torch.masked_select(target_id1, mask)
+        target_ids.append(target_id1)
+
+    correct = torch.zeros_like(pred_ids[0])
+    for p,t in zip(pred_ids,target_ids):
+        correct += p == t
+
+    total = torch.ones_like(correct).sum()
+    correct = (correct == 3).sum()
+
+    return {
+        'loss': loss,
+        'correct': correct,
+        'total': total,
+    }

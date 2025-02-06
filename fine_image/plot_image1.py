@@ -6,6 +6,12 @@ from PIL import Image
 import json
 import os
 
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
+
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
 

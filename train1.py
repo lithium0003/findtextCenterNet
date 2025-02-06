@@ -22,7 +22,6 @@ iters_to_accumulate=1
 iters_to_sploss=0
 output_iter=None
 scheduler_gamma = 0.95
-continue_train = False
 model_size = 'xl'
 decoder_only = False
 
@@ -78,10 +77,6 @@ class RunningLoss(torch.nn.modules.Module):
         return ret
 
 def train():
-    if continue_train:
-        from load_object import download
-        download()
-
     training_dataset = get_dataset(train=True)
     # training_loader = DataLoader(training_dataset, batch_size=batch, num_workers=4)
     training_loader = MultiLoader(training_dataset.batched(batch, partial=False), workers=8)
@@ -273,8 +268,6 @@ if __name__=='__main__':
                 output_iter = int(arg.split('=')[1])
             elif arg.startswith('--gamma'):
                 scheduler_gamma = float(arg.split('=')[1])
-            elif arg.startswith('--continue'):
-                continue_train = arg.split('=')[1].lower() == 'true'
             elif arg.startswith('--model'):
                 model_size = arg.split('=')[1].lower()
             elif arg.startswith('--decoder'):

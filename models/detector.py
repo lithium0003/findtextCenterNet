@@ -285,7 +285,7 @@ class CenterNetDetector(nn.Module):
         super().__init__(*args, **kwargs)
         self.detector = detector
         self.scale = scale
-        self.minval = torch.tensor(-1000.)
+        self.minval = torch.tensor(float("-inf"))
         
     def forward(self, x):
         if self.scale:

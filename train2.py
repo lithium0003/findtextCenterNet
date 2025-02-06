@@ -24,7 +24,6 @@ output_iter=None
 weight1=1
 weight2=1
 scheduler_gamma = 1.0
-continue_train = False
 model_size = 'xl'
 decoder_only = False
 
@@ -82,10 +81,6 @@ class RunningLoss(torch.nn.modules.Module):
         return ret
 
 def train():
-    if continue_train:
-        from load_object import download
-        download()
-
     training_dataset = FixDataDataset('train_data2', 1000)
     training_loader = DataLoader(training_dataset, batch_size=batch, shuffle=True, num_workers=8, drop_last=True)
 
@@ -292,8 +287,6 @@ if __name__=='__main__':
                 weight1 = float(arg.split('=')[1])
             elif arg.startswith('--weight2'):
                 weight2 = float(arg.split('=')[1])
-            elif arg.startswith('--continue'):
-                continue_train = arg.split('=')[1].lower() == 'true'
             elif arg.startswith('--model'):
                 model_size = arg.split('=')[1].lower()
             elif arg.startswith('--decoder'):
