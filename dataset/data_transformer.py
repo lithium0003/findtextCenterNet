@@ -363,6 +363,9 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                     else:
                         target_text += text
 
+                feature_values.append(np.zeros([encoder_dim], np.float16))
+                feature_idx.append(len(target_text))
+
                 self.realdata.append({
                     'feature': np.array(feature_values, dtype=np.float16),
                     'index': np.array(feature_idx),
