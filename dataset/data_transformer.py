@@ -436,13 +436,13 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             if out_count > max_decoderlen-3:
                 break
         if end_idx < index.shape[0]:
-            g = self.realdata[idx]['feature'][end_idx-1]
+            g = self.realdata[idx]['feature'][end_idx]
             # ruby, rubybase
             if g[-4] > 0 or g[-5] > 0:
-                j = end_idx
+                j = end_idx+1
                 while j < index.shape[0] and (g[-4] > 0 or g[-5] > 0):
                     g = self.realdata[idx]['feature'][j]
-                    end_idx = j+1
+                    end_idx = j
                     j += 1
         feat = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
         txt = text[index[start_idx]:index[end_idx]]
