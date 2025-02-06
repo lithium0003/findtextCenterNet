@@ -447,6 +447,9 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                     g = self.realdata[idx]['feature'][j]
                     end_idx = j
                     j += 1
+        if end_idx-start_idx > max_encoderlen-2:
+            end_idx = start_idx+max_encoderlen-2
+
         feat = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
         txt = text[index[start_idx]:index[end_idx]]
         feat[0:end_idx-start_idx] = self.realdata[idx]['feature'][start_idx:end_idx]
