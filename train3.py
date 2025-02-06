@@ -260,7 +260,8 @@ def train():
             print('==================')
             print(text)
             feature = torch.tensor(feature[None,:,:], device=device).permute(1,0,2)
-            pred = model2(feature).squeeze(1).cpu().numpy()
+            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                pred = model2(feature).squeeze(1).cpu().numpy()
             predstr = ''
             for p in pred:
                 if p == 0:
