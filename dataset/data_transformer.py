@@ -273,7 +273,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             npyfiles = sorted(glob.glob(os.path.join(train_data4, '*.npy')))
             for i,filename in enumerate(npyfiles):
                 basename = os.path.splitext(filename)[0]
-                print(i, '/', len(self.npyfiles), basename)
+                print(i, '/', len(npyfiles), basename)
                 feat = np.load(filename)
                 print(feat.shape)
                 with open(basename+'.json', 'r', encoding='utf-8') as file:
