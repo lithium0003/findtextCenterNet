@@ -794,8 +794,8 @@ def get_random_textline(rng, single=False):
                 # en
                 en = True
 
-                pageid = get_random_wordid(en=True)
-                content = get_word_content(pageid, en=True)
+                pageid = get_random_wordid(lang='en')
+                content = get_word_content(pageid, lang='en')
             else:
                 en = False
 
@@ -1061,8 +1061,10 @@ def get_random_text(rng):
             return get_random_hendwrite(rng)
 
 def get_random_text2(rng):
-    if rng.random() < 0.9:
+    if rng.random() < 0.75:
         return get_random_char(rng)
+    if rng.random() < 0.5:
+        return get_random_kr_char(rng)
     return get_random_hendwrite(rng)
 
 if __name__ == '__main__':
