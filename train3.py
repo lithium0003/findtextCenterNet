@@ -163,7 +163,7 @@ def train():
 
     # scaler = torch.amp.GradScaler()
     last_epoch = 0
-    smoothing = 0.1
+    smoothing = 0.
     for epoch in range(last_epoch, EPOCHS):
         print(datetime.datetime.now(), 'epoch', epoch, flush=True)
         print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], flush=True)

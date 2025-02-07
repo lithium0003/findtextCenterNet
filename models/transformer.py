@@ -187,6 +187,31 @@ class DecoderBlock(nn.Module):
         x = self.norm3(x)
         return x
 
+# https://github.com/KindXiaoming/grow-crystals
+# Harmonic Loss Trains Interpretable AI Models
+# https://arxiv.org/abs/2502.01628
+class DistLayer(torch.nn.Linear):
+    def __init__(self, in_features, out_features, n=1., eps=1e-4, bias=False):
+        super().__init__(in_features, out_features, bias=bias)
+        self.n = n
+        self.eps = eps
+        
+    def forward(self, x):
+        # x: (B, N)
+        # w: (V, N)
+        # dist_sq: (B, V)
+        w = self.weight
+        wx = torch.matmul(x, w.mT) # (B, V)
+        ww = torch.norm(w, dim=-1)**2 # (V,)
+        xx = torch.norm(x, dim=-1)**2 # (B,)
+
+        dist_sq = ww.unsqueeze(-2) + xx.unsqueeze(-1) - 2 * wx + self.eps
+        dist_sq = dist_sq / torch.min(dist_sq, dim=-1, keepdim = True)[0]
+        prob = (dist_sq)**(-self.n)
+        prob = prob/torch.sum(prob, dim=-1, keepdim=True)
+        logits = torch.log(prob)
+        return logits
+
 class Decoder(nn.Module):
     def __init__(self, dim, head_num, max_seq_len=5000, block_num = 6, dropout = 0.1):
         super().__init__()
@@ -196,7 +221,7 @@ class Decoder(nn.Module):
         self.norm = nn.LayerNorm([dim])
         self.blocks = nn.ModuleList([DecoderBlock(dim, head_num) for _ in range(block_num)])
         self.dropout = nn.Dropout(dropout, inplace=True)
-        self.out_layers = nn.ModuleList([nn.Linear(dim, m) for m in modulo_list])
+        self.out_layers = nn.ModuleList([DistLayer(dim, m) for m in modulo_list])
 
     def forward(self, x, y, self_mask=None, cross_mask=None, offset=0):
         x1 = [x % m for m in modulo_list]
