@@ -202,7 +202,7 @@ class DistLayer(torch.nn.Linear):
         # w: (V, N)
         # dist_sq: (B, V)
         w = self.weight
-        wx = torch.matmul(x, w.mT) # (B, V)
+        wx = torch.matmul(x, w.transpose(-2, -1)) # (B, V)
         ww = torch.norm(w, dim=-1)**2 # (V,)
         xx = torch.norm(x, dim=-1)**2 # (B,)
 
@@ -222,7 +222,7 @@ class Decoder(nn.Module):
         self.norm = nn.LayerNorm([dim])
         self.blocks = nn.ModuleList([DecoderBlock(dim, head_num) for _ in range(block_num)])
         self.dropout = nn.Dropout(dropout, inplace=True)
-        self.out_layers = nn.ModuleList([DistLayer(dim, m, n=int(sqrt(dim))) for m in modulo_list])
+        self.out_layers = nn.ModuleList([nn.Linear(dim, m) for m in modulo_list])
 
     def forward(self, x, y, self_mask=None, cross_mask=None, offset=0):
         x1 = [x % m for m in modulo_list]
