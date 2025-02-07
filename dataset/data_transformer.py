@@ -269,9 +269,9 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         self.hcodes = []
         self.vcodes = []
         for c in codes:
-            if charparam[code][0] is not None:
+            if charparam[c][0] is not None:
                 self.hcodes.append(c)
-            if charparam[code][1] is not None:
+            if charparam[c][1] is not None:
                 self.vcodes.append(c)
         self.charparam = charparam
 
