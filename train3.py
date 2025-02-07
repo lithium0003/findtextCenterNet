@@ -164,6 +164,7 @@ def train():
     # scaler = torch.amp.GradScaler()
     last_epoch = 0
     smoothing = 0.
+    loss_down = 0
     for epoch in range(last_epoch, EPOCHS):
         print(datetime.datetime.now(), 'epoch', epoch, flush=True)
         print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], flush=True)
@@ -247,8 +248,8 @@ def train():
         if 0 < scheduler_gamma < 1.0:
             scheduler.step() 
 
-        if smoothing > 0 and loss_value < 5:
-            smoothing = 0.
+        if loss_down == 0 and loss_value < 5:
+            loss_down += 1
             for group in optimizer.param_groups:
                 group['lr'] /= 10
 
