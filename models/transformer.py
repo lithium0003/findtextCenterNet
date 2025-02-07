@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from dataclasses import dataclass
+from math import sqrt
 
 from util_func import modulo_list, calc_predid, feature_dim
 from const import decoder_SOT, decoder_EOT, max_decoderlen, encoder_add_dim
@@ -221,7 +222,7 @@ class Decoder(nn.Module):
         self.norm = nn.LayerNorm([dim])
         self.blocks = nn.ModuleList([DecoderBlock(dim, head_num) for _ in range(block_num)])
         self.dropout = nn.Dropout(dropout, inplace=True)
-        self.out_layers = nn.ModuleList([DistLayer(dim, m) for m in modulo_list])
+        self.out_layers = nn.ModuleList([DistLayer(dim, m, n=int(sqrt(dim))) for m in modulo_list])
 
     def forward(self, x, y, self_mask=None, cross_mask=None, offset=0):
         x1 = [x % m for m in modulo_list]
