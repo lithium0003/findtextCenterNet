@@ -266,6 +266,13 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             idx = [i for i in range(len(txtfiles)) if i % 10 == 0]
         self.txtfile = list(np.array(txtfiles)[idx])
         self.codes = codes
+        self.hcodes = []
+        self.vcodes = []
+        for c in codes:
+            if charparam[code][0] is not None:
+                self.hcodes.append(c)
+            if charparam[code][1] is not None:
+                self.vcodes.append(c)
         self.charparam = charparam
 
         self.realdata = []
@@ -391,7 +398,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         idx -= len(self.realdata)
         if idx < len(self.txtfile):
             vert_ok = os.path.basename(os.path.dirname(self.txtfile[idx])) in ['aozora','wikipedia_ja']
-            return self.load_textfile(self.txtfile[idx], horizontal_only=not vert_ok)
+            return self.load_textfile(self.txtfile[idx], orientation='both' if vert_ok else 'horizontal')
         return self.random_text()
 
     def load_realdata(self, idx):
@@ -463,7 +470,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         # print('found:',code,chr(code),mu,sd)
         return rng.choice(value, axis=0, replace=False)
 
-    def gen_feature(self, text, horizontal_only):
+    def gen_feature(self, text, orientation='both'):
         # 1 vertical
         # 2 ruby (base)
         # 3 ruby (text)
@@ -472,7 +479,12 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         # 6 newline
         sp = False
         ruby = 0
-        horizontal = horizontal_only or rng.uniform() < 0.5
+        if orientation == 'horizontal':
+            horizontal = True
+        elif orientation == 'vertical':
+            horizontal = False
+        else:
+            horizontal = rng.uniform() < 0.5
         emphasis_idx = []
         if re.findall('['+''.join(emphasis_characters)+']', text):
             ind = text.find('\uFFF9')
@@ -532,7 +544,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             idx += 1
         return ret
 
-    def load_textfile(self, filename, horizontal_only=False):
+    def load_textfile(self, filename, orientation='both'):
         txt = self.text[filename]
         start_idx = rng.integers(len(txt)-1)
         txt = txt[start_idx:]
@@ -555,29 +567,33 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             i = j
             if i > out_count:
                 break
-        return self.pad_output(*self.format_output(outtxt, horizontal_only))
+        return self.pad_output(*self.format_output(outtxt, orientation=orientation))
 
     def random_text(self):
         if rng.uniform() < 0.5:
-            return self.pad_output(*self.format_output(get_random_furigana(), horizontal_only=False))
+            return self.pad_output(*self.format_output(get_random_furigana(), orientation='both'))
 
         out_count = rng.integers(1,max_decoderlen-3)
         split_count = rng.integers(20, 80)
         # print('sprit:', split_count)
         i = 0
         outtxt = ''
+        horizontal = rng.uniform() < 0.5
         while i < out_count:
             if i > 0 and i+split_count+1 >= out_count:
                 break
-            outtxt += ''.join([chr(c) for c in rng.choice(self.codes, size=split_count)])+'\n'
+            if horizontal:
+                outtxt += ''.join([chr(c) for c in rng.choice(self.hcodes, size=split_count)])+'\n'
+            else:
+                outtxt += ''.join([chr(c) for c in rng.choice(self.hcodes, size=split_count)])+'\n'
             i += split_count+1
-        return self.pad_output(*self.format_output(outtxt, horizontal_only=False))
+        return self.pad_output(*self.format_output(outtxt, orientation='horizontal' if horizontal else 'vertical'))
 
-    def format_output(self, text, horizontal_only):
+    def format_output(self, text, orientation='both'):
         if text and rng.uniform() < 0.5 and text[-1] == '\n':
             text = text[:-1]
         if text:
-            return text, self.gen_feature(text, horizontal_only)
+            return text, self.gen_feature(text, orientation=orientation)
         else:
             return '', np.zeros((max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float32)
 
@@ -591,7 +607,13 @@ class TransformerDataDataset(torch.utils.data.Dataset):
 if __name__=='__main__':
     from torch.utils.data import DataLoader
     from util_func import decode_ruby
-    
+
+    # import coremltools as ct
+    # from util_func import modulo_list, calc_predid
+    # import itertools
+
+    # mlmodel_decoder = ct.models.MLModel('CodeDecoder.mlpackage')
+
     prep = TransformerDataDataset.prepare()
     training_dataset = TransformerDataDataset(*prep)
 
@@ -602,6 +624,43 @@ if __name__=='__main__':
     #     print(data[1])
     #     print(data[2])
     #     print('---------')
+
+    #     glyphids = []
+    #     for d in data[1]:
+    #         if np.all(d == 0):
+    #             break
+    #         d = d[:feature_dim]
+    #         if np.all(d == 0):
+    #             continue
+    #         decode_output = mlmodel_decoder.predict({'feature_input': np.expand_dims(d, 0)})
+    #         p = []
+    #         id = []
+    #         for k,m in enumerate(modulo_list):
+    #             prob = decode_output['modulo_%d'%m][0]
+    #             idx = np.where(prob > 0.01)[0]
+    #             if len(idx) == 0:
+    #                 idx = [np.argmax(prob)]
+    #             if k == 0:
+    #                 for i in idx[:3]:
+    #                     id.append([i])
+    #                     p.append([prob[i]])
+    #             else:
+    #                 id = [i1 + [i2] for i1, i2 in itertools.product(id, idx[:3])]
+    #                 p = [i1 + [prob[i2]] for i1, i2 in itertools.product(p, idx[:3])]
+    #         p = [np.exp(np.mean([np.log(prob) for prob in probs])) for probs in p]
+    #         i = [calc_predid(*ids) for ids in id]
+    #         g = sorted([(prob, id) for prob,id in zip(p,i)], key=lambda x: x[0] if x[1] <= 0x10FFFF else 0, reverse=True)
+    #         prob,idx = g[0]
+    #         glyphids.append(idx)
+    #     predstr = ''
+    #     for cid in glyphids:
+    #         if cid < 0x10FFFF:
+    #             predstr += chr(cid)
+    #         else:
+    #             predstr += '\uFFFD'
+    #     print(predstr)
+    #     print('++++++++++')
+
     # exit()
 
     # training_loader = DataLoader(training_dataset, batch_size=8, shuffle=True, num_workers=8, drop_last=True)
