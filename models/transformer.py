@@ -248,13 +248,13 @@ class Encoder(nn.Module):
         self.dropout = nn.Dropout(dropout, inplace=True)
         self.blocks = nn.ModuleList([EncoderBlock(embed_dim, d, head_num) for d in range(block_num)])        
 
-    def forward(self, x, offset=0):
+    def forward(self, x, attn_mask=None, offset=0):
         x = self.embed(x)
-        x = self.pe(x, offset=offset)
+        x = self.pe(x,offset=offset)
         x = self.norm(x)
         x = self.dropout(x)
         for block in self.blocks:
-            x = block(x)
+            x = block(x, attn_mask=attn_mask)
         return x
 
 class DecoderBlock(nn.Module):
