@@ -21,9 +21,9 @@ class PositionalEncoding(nn.Module):
 class SwiGLU(nn.Module):
     def __init__(self, dim):
         super().__init__()
-        self.w1 = nn.Linear(dim, dim*8//3)
-        self.w2 = nn.Linear(dim*8//3, dim)
-        self.wg = nn.Linear(dim, dim*8//3)
+        self.w1 = nn.Linear(dim, dim*2)
+        self.wg = nn.Linear(dim, dim*2)
+        self.w2 = nn.Linear(dim*2, dim)
 
     def forward(self, x):
         x1 = self.w1(x)
@@ -122,9 +122,9 @@ class MultiheadDiffAttn(nn.Module):
         lambda_2 = torch.exp(torch.sum(self.lambda_q2 * self.lambda_k2, dim=-1).float()).type_as(q)
         lambda_full = lambda_1 - lambda_2 + self.lambda_init
         attn_weights = attn_weights.view(bsz, self.num_heads, 2, tgt_len, src_len)
-        attn_weights = attn_weights[:, :, 0] - lambda_full.type_as(q) * attn_weights[:, :, 1]
-        
-        attn = torch.matmul(attn_weights, v)
+        attn_weights = attn_weights[:, :, 0] - lambda_full * attn_weights[:, :, 1]
+
+        attn = torch.matmul(attn_weights.type_as(v), v)
         attn = self.subln(attn)
         attn = attn * (1 - self.lambda_init)
         attn = attn.transpose(1, 2).reshape(bsz, tgt_len, self.num_heads * 2 * self.head_dim)
@@ -241,10 +241,13 @@ class Transformer(nn.Module):
         self.decoder = Decoder(embed_dim=embed_dim, head_num=head_num, max_seq_len=max_dec_seq_len, block_num=dec_block_num)
     
     def forward(self, enc_input, dec_input):
-        encmask = torch.where(torch.any(enc_input != 0, dim=-1)[:,None,None,:], 0., -float("inf"))
+        encmask = torch.all(enc_input == 0, dim=-1)
+        decmask = encmask[:,None,None,:]
+        encmask = encmask[:,None,None,:]
+        encmask = torch.where(encmask, float("-inf"), 0.).type_as(enc_input)
         offset = torch.randint(0, self.max_len - enc_input.shape[1], (1,), device=enc_input.device)
         enc_output = self.encoder(enc_input, attn_mask=encmask, offset=offset)
-        output = self.decoder(dec_input, enc_output, cross_mask=encmask, offset=offset)
+        output = self.decoder(dec_input, enc_output, cross_mask=decmask, offset=offset)
         return output
 
 @dataclass
@@ -265,7 +268,9 @@ class TransformerPredictor(nn.Module):
         self.decoder = decoder
 
     def forward(self, enc_input):
-        encmask = torch.where(torch.any(enc_input != 0, dim=-1)[:,None,None,:], 0., -float("inf"))
+        encmask = torch.all(enc_input == 0, dim=-1)
+        encmask = encmask[:,None,None,:] + encmask[:,None,:,None]
+        encmask = torch.where(encmask, float("-inf"), 0.)
         enc_output = self.encoder(enc_input, attn_mask=encmask, offset=0)
         decoder_output = torch.zeros((enc_input.shape[0],max_decoderlen), dtype=torch.long, device=enc_input.device)
         decoder_output[:,0] = decoder_SOT
