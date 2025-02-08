@@ -104,6 +104,7 @@ class MultiheadDiffAttn(nn.Module):
         v = repeat_kv(v.transpose(1, 2), self.n_rep)
         q *= self.scaling
         attn_weights = torch.matmul(q, k.transpose(-1, -2))
+        print(attn_weights.shape)
         if attn_mask is None:
             attn_mask = torch.triu(
                 torch.zeros([tgt_len, src_len])
@@ -322,9 +323,7 @@ class Transformer(nn.Module):
         self.decoder = Decoder(embed_dim=embed_dim, head_num=head_num, max_seq_len=max_dec_seq_len, block_num=dec_block_num)
     
     def forward(self, enc_input, dec_input):
-        encmask = torch.any(enc_input != 0, dim=-1)
-        encmask = encmask.transpose(1,0)
-        encmask = encmask[:,None,None,:]
+        encmask = torch.where(torch.any(enc_input != 0, dim=-1)[:,None,None,:], 0., -float("inf"))
         offset = torch.randint(0, enc_input.shape[0] // 2, (1,), device=enc_input.device)
         enc_output = self.encoder(enc_input, attn_mask=encmask, offset=offset)
         output = self.decoder(dec_input, enc_output, cross_mask=encmask, offset=offset)
@@ -394,9 +393,11 @@ class TransformerDecoderPredictor(nn.Module):
         return outputs
 
 if __name__ == '__main__':
-    model = Transformer(enc_input_dim=100, dim=512, head_num=8)
+    model = Transformer(enc_input_dim=100, embed_dim=512, head_num=8)
+    print(model)
+    print(model(torch.ones(3,4,100),torch.ones(3,2, dtype=torch.long)))
 
-    model2 = TransformerPredictor(model.encoder, model.decoder)
-    print(model2)
-    d = model2(torch.ones(3,1,100))
-    print(d)
+    # model2 = TransformerPredictor(model.encoder, model.decoder)
+    # print(model2)
+    # d = model2(torch.ones(3,1,100))
+    # print(d)
