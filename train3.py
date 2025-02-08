@@ -154,8 +154,9 @@ def train():
     #     return rawloss['loss'], rawloss
 
     def train_step(encoder_input, decoder_input, label_code, smoothing):
-        outputs = model(encoder_input, decoder_input)
-        rawloss = loss_function3(outputs, label_code, smoothing)
+        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+            outputs = model(encoder_input, decoder_input)
+            rawloss = loss_function3(outputs, label_code, smoothing)
         return rawloss['loss'], rawloss
 
     def test_step(encoder_input, decoder_input, label_code, smoothing):
