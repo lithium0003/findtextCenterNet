@@ -15,7 +15,7 @@ class PositionalEncoding(nn.Module):
         self.pe = nn.Parameter(torch.randn(max_len, dim))
 
     def forward(self, x, offset = 0):
-        pe = self.pe[offset:offset+x.shape[0]].unsqueeze(1)
+        pe = self.pe[offset:offset+x.shape[1]].unsqueeze(0)
         return x + pe
 
 class SwiGLU(nn.Module):
