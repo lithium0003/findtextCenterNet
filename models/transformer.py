@@ -81,7 +81,7 @@ class MultiheadDiffAttn(nn.Module):
     def forward(
         self,
         query, key=None, value=None,
-        attn_mask=None,
+        causal_mask=False,
     ):
         if key is None:
             key = query
@@ -104,7 +104,8 @@ class MultiheadDiffAttn(nn.Module):
         v = repeat_kv(v.transpose(1, 2), self.n_rep)
         q *= self.scaling
         attn_weights = torch.matmul(q, k.transpose(-1, -2))
-        if attn_mask is None:
+        attn_weights = torch.nan_to_num(attn_weights)
+        if causal_mask:
             attn_mask = torch.triu(
                 torch.zeros([tgt_len, src_len], device=q.device)
                 .float()
@@ -112,8 +113,7 @@ class MultiheadDiffAttn(nn.Module):
                 .type_as(attn_weights),
                 1 + offset,
             )
-        attn_weights = torch.nan_to_num(attn_weights)
-        attn_weights += attn_mask   
+            attn_weights += attn_mask   
         attn_weights = F.softmax(attn_weights, dim=-1, dtype=torch.float32).type_as(
             attn_weights
         )
@@ -142,9 +142,9 @@ class EncoderBlock(nn.Module):
         self.dropout1 = nn.Dropout(dropout, inplace=True)
         self.dropout2 = nn.Dropout(dropout, inplace=True)
 
-    def forward(self, x, attn_mask=None):
+    def forward(self, x):
         skip = x
-        x = self.mha(x, attn_mask=attn_mask)
+        x = self.mha(x)
         x = self.dropout1(x)
         x = x + skip
         x = self.norm1(x)
@@ -166,13 +166,13 @@ class Encoder(nn.Module):
         self.dropout = nn.Dropout(dropout, inplace=True)
         self.blocks = nn.ModuleList([EncoderBlock(embed_dim, d, head_num) for d in range(block_num)])        
 
-    def forward(self, x, attn_mask=None, offset=0):
+    def forward(self, x, offset=0):
         x = self.embed(x)
         x = self.pe(x,offset=offset)
         x = self.norm(x)
         x = self.dropout(x)
         for block in self.blocks:
-            x = block(x, attn_mask=attn_mask)
+            x = block(x)
         return x
 
 class DecoderBlock(nn.Module):
@@ -188,14 +188,14 @@ class DecoderBlock(nn.Module):
         self.dropout2 = nn.Dropout(dropout, inplace=True)
         self.dropout3 = nn.Dropout(dropout, inplace=True)
 
-    def forward(self, x, y, cross_mask=None):
+    def forward(self, x, y):
         skip = x
-        x = self.self_attn(x)
+        x = self.self_attn(x, causal_mask=True)
         x = self.dropout1(x)
         x = x + skip
         x = self.norm1(x)
         _x = x
-        x = self.cross_attn(x, y, attn_mask=cross_mask)
+        x = self.cross_attn(x, y)
         x = self.dropout2(x)
         x = x + _x
         x = self.norm2(x)
@@ -217,7 +217,7 @@ class Decoder(nn.Module):
         self.dropout = nn.Dropout(dropout, inplace=True)
         self.out_layers = nn.ModuleList([nn.Linear(embed_dim, m) for m in modulo_list])
 
-    def forward(self, x, y, cross_mask=None, offset=0):
+    def forward(self, x, y, offset=0):
         x1 = [x % m for m in modulo_list]
         x = None
         for x2, layer in zip(x1, self.embed):
@@ -229,7 +229,7 @@ class Decoder(nn.Module):
         x = self.norm(x)
         x = self.dropout(x)
         for block in self.blocks:
-            x = block(x, y, cross_mask=cross_mask)
+            x = block(x, y)
         return [layer(x) for layer in self.out_layers]
 
 class Transformer(nn.Module):
@@ -241,14 +241,9 @@ class Transformer(nn.Module):
         self.decoder = Decoder(embed_dim=embed_dim, head_num=head_num, max_seq_len=max_dec_seq_len, block_num=dec_block_num)
     
     def forward(self, enc_input, dec_input):
-        # encmask = torch.zeros(enc_input.shape[:-1], dtype=enc_input.dtype, device=enc_input.device)
-        # encmask = encmask[:,None,None,:]
-        encmask = torch.all(enc_input == 0, dim=-1)
-        encmask = encmask[:,None,None,:]
-        encmask = torch.where(encmask, float("-inf"), 0.).type_as(enc_input)
-        offset = torch.randint(0, 100, (1,), dtype=torch.long, device=enc_input.device)
-        enc_output = self.encoder(enc_input, attn_mask=encmask, offset=offset)
-        output = self.decoder(dec_input, enc_output, cross_mask=encmask, offset=offset)
+        offset = torch.randint(0, self.max_len - enc_input.shape[1], (1,), device=enc_input.device)
+        enc_output = self.encoder(enc_input, offset=offset)
+        output = self.decoder(dec_input, enc_output, offset=offset)
         return output
 
 @dataclass
