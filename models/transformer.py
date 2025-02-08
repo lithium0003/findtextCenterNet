@@ -104,7 +104,6 @@ class MultiheadDiffAttn(nn.Module):
         v = repeat_kv(v.transpose(1, 2), self.n_rep)
         q *= self.scaling
         attn_weights = torch.matmul(q, k.transpose(-1, -2))
-        print(attn_weights.shape)
         if attn_mask is None:
             attn_mask = torch.triu(
                 torch.zeros([tgt_len, src_len])
@@ -133,88 +132,6 @@ class MultiheadDiffAttn(nn.Module):
         attn = self.out_proj(attn)
         return attn
     
-# class MultiHeadAttention(nn.Module):
-#     def __init__(self, dim, num_heads, dropout = 0.1):
-#         super().__init__()
-#         self.dim = dim
-#         self.num_heads = num_heads
-#         self.in_proj = nn.Linear(dim, dim * 3, bias=False)
-#         self.out_proj = nn.Linear(dim, dim, bias=False)
-#         self.dropout = dropout
-
-#     def calc_qkv(self, query, key, value):
-#         return self._in_projection_packed(query, key, value)
-
-#     def forward(self, query, key=None, value=None, attn_mask=None, is_causal=False):
-#         # set up shape vars
-#         tgt_len, bsz, embed_dim = query.shape
-
-#         head_dim = embed_dim // self.num_heads
-#         q, k, v = self.calc_qkv(query, key, value)
-
-#         #
-#         # reshape q, k, v for multihead attention and make them batch first
-#         #
-#         q = q.view(tgt_len, bsz * self.num_heads, head_dim).transpose(0, 1)
-#         k = k.view(k.shape[0], bsz * self.num_heads, head_dim).transpose(0, 1)
-#         v = v.view(v.shape[0], bsz * self.num_heads, head_dim).transpose(0, 1)
-
-#         src_len = k.size(1)
-
-#         # adjust dropout probability
-#         if not self.training:
-#             dropout_p = 0.0
-#         else:
-#             dropout_p = self.dropout
-
-#         q = q.view(bsz, self.num_heads, tgt_len, head_dim)
-#         k = k.view(bsz, self.num_heads, src_len, head_dim)
-#         v = v.view(bsz, self.num_heads, src_len, head_dim)
-
-#         attn_output = nn.functional.scaled_dot_product_attention(
-#             q, k, v, attn_mask, dropout_p, is_causal
-#         )
-#         attn_output = (
-#             attn_output.permute(2, 0, 1, 3).contiguous().view(bsz * tgt_len, embed_dim)
-#         )
-
-#         attn_output = nn.functional.linear(attn_output, self.out_proj.weight, None)
-#         attn_output = attn_output.view(tgt_len, bsz, attn_output.size(1))
-#         return attn_output
-
-#     def _in_projection_packed(self, query, key, value):
-#         E = query.size(-1)
-#         if key is value:
-#             if query is key:
-#                 # self-attention
-#                 proj = nn.functional.linear(query, self.in_proj.weight, None)
-#                 # reshape to 3, E and not E, 3 is deliberate for better memory coalescing and keeping same order as chunk()
-#                 proj = (
-#                     proj.unflatten(-1, (3, E))
-#                     .unsqueeze(0)
-#                     .transpose(0, -2)
-#                     .squeeze(-2)
-#                     .contiguous()
-#                 )
-#                 return proj[0], proj[1], proj[2]
-#             else:
-#                 # encoder-decoder attention
-#                 w_q, w_kv = self.in_proj.weight.split([E, E * 2])
-#                 q_proj = nn.functional.linear(query, w_q, None)
-#                 kv_proj = nn.functional.linear(key, w_kv, None)
-#                 # reshape to 2, E and not E, 2 is deliberate for better memory coalescing and keeping same order as chunk()
-#                 kv_proj = (
-#                     kv_proj.unflatten(-1, (2, E))
-#                     .unsqueeze(0)
-#                     .transpose(0, -2)
-#                     .squeeze(-2)
-#                     .contiguous()
-#                 )
-#                 return q_proj, kv_proj[0], kv_proj[1]
-#         else:
-#             w_q, w_k, w_v = self.in_proj.weight.chunk(3)
-#             return nn.functional.linear(query, w_q, None), nn.functional.linear(key, w_k, None), nn.functional.linear(value, w_v, None)
-
 class EncoderBlock(nn.Module):
     def __init__(self, embed_dim, depth, num_heads, dropout = 0.1):
         super().__init__()
@@ -347,15 +264,12 @@ class TransformerPredictor(nn.Module):
         self.decoder = decoder
 
     def forward(self, enc_input):
-        encmask = torch.any(enc_input != 0, dim=-1)
-        encmask = encmask.transpose(1,0)
-        encmask = encmask[:,None,None,:].expand(-1,-1,encmask.shape[-1],-1)
+        encmask = torch.where(torch.any(enc_input != 0, dim=-1)[:,None,None,:], 0., -float("inf"))
         enc_output = self.encoder(enc_input, attn_mask=encmask, offset=0)
         decoder_output = torch.zeros((max_decoderlen, enc_input.shape[1]), dtype=torch.long, device=enc_input.device)
-        decmask = torch.ones(max_decoderlen, max_decoderlen, dtype=torch.bool, device=enc_input.device).tril(diagonal=0).unsqueeze(0).unsqueeze(0)
         decoder_output[0,:] = decoder_SOT
         for i in range(max_decoderlen):
-            outputs = self.decoder(decoder_output, enc_output, self_mask=decmask, cross_mask=encmask, offset=0)
+            outputs = self.decoder(decoder_output, enc_output, cross_mask=encmask, offset=0)
             pred_ids = []
             for decoder_id1 in outputs:
                 pred_id1 = torch.argmax(decoder_id1, dim=-1)[i]
@@ -387,17 +301,17 @@ class TransformerDecoderPredictor(nn.Module):
         self.head_num = decoder.head_num
         self.decoder = decoder
 
-    def forward(self, enc_output, decoder_input, selfmask, crossmask):
-        outputs = self.decoder(decoder_input, enc_output, self_mask=selfmask, cross_mask=crossmask, offset=0)
+    def forward(self, enc_output, decoder_input, crossmask):
+        outputs = self.decoder(decoder_input, enc_output, cross_mask=crossmask, offset=0)
         # return [torch.softmax(x, dim=-1) for x in outputs]
         return outputs
 
 if __name__ == '__main__':
     model = Transformer(enc_input_dim=100, embed_dim=512, head_num=8)
     print(model)
-    print(model(torch.ones(3,4,100),torch.ones(3,2, dtype=torch.long)))
+    print(model(torch.ones(3,1,100),torch.ones(3,2, dtype=torch.long)))
 
-    # model2 = TransformerPredictor(model.encoder, model.decoder)
-    # print(model2)
-    # d = model2(torch.ones(3,1,100))
-    # print(d)
+    model2 = TransformerPredictor(model.encoder, model.decoder)
+    print(model2)
+    d = model2(torch.ones(3,1,100))
+    print(d)
