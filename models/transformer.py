@@ -242,7 +242,7 @@ class Transformer(nn.Module):
     
     def forward(self, enc_input, dec_input):
         encmask = torch.where(torch.any(enc_input != 0, dim=-1)[:,None,None,:], 0., -float("inf"))
-        offset = torch.randint(0, self.max_len - enc_input.shape[0], (1,), device=enc_input.device)
+        offset = torch.randint(0, self.max_len - enc_input.shape[1], (1,), device=enc_input.device)
         enc_output = self.encoder(enc_input, attn_mask=encmask, offset=offset)
         output = self.decoder(dec_input, enc_output, cross_mask=encmask, offset=offset)
         return output
