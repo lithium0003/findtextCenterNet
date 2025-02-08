@@ -236,12 +236,13 @@ class Transformer(nn.Module):
     def __init__(self, enc_input_dim, embed_dim, head_num, enc_block_num = 6, dec_block_num = 6, max_enc_seq_len = 5000, max_dec_seq_len = 5000):
         super().__init__()
         self.head_num = head_num
+        self.max_len = min(max_enc_seq_len, max_dec_seq_len)
         self.encoder = Encoder(input_dim=enc_input_dim, embed_dim=embed_dim, head_num=head_num, max_seq_len=max_enc_seq_len, block_num=enc_block_num)
         self.decoder = Decoder(embed_dim=embed_dim, head_num=head_num, max_seq_len=max_dec_seq_len, block_num=dec_block_num)
     
     def forward(self, enc_input, dec_input):
         encmask = torch.where(torch.any(enc_input != 0, dim=-1)[:,None,None,:], 0., -float("inf"))
-        offset = torch.randint(0, enc_input.shape[0] // 2, (1,), device=enc_input.device)
+        offset = torch.randint(0, self.max_len - enc_input.shape[0], (1,), device=enc_input.device)
         enc_output = self.encoder(enc_input, attn_mask=encmask, offset=offset)
         output = self.decoder(dec_input, enc_output, cross_mask=encmask, offset=offset)
         return output
