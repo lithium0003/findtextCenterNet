@@ -178,7 +178,7 @@ def train():
         optimizer.zero_grad()
         for i, data in enumerate(training_loader):
             text, feature, codes = data
-            feature = feature.to(device=device, non_blocking=True)
+            feature = feature.to(dtype=torch.float32, device=device, non_blocking=True)
             codes = codes.to(device=device, non_blocking=True)
 
             loss, rawloss = train_step(feature, codes[:,:-1], codes[:,1:], smoothing)
@@ -229,7 +229,7 @@ def train():
         with torch.no_grad():
             for vdata in validation_loader:
                 text, feature, codes = vdata
-                feature = feature.to(device=device, non_blocking=True)
+                feature = feature.to(dtype=torch.float32, device=device, non_blocking=True)
                 codes = codes.to(device=device, non_blocking=True)
 
                 loss, rawloss = test_step(feature, codes[:,:-1], codes[:,1:], smoothing)
@@ -260,7 +260,7 @@ def train():
             text, feature, codes = vdata
             print('==================')
             print(text)
-            feature = torch.tensor(feature[None,:,:], device=device)
+            feature = torch.tensor(feature[None,:,:], dtype=torch.float32, device=device)
             with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
                 pred = model2(feature).squeeze(0).cpu().numpy()
             predstr = ''
