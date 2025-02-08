@@ -264,14 +264,11 @@ class TransformerPredictor(nn.Module):
         self.decoder = decoder
 
     def forward(self, enc_input):
-        encmask = torch.all(enc_input == 0, dim=-1)
-        encmask = encmask[:,None,None,:]
-        encmask = torch.where(encmask, float("-inf"), 0.).type_as(enc_input)
-        enc_output = self.encoder(enc_input, attn_mask=encmask, offset=0)
+        enc_output = self.encoder(enc_input, offset=0)
         decoder_output = torch.zeros((enc_input.shape[0],max_decoderlen), dtype=torch.long, device=enc_input.device)
         decoder_output[:,0] = decoder_SOT
         for i in range(max_decoderlen):
-            outputs = self.decoder(decoder_output, enc_output, cross_mask=encmask, offset=0)
+            outputs = self.decoder(decoder_output, enc_output, offset=0)
             pred_ids = []
             for decoder_id1 in outputs:
                 pred_id1 = torch.argmax(decoder_id1, dim=-1)[:,i]
