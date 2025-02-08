@@ -242,6 +242,7 @@ class Transformer(nn.Module):
     
     def forward(self, enc_input, dec_input):
         encmask = torch.zeros(enc_input.shape[:-1], dtype=enc_input.dtype, device=enc_input.device)
+        encmask = encmask[:,None,None,:]
         # encmask = torch.all(enc_input == 0, dim=-1)
         # encmask = encmask[:,None,None,:]
         # encmask = torch.where(encmask, float("-inf"), 0.).type_as(enc_input)
