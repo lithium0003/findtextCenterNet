@@ -241,11 +241,11 @@ class Transformer(nn.Module):
         self.decoder = Decoder(embed_dim=embed_dim, head_num=head_num, max_seq_len=max_dec_seq_len, block_num=dec_block_num)
     
     def forward(self, enc_input, dec_input):
-        encmask = torch.zeros(enc_input.shape[:-1], dtype=enc_input.dtype, device=enc_input.device)
-        encmask = encmask[:,None,None,:]
-        # encmask = torch.all(enc_input == 0, dim=-1)
+        # encmask = torch.zeros(enc_input.shape[:-1], dtype=enc_input.dtype, device=enc_input.device)
         # encmask = encmask[:,None,None,:]
-        # encmask = torch.where(encmask, float("-inf"), 0.).type_as(enc_input)
+        encmask = torch.all(enc_input == 0, dim=-1)
+        encmask = encmask[:,None,None,:]
+        encmask = torch.where(encmask, float("-inf"), 0.).type_as(enc_input)
         offset = torch.randint(0, 100, (1,), dtype=torch.long, device=enc_input.device)
         enc_output = self.encoder(enc_input, attn_mask=encmask, offset=offset)
         output = self.decoder(dec_input, enc_output, cross_mask=encmask, offset=offset)
