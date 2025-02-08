@@ -242,12 +242,11 @@ class Transformer(nn.Module):
     
     def forward(self, enc_input, dec_input):
         encmask = torch.all(enc_input == 0, dim=-1)
-        decmask = encmask[:,None,None,:]
         encmask = encmask[:,None,None,:]
         encmask = torch.where(encmask, float("-inf"), 0.).type_as(enc_input)
         offset = torch.randint(0, self.max_len - enc_input.shape[1], (1,), device=enc_input.device)
         enc_output = self.encoder(enc_input, attn_mask=encmask, offset=offset)
-        output = self.decoder(dec_input, enc_output, cross_mask=decmask, offset=offset)
+        output = self.decoder(dec_input, enc_output, cross_mask=encmask, offset=offset)
         return output
 
 @dataclass
@@ -269,8 +268,8 @@ class TransformerPredictor(nn.Module):
 
     def forward(self, enc_input):
         encmask = torch.all(enc_input == 0, dim=-1)
-        encmask = encmask[:,None,None,:] + encmask[:,None,:,None]
-        encmask = torch.where(encmask, float("-inf"), 0.)
+        encmask = encmask[:,None,None,:]
+        encmask = torch.where(encmask, float("-inf"), 0.).type_as(enc_input)
         enc_output = self.encoder(enc_input, attn_mask=encmask, offset=0)
         decoder_output = torch.zeros((enc_input.shape[0],max_decoderlen), dtype=torch.long, device=enc_input.device)
         decoder_output[:,0] = decoder_SOT
