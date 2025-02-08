@@ -1,7 +1,8 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 from dataclasses import dataclass
-from math import sqrt
+import math
 
 from util_func import modulo_list, calc_predid, feature_dim
 from const import decoder_SOT, decoder_EOT, max_decoderlen, encoder_add_dim
@@ -17,169 +18,268 @@ class PositionalEncoding(nn.Module):
         pe = self.pe[offset:offset+x.shape[0]].unsqueeze(1)
         return x + pe
 
-class FeedForward(nn.Module):
-    def __init__(self, dim, dropout = 0.1):
+class SwiGLU(nn.Module):
+    def __init__(self, dim):
         super().__init__()
-        self.layers = nn.Sequential(
-            nn.Linear(dim, dim * 4),
-            nn.GLU(),
-            nn.Dropout(dropout, inplace=True),
-            nn.Linear(dim * 2, dim),
-        )
+        self.w1 = nn.Linear(dim, dim*8//3)
+        self.w2 = nn.Linear(dim*8//3, dim)
+        self.wg = nn.Linear(dim, dim*8//3)
 
     def forward(self, x):
-        return self.layers(x)
+        x1 = self.w1(x)
+        xg = F.silu(self.wg(x))
+        return self.w2(x1 * xg)
 
-class MultiHeadAttention(nn.Module):
-    def __init__(self, dim, num_heads, dropout = 0.1):
+def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
+    """torch.repeat_interleave(x, dim=1, repeats=n_rep)"""
+    bs, n_kv_heads, slen, head_dim = x.shape
+    if n_rep == 1:
+        return x
+    return (
+        x[:, :, None, :, :]
+        .expand(bs, n_kv_heads, n_rep, slen, head_dim)
+        .reshape(bs, n_kv_heads * n_rep, slen, head_dim)
+    )
+
+def lambda_init_fn(depth):
+    return 0.8 - 0.6 * math.exp(-0.3 * depth)
+
+class MultiheadDiffAttn(nn.Module):
+    def __init__(
+        self,
+        embed_dim,
+        depth,
+        num_heads,
+    ):
         super().__init__()
-        self.dim = dim
+        self.embed_dim = embed_dim
+        
+        # arg num_heads set to half of Transformer's num_heads
         self.num_heads = num_heads
-        self.in_proj = nn.Linear(dim, dim * 3, bias=False)
-        self.out_proj = nn.Linear(dim, dim, bias=False)
-        self.dropout = dropout
+        
+        # arg decoder_kv_attention_heads set to half of Transformer's num_kv_heads if use GQA
+        # set to same as num_heads if use normal MHA
+        self.num_kv_heads = num_heads
+        self.n_rep = self.num_heads // self.num_kv_heads
+        
+        self.head_dim = embed_dim // num_heads // 2
+        self.scaling = self.head_dim ** -0.5
+        
+        self.q_proj = nn.Linear(embed_dim, embed_dim, bias=False)
+        self.k_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
+        self.v_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
+        self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
 
-    def calc_qkv(self, query, key, value, k_cache, v_cache):
-        return self._in_projection_packed(query, key, value)
+        self.lambda_init = lambda_init_fn(depth)
+        self.lambda_q1 = nn.Parameter(torch.zeros(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
+        self.lambda_k1 = nn.Parameter(torch.zeros(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
+        self.lambda_q2 = nn.Parameter(torch.zeros(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
+        self.lambda_k2 = nn.Parameter(torch.zeros(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
 
-    def forward(self, query, key=None, value=None, attn_mask=None, is_causal=False, k_cache = None, v_cache = None):
-        # set up shape vars
-        tgt_len, bsz, embed_dim = query.shape
+        self.subln = nn.RMSNorm(2 * self.head_dim, eps=1e-5, elementwise_affine=True)
+    
+    def forward(
+        self,
+        query, key=None, value=None,
+        attn_mask=None,
+    ):
+        if key is None:
+            key = query
+        if value is None:
+            value = key
+        bsz, tgt_len, embed_dim = query.size()
+        bsz, src_len, embed_dim = key.size()
 
-        head_dim = embed_dim // self.num_heads
-        q, k, v = self.calc_qkv(query, key, value, k_cache, v_cache)
+        q = self.q_proj(query)
+        k = self.k_proj(key)
+        v = self.v_proj(value)
 
-        #
-        # reshape q, k, v for multihead attention and make them batch first
-        #
-        q = q.view(tgt_len, bsz * self.num_heads, head_dim).transpose(0, 1)
-        k = k.view(k.shape[0], bsz * self.num_heads, head_dim).transpose(0, 1)
-        v = v.view(v.shape[0], bsz * self.num_heads, head_dim).transpose(0, 1)
+        q = q.view(bsz, tgt_len, 2 * self.num_heads, self.head_dim)
+        k = k.view(bsz, src_len, 2 * self.num_kv_heads, self.head_dim)
+        v = v.view(bsz, src_len, self.num_kv_heads, 2 * self.head_dim)
 
-        src_len = k.size(1)
-
-        # adjust dropout probability
-        if not self.training:
-            dropout_p = 0.0
-        else:
-            dropout_p = self.dropout
-
-        q = q.view(bsz, self.num_heads, tgt_len, head_dim)
-        k = k.view(bsz, self.num_heads, src_len, head_dim)
-        v = v.view(bsz, self.num_heads, src_len, head_dim)
-
-        attn_output = nn.functional.scaled_dot_product_attention(
-            q, k, v, attn_mask, dropout_p, is_causal
+        offset = src_len - tgt_len
+        q = q.transpose(1, 2)
+        k = repeat_kv(k.transpose(1, 2), self.n_rep)
+        v = repeat_kv(v.transpose(1, 2), self.n_rep)
+        q *= self.scaling
+        attn_weights = torch.matmul(q, k.transpose(-1, -2))
+        if attn_mask is None:
+            attn_mask = torch.triu(
+                torch.zeros([tgt_len, src_len])
+                .float()
+                .fill_(float("-inf"))
+                .type_as(attn_weights),
+                1 + offset,
+            )
+        attn_weights = torch.nan_to_num(attn_weights)
+        attn_weights += attn_mask   
+        attn_weights = F.softmax(attn_weights, dim=-1, dtype=torch.float32).type_as(
+            attn_weights
         )
-        attn_output = (
-            attn_output.permute(2, 0, 1, 3).contiguous().view(bsz * tgt_len, embed_dim)
-        )
 
-        attn_output = nn.functional.linear(attn_output, self.out_proj.weight, None)
-        attn_output = attn_output.view(tgt_len, bsz, attn_output.size(1))
-        return attn_output
+        lambda_1 = torch.exp(torch.sum(self.lambda_q1 * self.lambda_k1, dim=-1).float()).type_as(q)
+        lambda_2 = torch.exp(torch.sum(self.lambda_q2 * self.lambda_k2, dim=-1).float()).type_as(q)
+        lambda_full = lambda_1 - lambda_2 + self.lambda_init
+        attn_weights = attn_weights.view(bsz, self.num_heads, 2, tgt_len, src_len)
+        attn_weights = attn_weights[:, :, 0] - lambda_full * attn_weights[:, :, 1]
+        
+        attn = torch.matmul(attn_weights, v)
+        attn = self.subln(attn)
+        attn = attn * (1 - self.lambda_init)
+        attn = attn.transpose(1, 2).reshape(bsz, tgt_len, self.num_heads * 2 * self.head_dim)
 
-    def _in_projection_packed(self, query, key, value):
-        E = query.size(-1)
-        if key is value:
-            if query is key:
-                # self-attention
-                proj = nn.functional.linear(query, self.in_proj.weight, None)
-                # reshape to 3, E and not E, 3 is deliberate for better memory coalescing and keeping same order as chunk()
-                proj = (
-                    proj.unflatten(-1, (3, E))
-                    .unsqueeze(0)
-                    .transpose(0, -2)
-                    .squeeze(-2)
-                    .contiguous()
-                )
-                return proj[0], proj[1], proj[2]
-            else:
-                # encoder-decoder attention
-                w_q, w_kv = self.in_proj.weight.split([E, E * 2])
-                q_proj = nn.functional.linear(query, w_q, None)
-                kv_proj = nn.functional.linear(key, w_kv, None)
-                # reshape to 2, E and not E, 2 is deliberate for better memory coalescing and keeping same order as chunk()
-                kv_proj = (
-                    kv_proj.unflatten(-1, (2, E))
-                    .unsqueeze(0)
-                    .transpose(0, -2)
-                    .squeeze(-2)
-                    .contiguous()
-                )
-                return q_proj, kv_proj[0], kv_proj[1]
-        else:
-            w_q, w_k, w_v = self.in_proj.weight.chunk(3)
-            return nn.functional.linear(query, w_q, None), nn.functional.linear(key, w_k, None), nn.functional.linear(value, w_v, None)
+        attn = self.out_proj(attn)
+        return attn
+    
+# class MultiHeadAttention(nn.Module):
+#     def __init__(self, dim, num_heads, dropout = 0.1):
+#         super().__init__()
+#         self.dim = dim
+#         self.num_heads = num_heads
+#         self.in_proj = nn.Linear(dim, dim * 3, bias=False)
+#         self.out_proj = nn.Linear(dim, dim, bias=False)
+#         self.dropout = dropout
+
+#     def calc_qkv(self, query, key, value):
+#         return self._in_projection_packed(query, key, value)
+
+#     def forward(self, query, key=None, value=None, attn_mask=None, is_causal=False):
+#         # set up shape vars
+#         tgt_len, bsz, embed_dim = query.shape
+
+#         head_dim = embed_dim // self.num_heads
+#         q, k, v = self.calc_qkv(query, key, value)
+
+#         #
+#         # reshape q, k, v for multihead attention and make them batch first
+#         #
+#         q = q.view(tgt_len, bsz * self.num_heads, head_dim).transpose(0, 1)
+#         k = k.view(k.shape[0], bsz * self.num_heads, head_dim).transpose(0, 1)
+#         v = v.view(v.shape[0], bsz * self.num_heads, head_dim).transpose(0, 1)
+
+#         src_len = k.size(1)
+
+#         # adjust dropout probability
+#         if not self.training:
+#             dropout_p = 0.0
+#         else:
+#             dropout_p = self.dropout
+
+#         q = q.view(bsz, self.num_heads, tgt_len, head_dim)
+#         k = k.view(bsz, self.num_heads, src_len, head_dim)
+#         v = v.view(bsz, self.num_heads, src_len, head_dim)
+
+#         attn_output = nn.functional.scaled_dot_product_attention(
+#             q, k, v, attn_mask, dropout_p, is_causal
+#         )
+#         attn_output = (
+#             attn_output.permute(2, 0, 1, 3).contiguous().view(bsz * tgt_len, embed_dim)
+#         )
+
+#         attn_output = nn.functional.linear(attn_output, self.out_proj.weight, None)
+#         attn_output = attn_output.view(tgt_len, bsz, attn_output.size(1))
+#         return attn_output
+
+#     def _in_projection_packed(self, query, key, value):
+#         E = query.size(-1)
+#         if key is value:
+#             if query is key:
+#                 # self-attention
+#                 proj = nn.functional.linear(query, self.in_proj.weight, None)
+#                 # reshape to 3, E and not E, 3 is deliberate for better memory coalescing and keeping same order as chunk()
+#                 proj = (
+#                     proj.unflatten(-1, (3, E))
+#                     .unsqueeze(0)
+#                     .transpose(0, -2)
+#                     .squeeze(-2)
+#                     .contiguous()
+#                 )
+#                 return proj[0], proj[1], proj[2]
+#             else:
+#                 # encoder-decoder attention
+#                 w_q, w_kv = self.in_proj.weight.split([E, E * 2])
+#                 q_proj = nn.functional.linear(query, w_q, None)
+#                 kv_proj = nn.functional.linear(key, w_kv, None)
+#                 # reshape to 2, E and not E, 2 is deliberate for better memory coalescing and keeping same order as chunk()
+#                 kv_proj = (
+#                     kv_proj.unflatten(-1, (2, E))
+#                     .unsqueeze(0)
+#                     .transpose(0, -2)
+#                     .squeeze(-2)
+#                     .contiguous()
+#                 )
+#                 return q_proj, kv_proj[0], kv_proj[1]
+#         else:
+#             w_q, w_k, w_v = self.in_proj.weight.chunk(3)
+#             return nn.functional.linear(query, w_q, None), nn.functional.linear(key, w_k, None), nn.functional.linear(value, w_v, None)
 
 class EncoderBlock(nn.Module):
-    def __init__(self, dim, num_heads, dropout = 0.1):
+    def __init__(self, embed_dim, depth, num_heads, dropout = 0.1):
         super().__init__()
-        self.mha = MultiHeadAttention(dim, num_heads, dropout)
-        self.norm1 = nn.LayerNorm([dim])
-        self.norm2 = nn.LayerNorm([dim])
-        self.ff = FeedForward(dim)
+        self.mha = MultiheadDiffAttn(embed_dim=embed_dim, depth=depth, num_heads=num_heads)
+        self.norm1 = nn.LayerNorm([embed_dim])
+        self.norm2 = nn.LayerNorm([embed_dim])
+        self.ff = SwiGLU(embed_dim)
         self.dropout1 = nn.Dropout(dropout, inplace=True)
         self.dropout2 = nn.Dropout(dropout, inplace=True)
 
     def forward(self, x, attn_mask=None):
-        Q = K = V = x
-        x = self.mha(Q, K, V, attn_mask=attn_mask)
+        skip = x
+        x = self.mha(x, attn_mask=attn_mask)
         x = self.dropout1(x)
-        x = x + Q
+        x = x + skip
         x = self.norm1(x)
         _x = x
         x = self.ff(x)
         x = self.dropout2(x)
-        x = x + _x + Q
+        x = x + _x + skip
         x = self.norm2(x)
         return x
 
 class Encoder(nn.Module):
-    def __init__(self, input_dim, dim, head_num, max_seq_len=5000, block_num = 6, dropout = 0.1):
+    def __init__(self, input_dim, embed_dim, head_num, max_seq_len=5000, block_num = 6, dropout = 0.1):
         super().__init__()
-        self.dim = dim
+        self.dim = embed_dim
         self.head_num = head_num
-        self.embed = nn.Linear(input_dim, dim)
-        self.pe = PositionalEncoding(dim, max_len=max_seq_len)
-        self.norm = nn.LayerNorm([dim])
+        self.embed = nn.Linear(input_dim, embed_dim)
+        self.pe = PositionalEncoding(embed_dim, max_len=max_seq_len)
+        self.norm = nn.LayerNorm([embed_dim])
         self.dropout = nn.Dropout(dropout, inplace=True)
-        self.blocks = nn.ModuleList([EncoderBlock(dim, head_num) for _ in range(block_num)])        
+        self.blocks = nn.ModuleList([EncoderBlock(embed_dim, d, head_num) for d in range(block_num)])        
 
-    def forward(self, x, attn_mask=None, offset=0):
+    def forward(self, x, offset=0):
         x = self.embed(x)
         x = self.pe(x, offset=offset)
         x = self.norm(x)
         x = self.dropout(x)
         for block in self.blocks:
-            x = block(x, attn_mask=attn_mask)
+            x = block(x)
         return x
 
 class DecoderBlock(nn.Module):
-    def __init__(self, dim, head_num, dropout = 0.1):
+    def __init__(self, embed_dim, depth, head_num, dropout = 0.1):
         super().__init__()
-        self.self_attn = MultiHeadAttention(dim, head_num)
-        self.cross_attn = MultiHeadAttention(dim, head_num)    
-        self.norm1 = nn.LayerNorm([dim])
-        self.norm2 = nn.LayerNorm([dim])
-        self.norm3 = nn.LayerNorm([dim])
-        self.ff = FeedForward(dim)
-        self.dropout1 = nn.Dropout(dropout)
-        self.dropout2 = nn.Dropout(dropout)
-        self.dropout3 = nn.Dropout(dropout)
+        self.self_attn = MultiheadDiffAttn(embed_dim, depth, head_num)
+        self.cross_attn = MultiheadDiffAttn(embed_dim, depth, head_num)    
+        self.norm1 = nn.LayerNorm([embed_dim])
+        self.norm2 = nn.LayerNorm([embed_dim])
+        self.norm3 = nn.LayerNorm([embed_dim])
+        self.ff = SwiGLU(embed_dim)
+        self.dropout1 = nn.Dropout(dropout, inplace=True)
+        self.dropout2 = nn.Dropout(dropout, inplace=True)
+        self.dropout3 = nn.Dropout(dropout, inplace=True)
 
-    def forward(self, x, y, self_mask=None, cross_mask=None):
-        Q = K = V = x
+    def forward(self, x, y, cross_mask=None):
         skip = x
-        x = self.self_attn(Q, K, V, attn_mask=self_mask)
+        x = self.self_attn(x)
         x = self.dropout1(x)
-        x = x + Q
+        x = x + skip
         x = self.norm1(x)
-        Q = x
-        K = V = y
-        x = self.cross_attn(Q, K, V, attn_mask=cross_mask)
+        _x = x
+        x = self.cross_attn(x, y, attn_mask=cross_mask)
         x = self.dropout2(x)
-        x = x + Q
+        x = x + _x
         x = self.norm2(x)
         _x = x
         x = self.ff(x)
@@ -189,17 +289,17 @@ class DecoderBlock(nn.Module):
         return x
 
 class Decoder(nn.Module):
-    def __init__(self, dim, head_num, max_seq_len=5000, block_num = 6, dropout = 0.1):
+    def __init__(self, embed_dim, head_num, max_seq_len=5000, block_num = 6, dropout = 0.1):
         super().__init__()
         self.head_num = head_num
-        self.embed = nn.ModuleList([nn.Embedding(m, dim) for m in modulo_list])
-        self.pe = PositionalEncoding(dim, max_len=max_seq_len)
-        self.norm = nn.LayerNorm([dim])
-        self.blocks = nn.ModuleList([DecoderBlock(dim, head_num) for _ in range(block_num)])
+        self.embed = nn.ModuleList([nn.Embedding(m, embed_dim) for m in modulo_list])
+        self.pe = PositionalEncoding(embed_dim, max_len=max_seq_len)
+        self.norm = nn.LayerNorm([embed_dim])
+        self.blocks = nn.ModuleList([DecoderBlock(embed_dim, d, head_num) for d in range(block_num)])
         self.dropout = nn.Dropout(dropout, inplace=True)
-        self.out_layers = nn.ModuleList([nn.Linear(dim, m) for m in modulo_list])
+        self.out_layers = nn.ModuleList([nn.Linear(embed_dim, m) for m in modulo_list])
 
-    def forward(self, x, y, self_mask=None, cross_mask=None, offset=0):
+    def forward(self, x, y, cross_mask=None, offset=0):
         x1 = [x % m for m in modulo_list]
         x = None
         for x2, layer in zip(x1, self.embed):
@@ -211,24 +311,23 @@ class Decoder(nn.Module):
         x = self.norm(x)
         x = self.dropout(x)
         for block in self.blocks:
-            x = block(x, y, self_mask=self_mask, cross_mask=cross_mask)
+            x = block(x, y, cross_mask=cross_mask)
         return [layer(x) for layer in self.out_layers]
 
 class Transformer(nn.Module):
-    def __init__(self, enc_input_dim, dim, head_num, enc_block_num = 6, dec_block_num = 6, max_enc_seq_len = 5000, max_dec_seq_len = 5000):
+    def __init__(self, enc_input_dim, embed_dim, head_num, enc_block_num = 6, dec_block_num = 6, max_enc_seq_len = 5000, max_dec_seq_len = 5000):
         super().__init__()
         self.head_num = head_num
-        self.encoder = Encoder(input_dim=enc_input_dim, dim=dim, head_num=head_num, max_seq_len=max_enc_seq_len, block_num=enc_block_num)
-        self.decoder = Decoder(dim=dim, head_num=head_num, max_seq_len=max_dec_seq_len, block_num=dec_block_num)
+        self.encoder = Encoder(input_dim=enc_input_dim, embed_dim=embed_dim, head_num=head_num, max_seq_len=max_enc_seq_len, block_num=enc_block_num)
+        self.decoder = Decoder(embed_dim=embed_dim, head_num=head_num, max_seq_len=max_dec_seq_len, block_num=dec_block_num)
     
     def forward(self, enc_input, dec_input):
         encmask = torch.any(enc_input != 0, dim=-1)
         encmask = encmask.transpose(1,0)
-        encmask = encmask[:,None,None,:].expand(-1,-1,encmask.shape[-1],-1)
-        decmask = torch.ones(dec_input.shape[0], dec_input.shape[0], dtype=torch.bool, device=enc_input.device).tril(diagonal=0).unsqueeze(0).unsqueeze(0)
+        encmask = encmask[:,None,None,:]
         offset = torch.randint(0, enc_input.shape[0] // 2, (1,), device=enc_input.device)
         enc_output = self.encoder(enc_input, attn_mask=encmask, offset=offset)
-        output = self.decoder(dec_input, enc_output, self_mask=decmask, cross_mask=encmask, offset=offset)
+        output = self.decoder(dec_input, enc_output, cross_mask=encmask, offset=offset)
         return output
 
 @dataclass
