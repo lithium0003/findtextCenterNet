@@ -266,13 +266,13 @@ class TransformerPredictor(nn.Module):
     def forward(self, enc_input):
         encmask = torch.where(torch.any(enc_input != 0, dim=-1)[:,None,None,:], 0., -float("inf"))
         enc_output = self.encoder(enc_input, attn_mask=encmask, offset=0)
-        decoder_output = torch.zeros((max_decoderlen, enc_input.shape[1]), dtype=torch.long, device=enc_input.device)
-        decoder_output[0,:] = decoder_SOT
+        decoder_output = torch.zeros((enc_input.shape[0],max_decoderlen), dtype=torch.long, device=enc_input.device)
+        decoder_output[:,0] = decoder_SOT
         for i in range(max_decoderlen):
             outputs = self.decoder(decoder_output, enc_output, cross_mask=encmask, offset=0)
             pred_ids = []
             for decoder_id1 in outputs:
-                pred_id1 = torch.argmax(decoder_id1, dim=-1)[i]
+                pred_id1 = torch.argmax(decoder_id1, dim=-1)[:,i]
                 pred_ids.append(pred_id1)
             ids = []
             for args in zip(*pred_ids):
@@ -282,8 +282,8 @@ class TransformerPredictor(nn.Module):
             if torch.all(ids == decoder_EOT):
                 break
             if i+1 < max_decoderlen:
-                decoder_output[i+1,:] = ids
-        return decoder_output[1:,:]
+                decoder_output[:,i+1] = ids
+        return decoder_output[:,1:]
 
 class TransformerEncoderPredictor(nn.Module):
     def __init__(self, encoder):

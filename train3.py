@@ -178,10 +178,10 @@ def train():
         optimizer.zero_grad()
         for i, data in enumerate(training_loader):
             text, feature, codes = data
-            feature = feature.to(device=device, non_blocking=True).permute(1,0,2)
-            codes = codes.to(device=device, non_blocking=True).permute(1,0)
+            feature = feature.to(device=device, non_blocking=True)
+            codes = codes.to(device=device, non_blocking=True)
 
-            loss, rawloss = train_step(feature, codes[:-1], codes[1:], smoothing)
+            loss, rawloss = train_step(feature, codes[:,:-1], codes[:,1:], smoothing)
             loss.backward()
             optimizer.step()
             # scaler.scale(loss).backward()
@@ -229,10 +229,10 @@ def train():
         with torch.no_grad():
             for vdata in validation_loader:
                 text, feature, codes = vdata
-                feature = feature.to(device=device, non_blocking=True).permute(1,0,2)
-                codes = codes.to(device=device, non_blocking=True).permute(1,0)
+                feature = feature.to(device=device, non_blocking=True)
+                codes = codes.to(device=device, non_blocking=True)
 
-                loss, rawloss = test_step(feature, codes[:-1], codes[1:], smoothing)
+                loss, rawloss = test_step(feature, codes[:,:-1], codes[:,1:], smoothing)
                 running_loss(rawloss)
 
         losslog = running_loss.write()
@@ -260,9 +260,9 @@ def train():
             text, feature, codes = vdata
             print('==================')
             print(text)
-            feature = torch.tensor(feature[None,:,:], device=device).permute(1,0,2)
+            feature = torch.tensor(feature[None,:,:], device=device)
             with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
-                pred = model2(feature).squeeze(1).cpu().numpy()
+                pred = model2(feature).squeeze(0).cpu().numpy()
             predstr = ''
             for p in pred:
                 if p == 0:
