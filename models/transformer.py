@@ -9,6 +9,29 @@ from const import decoder_SOT, decoder_EOT, max_decoderlen, encoder_add_dim
 
 encoder_dim = feature_dim + encoder_add_dim
 
+class RMSNorm(nn.Module):
+    def __init__(self, dim: int, eps: float = 1e-6, elementwise_affine=True, memory_efficient=False):
+        super().__init__()
+        self.dim = dim
+        self.eps = eps
+        self.elementwise_affine = elementwise_affine
+        if self.elementwise_affine:
+            self.weight = nn.Parameter(torch.ones(dim))
+        else:
+            self.register_parameter('weight', None)
+
+    def _norm(self, x):
+        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+
+    def forward(self, x):
+        output = self._norm(x.float()).type_as(x)
+        if self.weight is not None:
+            output = output * self.weight
+        return output
+
+    def extra_repr(self) -> str:
+        return f'dim={self.dim}, eps={self.eps}, elementwise_affine={self.elementwise_affine}'
+
 class PositionalEncoding(nn.Module):
     def __init__(self, dim, max_len = 5000):
         super().__init__()
@@ -76,7 +99,7 @@ class MultiheadDiffAttn(nn.Module):
         self.lambda_q2 = nn.Parameter(torch.zeros(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
         self.lambda_k2 = nn.Parameter(torch.zeros(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
 
-        self.subln = nn.RMSNorm(2 * self.head_dim, eps=1e-5, elementwise_affine=True)
+        self.subln = RMSNorm(2 * self.head_dim, eps=1e-5, elementwise_affine=True)
     
     def forward(
         self,
@@ -107,10 +130,8 @@ class MultiheadDiffAttn(nn.Module):
         attn_weights = torch.nan_to_num(attn_weights)
         if causal_mask:
             attn_mask = torch.triu(
-                torch.zeros([tgt_len, src_len], device=q.device)
-                .float()
-                .fill_(float("-inf"))
-                .type_as(attn_weights),
+                torch.empty([tgt_len, src_len], dtype=attn_weights.dtype, device=q.device)
+                .fill_(-float("inf")),
                 1 + offset,
             )
             attn_weights += attn_mask   
@@ -290,8 +311,8 @@ class TransformerEncoderPredictor(nn.Module):
         self.head_num = encoder.head_num
         self.encoder = encoder
 
-    def forward(self, enc_input, encmask):
-        enc_output = self.encoder(enc_input, attn_mask=encmask, offset=0)
+    def forward(self, enc_input):
+        enc_output = self.encoder(enc_input, offset=0)
         return enc_output
 
 class TransformerDecoderPredictor(nn.Module):
@@ -300,8 +321,8 @@ class TransformerDecoderPredictor(nn.Module):
         self.head_num = decoder.head_num
         self.decoder = decoder
 
-    def forward(self, enc_output, decoder_input, crossmask):
-        outputs = self.decoder(decoder_input, enc_output, cross_mask=crossmask, offset=0)
+    def forward(self, enc_output, decoder_input):
+        outputs = self.decoder(decoder_input, enc_output, offset=0)
         # return [torch.softmax(x, dim=-1) for x in outputs]
         return outputs
 
