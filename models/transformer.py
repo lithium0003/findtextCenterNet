@@ -122,7 +122,7 @@ class MultiheadDiffAttn(nn.Module):
         lambda_2 = torch.exp(torch.sum(self.lambda_q2 * self.lambda_k2, dim=-1).float()).type_as(q)
         lambda_full = lambda_1 - lambda_2 + self.lambda_init
         attn_weights = attn_weights.view(bsz, self.num_heads, 2, tgt_len, src_len)
-        attn_weights = attn_weights[:, :, 0] - lambda_full * attn_weights[:, :, 1]
+        attn_weights = attn_weights[:, :, 0] - lambda_full.type_as(q) * attn_weights[:, :, 1]
         
         attn = torch.matmul(attn_weights, v)
         attn = self.subln(attn)
