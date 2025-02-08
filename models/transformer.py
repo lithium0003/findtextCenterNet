@@ -15,7 +15,7 @@ class PositionalEncoding(nn.Module):
         self.pe = nn.Parameter(torch.randn(max_len, dim))
 
     def forward(self, x, offset = 0):
-        pe = self.pe[offset:offset+x.shape[1]].unsqueeze(0)
+        pe = self.pe[offset:offset+x.size(1)].unsqueeze(0)
         return x + pe
 
 class SwiGLU(nn.Module):
@@ -309,9 +309,11 @@ class TransformerDecoderPredictor(nn.Module):
 if __name__ == '__main__':
     model = Transformer(enc_input_dim=100, embed_dim=512, head_num=8)
     print(model)
-    print(model(torch.ones(3,1,100),torch.ones(3,2, dtype=torch.long)))
+    out = model(torch.ones(3,1,100),torch.ones(3,2, dtype=torch.long))
+    print(out)
+    print([o.shape for o in out])
 
-    model2 = TransformerPredictor(model.encoder, model.decoder)
-    print(model2)
-    d = model2(torch.ones(3,1,100))
-    print(d)
+    # model2 = TransformerPredictor(model.encoder, model.decoder)
+    # print(model2)
+    # d = model2(torch.ones(3,1,100))
+    # print(d)
