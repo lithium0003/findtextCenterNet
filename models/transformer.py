@@ -15,7 +15,7 @@ class PositionalEncoding(nn.Module):
         self.pe = nn.Parameter(torch.randn(max_len, dim))
 
     def forward(self, x, offset = 0):
-        pe = self.pe[:x.shape[1]].unsqueeze(0)
+        pe = self.pe[offset:offset+x.shape[1]].unsqueeze(0)
         return x + pe.type_as(x)
 
 class SwiGLU(nn.Module):
@@ -246,7 +246,7 @@ class Transformer(nn.Module):
         # encmask = torch.all(enc_input == 0, dim=-1)
         # encmask = encmask[:,None,None,:]
         # encmask = torch.where(encmask, float("-inf"), 0.).type_as(enc_input)
-        offset = torch.randint(0, self.max_len - enc_input.shape[1], (1,), dtype=torch.long, device=enc_input.device)
+        offset = torch.randint(0, 100, (1,), dtype=torch.long, device=enc_input.device)
         enc_output = self.encoder(enc_input, attn_mask=encmask, offset=offset)
         output = self.decoder(dec_input, enc_output, cross_mask=encmask, offset=offset)
         return output
