@@ -188,31 +188,6 @@ class DecoderBlock(nn.Module):
         x = self.norm3(x)
         return x
 
-# https://github.com/KindXiaoming/grow-crystals
-# Harmonic Loss Trains Interpretable AI Models
-# https://arxiv.org/abs/2502.01628
-class DistLayer(torch.nn.Linear):
-    def __init__(self, in_features, out_features, n=1., eps=1e-4, bias=False):
-        super().__init__(in_features, out_features, bias=bias)
-        self.n = n
-        self.eps = eps
-        
-    def forward(self, x):
-        # x: (B, N)
-        # w: (V, N)
-        # dist_sq: (B, V)
-        w = self.weight
-        wx = torch.matmul(x, w.transpose(-2, -1)) # (B, V)
-        ww = torch.norm(w, dim=-1)**2 # (V,)
-        xx = torch.norm(x, dim=-1)**2 # (B,)
-
-        dist_sq = ww.unsqueeze(-2) + xx.unsqueeze(-1) - 2 * wx + self.eps
-        dist_sq = dist_sq / torch.min(dist_sq, dim=-1, keepdim = True)[0]
-        prob = (dist_sq)**(-self.n)
-        prob = prob/torch.sum(prob, dim=-1, keepdim=True)
-        logits = torch.log(prob)
-        return logits
-
 class Decoder(nn.Module):
     def __init__(self, dim, head_num, max_seq_len=5000, block_num = 6, dropout = 0.1):
         super().__init__()
@@ -261,8 +236,8 @@ class ModelDimensions:
     enc_input_dim: int = encoder_dim
     dim: int = 512
     head_num: int = 16
-    enc_block_num: int = 8
-    dec_block_num: int = 8
+    enc_block_num: int = 16
+    dec_block_num: int = 16
     max_enc_seq_len: int = 256
     max_dec_seq_len: int = 256
 
@@ -316,6 +291,7 @@ class TransformerDecoderPredictor(nn.Module):
 
     def forward(self, enc_output, decoder_input, selfmask, crossmask):
         outputs = self.decoder(decoder_input, enc_output, self_mask=selfmask, cross_mask=crossmask, offset=0)
+        # return [torch.softmax(x, dim=-1) for x in outputs]
         return outputs
 
 if __name__ == '__main__':
