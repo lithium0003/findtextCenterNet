@@ -16,7 +16,7 @@ class PositionalEncoding(nn.Module):
 
     def forward(self, x, offset = 0):
         pe = self.pe[offset:offset+x.size(1)].unsqueeze(0)
-        return x + pe
+        return x + pe.type_as(x)
 
 class SwiGLU(nn.Module):
     def __init__(self, dim):
