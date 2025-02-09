@@ -131,7 +131,7 @@ def train():
     # ], lr=lr, weight_decay=wd)
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
-    optimizer = torch.optim.RAdam(all_params, lr=lr)
+    optimizer = torch.optim.RAdam(all_params, lr=lr, weight_decay=wd)
     if 0 < scheduler_gamma < 1.0:
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=scheduler_gamma)
 
@@ -287,6 +287,8 @@ if __name__=='__main__':
                 EPOCHS = int(arg.split('=')[1])
             elif arg.startswith('--lr'):
                 lr = float(arg.split('=')[1])
+            elif arg.startswith('--wd'):
+                wd = float(arg.split('=')[1])
             elif arg.startswith('--logstep'):
                 logstep = int(arg.split('=')[1])
             elif arg.startswith('--output'):
