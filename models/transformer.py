@@ -81,9 +81,9 @@ class PositionalEncoding(nn.Module):
 class SwiGLU(nn.Module):
     def __init__(self, dim, dropout = 0.1):
         super().__init__()
-        self.w1 = nn.Linear(dim, dim*4)
-        self.wg = nn.Linear(dim, dim*4)
-        self.w2 = nn.Linear(dim*4, dim)
+        self.w1 = nn.Linear(dim, dim*2)
+        self.wg = nn.Linear(dim, dim*2)
+        self.w2 = nn.Linear(dim*2, dim)
         self.dropout = nn.Dropout(p = dropout, inplace=True)
 
     def forward(self, x):
@@ -312,10 +312,10 @@ class Transformer(nn.Module):
 @dataclass
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
-    embed_dim: int = 512
-    head_num: int = 16
-    enc_block_num: int = 8
-    dec_block_num: int = 8
+    embed_dim: int = 1024
+    head_num: int = 32
+    enc_block_num: int = 4
+    dec_block_num: int = 4
     max_enc_seq_len: int = 256
     max_dec_seq_len: int = 256
 
