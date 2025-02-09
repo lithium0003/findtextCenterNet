@@ -295,10 +295,12 @@ class Transformer(nn.Module):
         self.causal_mask = nn.Buffer(torch.triu(torch.empty([max_dec_seq_len, max_dec_seq_len]).fill_(-float("inf")),1).requires_grad_(False))
 
     def forward(self, enc_input, dec_input):
-        key_mask = torch.where(torch.all(enc_input == 0, dim=-1)[:,None,None,:], float("-inf"), 0).expand(-1,-1,enc_input.shape[1],-1)
-        enc_output = self.encoder(enc_input, key_mask=key_mask)
-        key_mask = torch.where(torch.all(enc_input == 0, dim=-1)[:,None,None,:], float("-inf"), 0).expand(-1,-1,enc_output.shape[1],-1)
-        output = self.decoder(dec_input, enc_output, causal_mask=self.causal_mask, key_mask=key_mask)
+        key_mask = torch.all(enc_input == 0, dim=-1)
+        key_mask = torch.logical_and(key_mask, torch.any(key_mask, dim=-1).unsqueeze(1))
+        mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0).expand(-1,-1,self.max_len,-1)
+        enc_output = self.encoder(enc_input, key_mask=mask)
+        mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0).expand(-1,-1,enc_output.shape[1],-1)
+        output = self.decoder(dec_input, enc_output, causal_mask=self.causal_mask, key_mask=mask)
         return output
 
 @dataclass
@@ -321,7 +323,9 @@ class TransformerPredictor(nn.Module):
         self.causal_mask = nn.Buffer(torch.triu(torch.empty([self.max_len, self.max_len]).fill_(-float("inf")),1).requires_grad_(False))
 
     def forward(self, enc_input):
-        key_mask = torch.where(torch.all(enc_input == 0, dim=-1)[:,None,None,:], float("-inf"), 0).expand(-1,-1,self.max_len,-1)
+        key_mask = torch.all(enc_input == 0, dim=-1)
+        key_mask = torch.logical_and(key_mask, torch.any(key_mask, dim=-1).unsqueeze(1))
+        key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0).expand(-1,-1,self.max_len,-1)
         enc_output = self.encoder(enc_input, key_mask=key_mask)
         decoder_output = torch.zeros((enc_input.shape[0],max_decoderlen), dtype=torch.long, device=enc_input.device)
         decoder_output[:,0] = decoder_SOT
