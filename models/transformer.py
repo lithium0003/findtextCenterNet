@@ -49,7 +49,7 @@ class PositionalEncoding(nn.Module):
         super(PositionalEncoding, self).__init__()
 
         # same size with input matrix (for adding with input matrix)
-        self.encoding = nn.Buffer(torch.zeros(max_len, d_model, requires_grad=False))
+        encoding = torch.zeros(max_len, d_model)
 
         pos = torch.arange(0, max_len)
         pos = pos.float().unsqueeze(dim=1)
@@ -59,9 +59,11 @@ class PositionalEncoding(nn.Module):
         # 'i' means index of d_model (e.g. embedding size = 50, 'i' = [0,50])
         # "step=2" means 'i' multiplied with two (same with 2 * i)
 
-        self.encoding[:, 0::2] = torch.sin(pos / (10000 ** (_2i / d_model)))
-        self.encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
+        encoding[:, 0::2] = torch.sin(pos / (10000 ** (_2i / d_model)))
+        encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
         # compute positional encoding to consider positional information of words
+
+        self.encoding = nn.Parameter(encoding, requires_grad=True)
 
     def forward(self, x):
         # self.encoding
@@ -163,7 +165,7 @@ class MultiheadDiffAttn(nn.Module):
         attn_weights = torch.matmul(q, k.transpose(-1, -2))
         if causal_mask is not None:
             attn_weights += causal_mask[:tgt_len,:src_len].type_as(attn_weights)
-        attn_weights = F.softmax(attn_weights.float(), dim=-1).type_as(attn_weights)
+        attn_weights = F.softmax(attn_weights.float(), dim=-1, dtype=torch.float32).type_as(attn_weights)
 
         lambda_1 = torch.exp(torch.sum(self.lambda_q1 * self.lambda_k1, dim=-1).float()).type_as(q)
         lambda_2 = torch.exp(torch.sum(self.lambda_q2 * self.lambda_k2, dim=-1).float()).type_as(q)
