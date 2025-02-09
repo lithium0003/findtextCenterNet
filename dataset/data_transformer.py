@@ -85,9 +85,9 @@ def find_splitpoint(txt, start=0, split_count=-1):
         return min(i+split_count+1, len(txt))
     idx2 = txt.find('\uFFFA', idx1)
     idx3 = txt.find('\uFFFB', idx1)
-    if idx3 >= i+split_count-3:
+    if idx3 >= i+split_count:
         return idx3+1
-    return find_splitpoint(txt, start=idx3+1, split_count=i+split_count-3-idx3)
+    return find_splitpoint(txt, start=idx3+1, split_count=i+split_count-idx3)
 
 def get_random_furigana():
     # 0: num
@@ -459,7 +459,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
 
         feat = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
         txt = text[index[start_idx]:index[end_idx]]
-        feat[0:end_idx-start_idx,:feature_dim] += rng.normal(loc=0, scale=1, size=(end_idx-start_idx,feature_dim))
+        feat[0:end_idx-start_idx,:feature_dim] += rng.normal(loc=0, scale=0.1, size=(end_idx-start_idx,feature_dim))
         feat[0:end_idx-start_idx] += self.realdata[idx]['feature'][start_idx:end_idx]
         return self.pad_output(txt, feat)
 
@@ -469,7 +469,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         if value is None:
             value = rng.normal(loc=0, scale=5, size=(1,feature_dim))
         # print('found:',code,chr(code),mu,sd)
-        return rng.choice(value, axis=0, replace=False) + rng.normal(loc=0, scale=1, size=(1,feature_dim))
+        return rng.choice(value, axis=0, replace=False) + rng.normal(loc=0, scale=0.1, size=(1,feature_dim))
 
     def gen_feature(self, text, orientation='both'):
         # 1 vertical
