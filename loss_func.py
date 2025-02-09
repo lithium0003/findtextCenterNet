@@ -190,7 +190,7 @@ def loss_function3(outputs, labelcode):
     loss = 0.
     for target_id1, decoder_id1 in zip(target_ids, outputs):
         id1_loss = torch.nn.functional.cross_entropy(decoder_id1.permute(0,2,1), target_id1, reduction='none')
-        loss += torch.masked_select(id1_loss, mask).mean()
+        loss += (id1_loss * mask).sum() / mask.sum().clamp_min(1)
 
     pred_ids = []
     for decoder_id1 in outputs:

@@ -369,6 +369,8 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                     else:
                         target_text += text
 
+                if len(feature_values) == 0:
+                    continue
                 feature_values.append(np.zeros([encoder_dim], np.float16))
                 feature_idx.append(len(target_text))
 
@@ -542,6 +544,10 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             if i in emphasis_idx:
                 ret[idx,feature_dim+4] = 5
             idx += 1
+ 
+        if idx == 0:
+            ret[idx,:feature_dim] = rng.normal(loc=0, scale=5, size=(feature_dim,))
+
         return ret
 
     def load_textfile(self, filename, orientation='both'):
