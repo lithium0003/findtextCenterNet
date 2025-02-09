@@ -181,7 +181,6 @@ def train():
 
             loss, rawloss = train_step(feature, codes[:,:-1], codes[:,1:], smoothing)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 15.0)
             optimizer.step()
             # scaler.scale(loss).backward()
             # scaler.step(optimizer)
@@ -247,10 +246,10 @@ def train():
         if 0 < scheduler_gamma < 1.0:
             scheduler.step() 
 
-        # if loss_down == 0 and loss_value < 5:
-        #     loss_down += 1
-        #     for group in optimizer.param_groups:
-        #         group['lr'] /= 10
+        if loss_down == 0 and loss_value < 2:
+            loss_down += 1
+            for group in optimizer.param_groups:
+                group['lr'] /= 10
 
         model2.eval()
         idx = rng.integers(len(validation_dataset))
