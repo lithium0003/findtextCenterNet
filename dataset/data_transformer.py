@@ -461,8 +461,8 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         feat = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
         feat[0,:feature_dim] = rng.normal(loc=0, scale=5, size=(feature_dim,))
         txt = text[index[start_idx]:index[end_idx]]
-        feat[0:end_idx-start_idx,:feature_dim] += rng.normal(loc=0, scale=0.1, size=(end_idx-start_idx,feature_dim))
         feat[0:end_idx-start_idx] += self.realdata[idx]['feature'][start_idx:end_idx]
+        feat[0:end_idx-start_idx,:feature_dim] *= (1 + rng.normal(loc=0, scale=0.01, size=(end_idx-start_idx,feature_dim)))
         return self.pad_output(txt, feat)
 
     def generage_feature(self, code, horizontal):
@@ -471,7 +471,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         if value is None:
             value = rng.normal(loc=0, scale=5, size=(1,feature_dim))
         # print('found:',code,chr(code),mu,sd)
-        return rng.choice(value, axis=0, replace=False) + rng.normal(loc=0, scale=0.1, size=(1,feature_dim))
+        return rng.choice(value, axis=0, replace=False) * (1 + rng.normal(loc=0, scale=0.01, size=(1,feature_dim)))
 
     def gen_feature(self, text, orientation='both'):
         # 1 vertical
