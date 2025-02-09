@@ -164,10 +164,10 @@ class MultiheadDiffAttn(nn.Module):
         v = repeat_kv(v.transpose(1, 2), self.n_rep)
         q *= self.scaling
         attn_weights = torch.matmul(q, k.transpose(-1, -2))
-        if causal_mask is not None:
-            attn_weights += causal_mask[:tgt_len,:src_len].type_as(attn_weights)
         if key_mask is not None:
             attn_weights += key_mask.type_as(attn_weights)
+        if causal_mask is not None:
+            attn_weights += causal_mask[:tgt_len,:src_len].type_as(attn_weights)
         attn_weights = F.softmax(attn_weights.float(), dim=-1, dtype=torch.float32).type_as(attn_weights)
 
         lambda_1 = torch.exp(torch.sum(self.lambda_q1 * self.lambda_k1, dim=-1).float()).type_as(q)
@@ -295,8 +295,9 @@ class Transformer(nn.Module):
         self.causal_mask = nn.Buffer(torch.triu(torch.empty([max_dec_seq_len, max_dec_seq_len]).fill_(-float("inf")),1).requires_grad_(False))
 
     def forward(self, enc_input, dec_input):
-        key_mask = torch.where(torch.all(enc_input == 0, dim=-1)[:,None,None,:], float("-inf"), 0).expand(-1,-1,self.max_len,-1)
+        key_mask = torch.where(torch.all(enc_input == 0, dim=-1)[:,None,None,:], float("-inf"), 0).expand(-1,-1,enc_input.shape[1],-1)
         enc_output = self.encoder(enc_input, key_mask=key_mask)
+        key_mask = torch.where(torch.all(enc_input == 0, dim=-1)[:,None,None,:], float("-inf"), 0).expand(-1,-1,enc_output.shape[1],-1)
         output = self.decoder(dec_input, enc_output, causal_mask=self.causal_mask, key_mask=key_mask)
         return output
 
