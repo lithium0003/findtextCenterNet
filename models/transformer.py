@@ -108,7 +108,6 @@ class MultiheadDiffAttn(nn.Module):
         embed_dim,
         depth,
         num_heads,
-        max_len = 5000,
     ):
         super().__init__()
         self.embed_dim = embed_dim
@@ -124,7 +123,6 @@ class MultiheadDiffAttn(nn.Module):
         self.head_dim = embed_dim // num_heads // 2
         self.scaling = self.head_dim ** -0.5
         
-        self.pos_emb = PositionalEncoding(embed_dim, max_len=max_len)
         self.q_proj = nn.Linear(embed_dim, embed_dim, bias=False)
         self.k_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
         self.v_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
@@ -153,9 +151,6 @@ class MultiheadDiffAttn(nn.Module):
         q = self.q_proj(query)
         k = self.k_proj(key)
         v = self.v_proj(value)
-
-        q = self.pos_emb(q)
-        k = self.pos_emb(k)
 
         q = q.view(bsz, tgt_len, 2 * self.num_heads, self.head_dim)
         k = k.view(bsz, src_len, 2 * self.num_kv_heads, self.head_dim)
@@ -194,9 +189,9 @@ class MultiheadDiffAttn(nn.Module):
         return attn
     
 class EncoderBlock(nn.Module):
-    def __init__(self, embed_dim, depth, num_heads, max_seq_len = 5000, dropout = 0.1):
+    def __init__(self, embed_dim, depth, num_heads, dropout = 0.1):
         super().__init__()
-        self.mha = MultiheadDiffAttn(embed_dim=embed_dim, depth=depth, num_heads=num_heads, max_len=max_seq_len)
+        self.mha = MultiheadDiffAttn(embed_dim=embed_dim, depth=depth, num_heads=num_heads)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.ff = SwiGLU(embed_dim)
@@ -222,12 +217,14 @@ class Encoder(nn.Module):
         self.dim = embed_dim
         self.head_num = head_num
         self.embed = nn.Linear(input_dim, embed_dim)
+        self.pos_emb = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.norm = nn.LayerNorm([embed_dim])
         self.dropout = nn.Dropout(dropout, inplace=True)
-        self.blocks = nn.ModuleList([EncoderBlock(embed_dim, d, head_num, max_seq_len=max_seq_len) for d in range(block_num)])        
+        self.blocks = nn.ModuleList([EncoderBlock(embed_dim, d, head_num) for d in range(block_num)])        
 
     def forward(self, x):
         x = self.embed(x)
+        x = self.pos_emb(x)
         x = self.norm(x)
         x = self.dropout(x)
         for block in self.blocks:
@@ -235,10 +232,10 @@ class Encoder(nn.Module):
         return x
 
 class DecoderBlock(nn.Module):
-    def __init__(self, embed_dim, depth, head_num, max_seq_len = 5000, dropout = 0.1):
+    def __init__(self, embed_dim, depth, head_num, dropout = 0.1):
         super().__init__()
-        self.self_attn = MultiheadDiffAttn(embed_dim, depth, head_num, max_len=max_seq_len)
-        self.cross_attn = MultiheadDiffAttn(embed_dim, depth, head_num, max_len=max_seq_len)
+        self.self_attn = MultiheadDiffAttn(embed_dim, depth, head_num)
+        self.cross_attn = MultiheadDiffAttn(embed_dim, depth, head_num)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.norm3 = nn.LayerNorm([embed_dim])
@@ -270,8 +267,9 @@ class Decoder(nn.Module):
         super().__init__()
         self.head_num = head_num
         self.embed = nn.ModuleList([nn.Embedding(m, embed_dim) for m in modulo_list])
+        self.pos_emb = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.norm = nn.LayerNorm([embed_dim])
-        self.blocks = nn.ModuleList([DecoderBlock(embed_dim, d, head_num, max_seq_len=max_seq_len) for d in range(block_num)])
+        self.blocks = nn.ModuleList([DecoderBlock(embed_dim, d, head_num) for d in range(block_num)])
         self.dropout = nn.Dropout(dropout, inplace=True)
         self.out_layers = nn.ModuleList([nn.Linear(embed_dim, m) for m in modulo_list])
 
@@ -283,6 +281,7 @@ class Decoder(nn.Module):
                 x = layer(x2)
             else:
                 x += layer(x2)
+        x = self.pos_emb(x)
         x = self.norm(x)
         x = self.dropout(x)
         for block in self.blocks:
