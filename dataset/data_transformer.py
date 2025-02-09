@@ -455,14 +455,18 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                     g = self.realdata[idx]['feature'][j]
                     end_idx = j
                     j += 1
+        if end_idx+1 < index.shape[0]:
+            end_idx += 1
         if end_idx-start_idx > max_encoderlen-2:
             end_idx = start_idx+max_encoderlen-2
 
         feat = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
-        feat[0,:feature_dim] = rng.normal(loc=0, scale=5, size=(feature_dim,))
+        feat[0,:] = 5 # SOT
         txt = text[index[start_idx]:index[end_idx]]
         feat[0:end_idx-start_idx] += self.realdata[idx]['feature'][start_idx:end_idx]
         feat[0:end_idx-start_idx,:feature_dim] *= (1 + rng.normal(loc=0, scale=0.01, size=(end_idx-start_idx,feature_dim)))
+        if end_idx-start_idx < max_encoderlen:
+            feat[end_idx-start_idx] = -5 # EOT
         return self.pad_output(txt, feat)
 
     def generage_feature(self, code, horizontal):
@@ -508,8 +512,9 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                     break
         # print(emphasis_idx)
         ret = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
-        ret[0,:feature_dim] = rng.normal(loc=0, scale=5, size=(feature_dim,))
         idx = 0
+        ret[idx,:] = 5 # SOT
+        idx += 1
         for i,c in enumerate(text):
             if idx >= max_encoderlen:
                 break
@@ -546,6 +551,9 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             if i in emphasis_idx:
                 ret[idx,feature_dim+4] = 5
             idx += 1
+
+        if idx < max_encoderlen-1:
+            ret[idx,:] = -5 # EOT
 
         return ret
 
@@ -608,6 +616,28 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         codes += [0] * max(0,max_decoderlen+1-len(codes))
         codes = np.array(codes, dtype=int)
         return text, feature, codes[:max_decoderlen+1]
+
+
+#######################################################
+# encoder
+# 
+# input
+#  100(feature) + 6(add)
+#                 [vertical,rubybase,ruby,space,emphasis,newline]
+#
+# sot = all(5)
+# eot = all(-5)
+#######################################################
+# decoder
+#
+# input/output
+#  utf-32 code
+#
+# sot = 1
+# eot = 2
+# pad = 0
+#######################################################
+
 
 if __name__=='__main__':
     from torch.utils.data import DataLoader
