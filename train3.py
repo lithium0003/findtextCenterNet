@@ -181,6 +181,7 @@ def train():
 
             loss, rawloss = train_step(feature, codes[:,:-1], codes[:,1:], smoothing)
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             # scaler.scale(loss).backward()
             # scaler.step(optimizer)
