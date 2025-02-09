@@ -92,7 +92,7 @@ def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
     """torch.repeat_interleave(x, dim=1, repeats=n_rep)"""
     bs, n_kv_heads, slen, head_dim = x.shape
     if n_rep == 1:
-        return x
+        return x.contiguous()
     return (
         x[:, :, None, :, :]
         .expand(bs, n_kv_heads, n_rep, slen, head_dim)
@@ -129,10 +129,10 @@ class MultiheadDiffAttn(nn.Module):
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
 
         self.lambda_init = lambda_init_fn(depth)
-        self.lambda_q1 = nn.Parameter(torch.zeros(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
-        self.lambda_k1 = nn.Parameter(torch.zeros(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
-        self.lambda_q2 = nn.Parameter(torch.zeros(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
-        self.lambda_k2 = nn.Parameter(torch.zeros(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
+        self.lambda_q1 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
+        self.lambda_k1 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
+        self.lambda_q2 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
+        self.lambda_k2 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
 
         self.subln = RMSNorm(2 * self.head_dim, eps=1e-5, elementwise_affine=True)
     
@@ -157,22 +157,19 @@ class MultiheadDiffAttn(nn.Module):
         v = v.view(bsz, src_len, self.num_kv_heads, 2 * self.head_dim)
 
         offset = src_len - tgt_len
-        q = q.transpose(1, 2)
+        q = q.transpose(1, 2).contiguous()
         k = repeat_kv(k.transpose(1, 2), self.n_rep)
         v = repeat_kv(v.transpose(1, 2), self.n_rep)
         q *= self.scaling
         attn_weights = torch.matmul(q, k.transpose(-1, -2))
-        attn_weights = torch.nan_to_num(attn_weights)
         if causal_mask:
             attn_mask = torch.triu(
-                torch.empty([tgt_len, src_len], dtype=attn_weights.dtype, device=q.device)
+                torch.empty([tgt_len, src_len], device=q.device)
                 .fill_(-float("inf")),
                 1 + offset,
-            )
-            attn_weights += attn_mask   
-        attn_weights = F.softmax(attn_weights, dim=-1, dtype=torch.float32).type_as(
-            attn_weights
-        )
+            ).type_as(attn_weights)
+            attn_weights += attn_mask
+        attn_weights = F.softmax(attn_weights.float(), dim=-1).type_as(attn_weights)
 
         lambda_1 = torch.exp(torch.sum(self.lambda_q1 * self.lambda_k1, dim=-1).float()).type_as(q)
         lambda_2 = torch.exp(torch.sum(self.lambda_q2 * self.lambda_k2, dim=-1).float()).type_as(q)
@@ -187,7 +184,7 @@ class MultiheadDiffAttn(nn.Module):
 
         attn = self.out_proj(attn)
         return attn
-    
+
 class EncoderBlock(nn.Module):
     def __init__(self, embed_dim, depth, num_heads, dropout = 0.1):
         super().__init__()
