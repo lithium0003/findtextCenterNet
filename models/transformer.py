@@ -167,7 +167,7 @@ class MultiheadDiffAttn(nn.Module):
         if causal_mask is not None:
             attn_weights += causal_mask[:tgt_len,:src_len].type_as(attn_weights)
         if key_mask is not None:
-            attn_weights += key_mask[:tgt_len,:src_len].type_as(attn_weights)
+            attn_weights += key_mask.type_as(attn_weights)
         attn_weights = F.softmax(attn_weights.float(), dim=-1, dtype=torch.float32).type_as(attn_weights)
 
         lambda_1 = torch.exp(torch.sum(self.lambda_q1 * self.lambda_k1, dim=-1).float()).type_as(q)
@@ -295,7 +295,7 @@ class Transformer(nn.Module):
         self.causal_mask = nn.Buffer(torch.triu(torch.empty([max_dec_seq_len, max_dec_seq_len]).fill_(-float("inf")),1).requires_grad_(False))
 
     def forward(self, enc_input, dec_input):
-        key_mask = torch.where(torch.all(enc_input == 0, dim=-1)[:,None,None,:], float("-inf"), 0).expand(-1,-1,enc_input.shape[1],-1)
+        key_mask = torch.where(torch.all(enc_input == 0, dim=-1)[:,None,None,:], float("-inf"), 0).expand(-1,-1,self.max_len,-1)
         enc_output = self.encoder(enc_input, key_mask=key_mask)
         output = self.decoder(dec_input, enc_output, causal_mask=self.causal_mask, key_mask=key_mask)
         return output
@@ -314,12 +314,13 @@ class TransformerPredictor(nn.Module):
     def __init__(self, encoder, decoder):
         super().__init__()
         self.head_num = encoder.head_num
+        self.max_len = decoder.max_seq_len
         self.encoder = encoder
         self.decoder = decoder
-        self.causal_mask = nn.Buffer(torch.triu(torch.empty([decoder.max_seq_len, decoder.max_seq_len]).fill_(-float("inf")),1).requires_grad_(False))
+        self.causal_mask = nn.Buffer(torch.triu(torch.empty([self.max_len, self.max_len]).fill_(-float("inf")),1).requires_grad_(False))
 
     def forward(self, enc_input):
-        key_mask = torch.where(torch.all(enc_input == 0, dim=-1), float("-inf"), 0)[:,None,None,:]
+        key_mask = torch.where(torch.all(enc_input == 0, dim=-1)[:,None,None,:], float("-inf"), 0).expand(-1,-1,self.max_len,-1)
         enc_output = self.encoder(enc_input, key_mask=key_mask)
         decoder_output = torch.zeros((enc_input.shape[0],max_decoderlen), dtype=torch.long, device=enc_input.device)
         decoder_output[:,0] = decoder_SOT
