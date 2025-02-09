@@ -459,6 +459,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             end_idx = start_idx+max_encoderlen-2
 
         feat = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
+        feat[0,:feature_dim] = rng.normal(loc=0, scale=5, size=(feature_dim,))
         txt = text[index[start_idx]:index[end_idx]]
         feat[0:end_idx-start_idx,:feature_dim] += rng.normal(loc=0, scale=0.1, size=(end_idx-start_idx,feature_dim))
         feat[0:end_idx-start_idx] += self.realdata[idx]['feature'][start_idx:end_idx]
@@ -507,6 +508,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                     break
         # print(emphasis_idx)
         ret = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
+        ret[0,:feature_dim] = rng.normal(loc=0, scale=5, size=(feature_dim,))
         idx = 0
         for i,c in enumerate(text):
             if idx >= max_encoderlen:
@@ -544,9 +546,6 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             if i in emphasis_idx:
                 ret[idx,feature_dim+4] = 5
             idx += 1
- 
-        if idx == 0:
-            ret[idx,:feature_dim] = rng.normal(loc=0, scale=5, size=(feature_dim,))
 
         return ret
 
