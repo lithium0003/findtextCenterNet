@@ -32,13 +32,48 @@ class RMSNorm(nn.Module):
     def extra_repr(self) -> str:
         return f'dim={self.dim}, eps={self.eps}, elementwise_affine={self.elementwise_affine}'
 
-class PositionalEncoding(nn.Module):
-    def __init__(self, dim, max_len = 5000):
-        super().__init__()
-        self.pe = nn.Parameter(torch.randn(max_len, dim))
 
-    def forward(self, x, offset = 0):
-        pe = self.pe[offset:offset+x.shape[1]].unsqueeze(0)
+class PositionalEncoding(nn.Module):
+    """
+    compute sinusoid encoding.
+    """
+
+    def __init__(self, d_model, max_len = 5000):
+        """
+        constructor of sinusoid encoding class
+
+        :param d_model: dimension of model
+        :param max_len: max sequence length
+        :param device: hardware device setting
+        """
+        super(PositionalEncoding, self).__init__()
+
+        # same size with input matrix (for adding with input matrix)
+        self.encoding = nn.Buffer(torch.zeros(max_len, d_model, requires_grad=False))
+
+        pos = torch.arange(0, max_len)
+        pos = pos.float().unsqueeze(dim=1)
+        # 1D => 2D unsqueeze to represent word's position
+
+        _2i = torch.arange(0, d_model, step=2).float()
+        # 'i' means index of d_model (e.g. embedding size = 50, 'i' = [0,50])
+        # "step=2" means 'i' multiplied with two (same with 2 * i)
+
+        self.encoding[:, 0::2] = torch.sin(pos / (10000 ** (_2i / d_model)))
+        self.encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
+        # compute positional encoding to consider positional information of words
+
+    def forward(self, x):
+        # self.encoding
+        # [max_len = 512, d_model = 512]
+
+        seq_len = x.shape[1]
+        # [batch_size = 128, seq_len = 30]
+
+        pe = self.encoding[:seq_len, :].unsqueeze(0)
+        # [seq_len = 30, d_model = 512]
+        # it will add with tok_emb : [128, 30, 512]
+
         return x + pe.type_as(x)
 
 class SwiGLU(nn.Module):
@@ -73,6 +108,7 @@ class MultiheadDiffAttn(nn.Module):
         embed_dim,
         depth,
         num_heads,
+        max_len = 5000,
     ):
         super().__init__()
         self.embed_dim = embed_dim
@@ -88,6 +124,7 @@ class MultiheadDiffAttn(nn.Module):
         self.head_dim = embed_dim // num_heads // 2
         self.scaling = self.head_dim ** -0.5
         
+        self.pos_emb = PositionalEncoding(embed_dim, max_len=max_len)
         self.q_proj = nn.Linear(embed_dim, embed_dim, bias=False)
         self.k_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
         self.v_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
@@ -116,6 +153,9 @@ class MultiheadDiffAttn(nn.Module):
         q = self.q_proj(query)
         k = self.k_proj(key)
         v = self.v_proj(value)
+
+        q = self.pos_emb(q)
+        k = self.pos_emb(k)
 
         q = q.view(bsz, tgt_len, 2 * self.num_heads, self.head_dim)
         k = k.view(bsz, src_len, 2 * self.num_kv_heads, self.head_dim)
@@ -154,9 +194,9 @@ class MultiheadDiffAttn(nn.Module):
         return attn
     
 class EncoderBlock(nn.Module):
-    def __init__(self, embed_dim, depth, num_heads, dropout = 0.1):
+    def __init__(self, embed_dim, depth, num_heads, max_seq_len = 5000, dropout = 0.1):
         super().__init__()
-        self.mha = MultiheadDiffAttn(embed_dim=embed_dim, depth=depth, num_heads=num_heads)
+        self.mha = MultiheadDiffAttn(embed_dim=embed_dim, depth=depth, num_heads=num_heads, max_len=max_seq_len)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.ff = SwiGLU(embed_dim)
@@ -182,14 +222,12 @@ class Encoder(nn.Module):
         self.dim = embed_dim
         self.head_num = head_num
         self.embed = nn.Linear(input_dim, embed_dim)
-        self.pe = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.norm = nn.LayerNorm([embed_dim])
         self.dropout = nn.Dropout(dropout, inplace=True)
-        self.blocks = nn.ModuleList([EncoderBlock(embed_dim, d, head_num) for d in range(block_num)])        
+        self.blocks = nn.ModuleList([EncoderBlock(embed_dim, d, head_num, max_seq_len=max_seq_len) for d in range(block_num)])        
 
-    def forward(self, x, offset=0):
+    def forward(self, x):
         x = self.embed(x)
-        x = self.pe(x,offset=offset)
         x = self.norm(x)
         x = self.dropout(x)
         for block in self.blocks:
@@ -197,10 +235,10 @@ class Encoder(nn.Module):
         return x
 
 class DecoderBlock(nn.Module):
-    def __init__(self, embed_dim, depth, head_num, dropout = 0.1):
+    def __init__(self, embed_dim, depth, head_num, max_seq_len = 5000, dropout = 0.1):
         super().__init__()
-        self.self_attn = MultiheadDiffAttn(embed_dim, depth, head_num)
-        self.cross_attn = MultiheadDiffAttn(embed_dim, depth, head_num)    
+        self.self_attn = MultiheadDiffAttn(embed_dim, depth, head_num, max_len=max_seq_len)
+        self.cross_attn = MultiheadDiffAttn(embed_dim, depth, head_num, max_len=max_seq_len)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.norm3 = nn.LayerNorm([embed_dim])
@@ -232,13 +270,12 @@ class Decoder(nn.Module):
         super().__init__()
         self.head_num = head_num
         self.embed = nn.ModuleList([nn.Embedding(m, embed_dim) for m in modulo_list])
-        self.pe = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.norm = nn.LayerNorm([embed_dim])
-        self.blocks = nn.ModuleList([DecoderBlock(embed_dim, d, head_num) for d in range(block_num)])
+        self.blocks = nn.ModuleList([DecoderBlock(embed_dim, d, head_num, max_seq_len=max_seq_len) for d in range(block_num)])
         self.dropout = nn.Dropout(dropout, inplace=True)
         self.out_layers = nn.ModuleList([nn.Linear(embed_dim, m) for m in modulo_list])
 
-    def forward(self, x, y, offset=0):
+    def forward(self, x, y):
         x1 = [x % m for m in modulo_list]
         x = None
         for x2, layer in zip(x1, self.embed):
@@ -246,7 +283,6 @@ class Decoder(nn.Module):
                 x = layer(x2)
             else:
                 x += layer(x2)
-        x = self.pe(x, offset=offset)
         x = self.norm(x)
         x = self.dropout(x)
         for block in self.blocks:
@@ -262,9 +298,8 @@ class Transformer(nn.Module):
         self.decoder = Decoder(embed_dim=embed_dim, head_num=head_num, max_seq_len=max_dec_seq_len, block_num=dec_block_num)
     
     def forward(self, enc_input, dec_input):
-        offset = torch.randint(0, self.max_len - enc_input.shape[1], (1,), device=enc_input.device)
-        enc_output = self.encoder(enc_input, offset=offset)
-        output = self.decoder(dec_input, enc_output, offset=offset)
+        enc_output = self.encoder(enc_input)
+        output = self.decoder(dec_input, enc_output)
         return output
 
 @dataclass
@@ -285,11 +320,11 @@ class TransformerPredictor(nn.Module):
         self.decoder = decoder
 
     def forward(self, enc_input):
-        enc_output = self.encoder(enc_input, offset=0)
+        enc_output = self.encoder(enc_input)
         decoder_output = torch.zeros((enc_input.shape[0],max_decoderlen), dtype=torch.long, device=enc_input.device)
         decoder_output[:,0] = decoder_SOT
         for i in range(max_decoderlen):
-            outputs = self.decoder(decoder_output, enc_output, offset=0)
+            outputs = self.decoder(decoder_output, enc_output)
             pred_ids = []
             for decoder_id1 in outputs:
                 pred_id1 = torch.argmax(decoder_id1, dim=-1)[:,i]
@@ -312,7 +347,7 @@ class TransformerEncoderPredictor(nn.Module):
         self.encoder = encoder
 
     def forward(self, enc_input):
-        enc_output = self.encoder(enc_input, offset=0)
+        enc_output = self.encoder(enc_input)
         return enc_output
 
 class TransformerDecoderPredictor(nn.Module):
@@ -322,7 +357,7 @@ class TransformerDecoderPredictor(nn.Module):
         self.decoder = decoder
 
     def forward(self, enc_output, decoder_input):
-        outputs = self.decoder(decoder_input, enc_output, offset=0)
+        outputs = self.decoder(decoder_input, enc_output)
         # return [torch.softmax(x, dim=-1) for x in outputs]
         return outputs
 
