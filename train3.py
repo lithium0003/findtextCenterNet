@@ -131,7 +131,7 @@ def train():
     # ], lr=lr, weight_decay=wd)
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
-    optimizer = torch.optim.RAdam(all_params, lr=lr, weight_decay=wd)
+    optimizer = torch.optim.RAdam(all_params, lr=lr)
     if 0 < scheduler_gamma < 1.0:
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=scheduler_gamma)
 
