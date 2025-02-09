@@ -142,6 +142,7 @@ class MultiheadDiffAttn(nn.Module):
         self,
         query, key=None, value=None,
         causal_mask=None,
+        key_mask=None,
     ):
         if key is None:
             key = query
@@ -165,6 +166,8 @@ class MultiheadDiffAttn(nn.Module):
         attn_weights = torch.matmul(q, k.transpose(-1, -2))
         if causal_mask is not None:
             attn_weights += causal_mask[:tgt_len,:src_len].type_as(attn_weights)
+        if key_mask is not None:
+            attn_weights += key_mask[:tgt_len,:src_len].type_as(attn_weights)
         attn_weights = F.softmax(attn_weights.float(), dim=-1, dtype=torch.float32).type_as(attn_weights)
 
         lambda_1 = torch.exp(torch.sum(self.lambda_q1 * self.lambda_k1, dim=-1).float()).type_as(q)
@@ -191,9 +194,9 @@ class EncoderBlock(nn.Module):
         self.dropout1 = nn.Dropout(dropout, inplace=True)
         self.dropout2 = nn.Dropout(dropout, inplace=True)
 
-    def forward(self, x):
+    def forward(self, x, key_mask=None):
         skip = x
-        x = self.mha(x)
+        x = self.mha(x, key_mask=key_mask)
         x = self.dropout1(x)
         x = x + skip
         x = self.norm1(x)
@@ -215,13 +218,13 @@ class Encoder(nn.Module):
         self.dropout = nn.Dropout(dropout, inplace=True)
         self.blocks = nn.ModuleList([EncoderBlock(embed_dim, d, head_num) for d in range(block_num)])        
 
-    def forward(self, x):
+    def forward(self, x, key_mask=None):
         x = self.embed(x)
         x = self.pos_emb(x)
         x = self.norm(x)
         x = self.dropout(x)
         for block in self.blocks:
-            x = block(x)
+            x = block(x, key_mask=key_mask)
         return x
 
 class DecoderBlock(nn.Module):
@@ -237,14 +240,14 @@ class DecoderBlock(nn.Module):
         self.dropout2 = nn.Dropout(dropout, inplace=True)
         self.dropout3 = nn.Dropout(dropout, inplace=True)
 
-    def forward(self, x, y, causal_mask=None):
+    def forward(self, x, y, causal_mask=None, key_mask=None):
         skip = x
         x = self.self_attn(x, causal_mask=causal_mask)
         x = self.dropout1(x)
         x = x + skip
         x = self.norm1(x)
         _x = x
-        x = self.cross_attn(x, y)
+        x = self.cross_attn(x, y, key_mask=key_mask)
         x = self.dropout2(x)
         x = x + _x
         x = self.norm2(x)
@@ -267,7 +270,7 @@ class Decoder(nn.Module):
         self.dropout = nn.Dropout(dropout, inplace=True)
         self.out_layers = nn.ModuleList([nn.Linear(embed_dim, m) for m in modulo_list])
 
-    def forward(self, x, y, causal_mask=None):
+    def forward(self, x, y, causal_mask=None, key_mask=None):
         x1 = [x % m for m in modulo_list]
         x = None
         for x2, layer in zip(x1, self.embed):
@@ -279,7 +282,7 @@ class Decoder(nn.Module):
         x = self.norm(x)
         x = self.dropout(x)
         for block in self.blocks:
-            x = block(x, y, causal_mask=causal_mask)
+            x = block(x, y, causal_mask=causal_mask, key_mask=key_mask)
         return [layer(x) for layer in self.out_layers]
 
 class Transformer(nn.Module):
@@ -292,8 +295,9 @@ class Transformer(nn.Module):
         self.causal_mask = nn.Buffer(torch.triu(torch.empty([max_dec_seq_len, max_dec_seq_len]).fill_(-float("inf")),1).requires_grad_(False))
 
     def forward(self, enc_input, dec_input):
-        enc_output = self.encoder(enc_input)
-        output = self.decoder(dec_input, enc_output, causal_mask=self.causal_mask)
+        key_mask = torch.where(torch.all(enc_input == 0, dim=-1)[:,None,None,:], float("-inf"), 0).expand(-1,-1,enc_input.shape[1],-1)
+        enc_output = self.encoder(enc_input, key_mask=key_mask)
+        output = self.decoder(dec_input, enc_output, causal_mask=self.causal_mask, key_mask=key_mask)
         return output
 
 @dataclass
@@ -315,11 +319,12 @@ class TransformerPredictor(nn.Module):
         self.causal_mask = nn.Buffer(torch.triu(torch.empty([decoder.max_seq_len, decoder.max_seq_len]).fill_(-float("inf")),1).requires_grad_(False))
 
     def forward(self, enc_input):
-        enc_output = self.encoder(enc_input)
+        key_mask = torch.where(torch.all(enc_input == 0, dim=-1), float("-inf"), 0)[:,None,None,:]
+        enc_output = self.encoder(enc_input, key_mask=key_mask)
         decoder_output = torch.zeros((enc_input.shape[0],max_decoderlen), dtype=torch.long, device=enc_input.device)
         decoder_output[:,0] = decoder_SOT
         for i in range(max_decoderlen):
-            outputs = self.decoder(decoder_output, enc_output, self.causal_mask)
+            outputs = self.decoder(decoder_output, enc_output, causal_mask=self.causal_mask, key_mask=key_mask)
             pred_ids = []
             for decoder_id1 in outputs:
                 pred_id1 = torch.argmax(decoder_id1, dim=-1)[:,i]
@@ -341,8 +346,8 @@ class TransformerEncoderPredictor(nn.Module):
         self.head_num = encoder.head_num
         self.encoder = encoder
 
-    def forward(self, enc_input):
-        enc_output = self.encoder(enc_input)
+    def forward(self, enc_input, key_mask):
+        enc_output = self.encoder(enc_input, key_mask)
         return enc_output
 
 class TransformerDecoderPredictor(nn.Module):
@@ -351,9 +356,8 @@ class TransformerDecoderPredictor(nn.Module):
         self.head_num = decoder.head_num
         self.decoder = decoder
 
-    def forward(self, enc_output, decoder_input, causal_mask):
-        outputs = self.decoder(decoder_input, enc_output, causal_mask=causal_mask)
-        # return [torch.softmax(x, dim=-1) for x in outputs]
+    def forward(self, enc_output, decoder_input, causal_mask, key_mask):
+        outputs = self.decoder(decoder_input, enc_output, causal_mask=causal_mask, key_mask=key_mask)
         return outputs
 
 if __name__ == '__main__':
