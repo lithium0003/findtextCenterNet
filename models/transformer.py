@@ -79,12 +79,12 @@ class PositionalEncoding(nn.Module):
         return x + pe.type_as(x)
 
 class SwiGLU(nn.Module):
-    def __init__(self, dim, drop_out = 0.1):
+    def __init__(self, dim, dropout = 0.1):
         super().__init__()
         self.w1 = nn.Linear(dim, dim*4)
         self.wg = nn.Linear(dim, dim*4)
         self.w2 = nn.Linear(dim*4, dim)
-        self.dropout = nn.Dropout(p = drop_out, inplace=True)
+        self.dropout = nn.Dropout(p = dropout, inplace=True)
 
     def forward(self, x):
         x1 = self.w1(x)
@@ -113,7 +113,7 @@ class MultiheadDiffAttn(nn.Module):
         embed_dim,
         depth,
         num_heads,
-        drop_out = 0.1,
+        dropout = 0.1,
     ):
         super().__init__()
         self.embed_dim = embed_dim
@@ -141,7 +141,7 @@ class MultiheadDiffAttn(nn.Module):
         self.lambda_k2 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
 
         self.subln = RMSNorm(2 * self.head_dim, eps=1e-5, elementwise_affine=True)
-        self.dropout = nn.Dropout(p = drop_out, inplace=True)
+        self.dropout = nn.Dropout(p = dropout, inplace=True)
 
     def forward(
         self,
@@ -194,10 +194,10 @@ class MultiheadDiffAttn(nn.Module):
 class EncoderBlock(nn.Module):
     def __init__(self, embed_dim, depth, num_heads, dropout = 0.1):
         super().__init__()
-        self.mha = MultiheadDiffAttn(embed_dim=embed_dim, depth=depth, num_heads=num_heads, drop_out=dropout)
+        self.mha = MultiheadDiffAttn(embed_dim=embed_dim, depth=depth, num_heads=num_heads, dropout=dropout)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
-        self.ff = SwiGLU(embed_dim, drop_out=dropout)
+        self.ff = SwiGLU(embed_dim, dropout=dropout)
         self.dropout1 = nn.Dropout(dropout, inplace=True)
         self.dropout2 = nn.Dropout(dropout, inplace=True)
 
@@ -237,12 +237,12 @@ class Encoder(nn.Module):
 class DecoderBlock(nn.Module):
     def __init__(self, embed_dim, depth, head_num, dropout = 0.1):
         super().__init__()
-        self.self_attn = MultiheadDiffAttn(embed_dim, depth, head_num, drop_out=dropout)
-        self.cross_attn = MultiheadDiffAttn(embed_dim, depth, head_num, drop_out=dropout)
+        self.self_attn = MultiheadDiffAttn(embed_dim, depth, head_num, dropout=dropout)
+        self.cross_attn = MultiheadDiffAttn(embed_dim, depth, head_num, dropout=dropout)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.norm3 = nn.LayerNorm([embed_dim])
-        self.ff = SwiGLU(embed_dim, drop_out=dropout)
+        self.ff = SwiGLU(embed_dim, dropout=dropout)
         self.dropout1 = nn.Dropout(dropout, inplace=True)
         self.dropout2 = nn.Dropout(dropout, inplace=True)
         self.dropout3 = nn.Dropout(dropout, inplace=True)
@@ -273,7 +273,7 @@ class Decoder(nn.Module):
         self.embed = nn.ModuleList([nn.Embedding(m, embed_dim) for m in modulo_list])
         self.pos_emb = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.norm = nn.LayerNorm([embed_dim])
-        self.blocks = nn.ModuleList([DecoderBlock(embed_dim, d, head_num, drop_out=dropout) for d in range(block_num)])
+        self.blocks = nn.ModuleList([DecoderBlock(embed_dim, d, head_num, dropout=dropout) for d in range(block_num)])
         self.dropout = nn.Dropout(dropout, inplace=True)
         self.out_layers = nn.ModuleList([nn.Linear(embed_dim, m) for m in modulo_list])
 
