@@ -161,7 +161,7 @@ class MultiheadDiffAttn(nn.Module):
         v = repeat_kv(v.transpose(1, 2), self.n_rep)
         q *= self.scaling
         attn_weights = torch.matmul(q, k.transpose(-1, -2))
-        if causal_mask:
+        if causal_mask is not None:
             attn_weights += causal_mask[:tgt_len,:src_len].type_as(attn_weights)
         attn_weights = F.softmax(attn_weights.float(), dim=-1).type_as(attn_weights)
 
