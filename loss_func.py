@@ -180,7 +180,7 @@ def loss_function(fmask, labelmap, idmap, heatmap, decoder_outputs):
         'total': total,
     }
 
-def loss_function3(outputs, labelcode, smoothing=0.1):
+def loss_function3(outputs, labelcode):
     target_ids = []
     for modulo in modulo_list:
         target_id1 = labelcode % modulo
@@ -189,7 +189,7 @@ def loss_function3(outputs, labelcode, smoothing=0.1):
     mask = labelcode > 0
     loss = 0.
     for target_id1, decoder_id1 in zip(target_ids, outputs):
-        id1_loss = torch.nn.functional.cross_entropy(decoder_id1.transpose(-1,1), target_id1, reduction='none', label_smoothing=smoothing)
+        id1_loss = torch.nn.functional.cross_entropy(decoder_id1.permute(0,2,1), target_id1, reduction='none')
         loss += torch.masked_select(id1_loss, mask).mean()
 
     pred_ids = []

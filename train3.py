@@ -139,16 +139,18 @@ def train():
         'loss',
     ])
 
-    def train_step(encoder_input, decoder_input, label_code, smoothing):
+    @torch.compile
+    def train_step(encoder_input, decoder_input, label_code):
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             outputs = model(encoder_input, decoder_input)
-            rawloss = loss_function3(outputs, label_code, smoothing)
+            rawloss = loss_function3(outputs, label_code)
         return rawloss['loss'], rawloss
 
-    def test_step(encoder_input, decoder_input, label_code, smoothing):
+    @torch.compile
+    def test_step(encoder_input, decoder_input, label_code):
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             outputs = model(encoder_input, decoder_input)
-            rawloss = loss_function3(outputs, label_code, smoothing)
+            rawloss = loss_function3(outputs, label_code)
         return rawloss['loss'], rawloss
 
     print('batch', batch, flush=True)
@@ -161,7 +163,6 @@ def train():
 
     # scaler = torch.amp.GradScaler()
     last_epoch = 0
-    smoothing = 0.
     loss_down = 0
     for epoch in range(last_epoch, EPOCHS):
         print(datetime.datetime.now(), 'epoch', epoch, flush=True)
@@ -179,7 +180,7 @@ def train():
             feature = feature.to(dtype=torch.float32, device=device, non_blocking=True)
             codes = codes.to(device=device, non_blocking=True)
 
-            loss, rawloss = train_step(feature, codes[:,:-1], codes[:,1:], smoothing)
+            loss, rawloss = train_step(feature, codes[:,:-1], codes[:,1:])
             loss.backward()
             optimizer.step()
             # scaler.scale(loss).backward()
@@ -230,7 +231,7 @@ def train():
                 feature = feature.to(dtype=torch.float32, device=device, non_blocking=True)
                 codes = codes.to(device=device, non_blocking=True)
 
-                loss, rawloss = test_step(feature, codes[:,:-1], codes[:,1:], smoothing)
+                loss, rawloss = test_step(feature, codes[:,:-1], codes[:,1:])
                 running_loss(rawloss)
 
         losslog = running_loss.write()
