@@ -464,7 +464,6 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         feat[0,:] = 5 # SOT
         txt = text[index[start_idx]:index[end_idx]]
         feat[0:end_idx-start_idx] += self.realdata[idx]['feature'][start_idx:end_idx]
-        feat[0:end_idx-start_idx,:feature_dim] *= (1 + rng.normal(loc=0, scale=0.01, size=(end_idx-start_idx,feature_dim)))
         if end_idx-start_idx < max_encoderlen:
             feat[end_idx-start_idx] = -5 # EOT
         return self.pad_output(txt, feat)
@@ -475,7 +474,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         if value is None:
             value = rng.normal(loc=0, scale=5, size=(1,feature_dim))
         # print('found:',code,chr(code),mu,sd)
-        return rng.choice(value, axis=0, replace=False) * (1 + rng.normal(loc=0, scale=0.01, size=(1,feature_dim)))
+        return rng.choice(value, axis=0, replace=False)
 
     def gen_feature(self, text, orientation='both'):
         # 1 vertical
