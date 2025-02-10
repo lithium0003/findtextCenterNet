@@ -391,12 +391,12 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             self.text[filename] = txt
 
     def __len__(self):
-        return (len(self.realdata) + len(self.txtfile)) * 2
+        return len(self.realdata) * 10 + len(self.txtfile) * 2
     
     def __getitem__(self, idx):
-        if idx < len(self.realdata):
-            return self.load_realdata(idx)
-        idx -= len(self.realdata)
+        if idx < len(self.realdata) * 10:
+            return self.load_realdata(idx % len(self.realdata))
+        idx -= len(self.realdata) * 10
         if idx < len(self.txtfile):
             vert_ok = os.path.basename(os.path.dirname(self.txtfile[idx])) in ['aozora','wikipedia_ja']
             return self.load_textfile(self.txtfile[idx], orientation='both' if vert_ok else 'horizontal')
