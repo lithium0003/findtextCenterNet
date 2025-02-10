@@ -302,10 +302,8 @@ class Transformer(nn.Module):
         self.causal_mask = nn.Buffer(torch.triu(torch.empty([max_dec_seq_len, max_dec_seq_len]).fill_(-float("inf")),1).requires_grad_(False))
 
     def forward(self, enc_input, dec_input):
-        key_mask = torch.all(enc_input == 0, dim=-1)
-        key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0).expand(-1,-1,self.max_len,-1)
-        enc_output = self.encoder(enc_input, key_mask=key_mask)
-        output = self.decoder(dec_input, enc_output, causal_mask=self.causal_mask, key_mask=key_mask)
+        enc_output = self.encoder(enc_input, key_mask=None)
+        output = self.decoder(dec_input, enc_output, causal_mask=self.causal_mask, key_mask=None)
         return output
 
 @dataclass
