@@ -17,7 +17,7 @@ from loss_func import loss_function3
 lr = 1e-4
 wd = 1e-2
 EPOCHS = 1000
-batch=512
+batch=256
 logstep=10
 output_iter=None
 scheduler_gamma = 1.0
