@@ -14,7 +14,7 @@ from models.transformer import ModelDimensions, Transformer, TransformerPredicto
 from dataset.data_transformer import TransformerDataDataset
 from loss_func import loss_function3
 
-lr = 1e-4
+lr = 4e-4
 wd = 1e-2
 EPOCHS = 1000
 batch=512

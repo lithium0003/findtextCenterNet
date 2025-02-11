@@ -275,6 +275,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                 self.vcodes.append(c)
         self.charparam = charparam
 
+        self.real_ratio = 100
         self.realdata = []
         if train:
             npyfiles = sorted(glob.glob(os.path.join(train_data4, '*.npy')))
@@ -391,12 +392,12 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             self.text[filename] = txt
 
     def __len__(self):
-        return len(self.realdata) * 10 + len(self.txtfile) * 2
+        return len(self.realdata) * self.real_ratio + len(self.txtfile) * 2
     
     def __getitem__(self, idx):
-        if idx < len(self.realdata) * 10:
+        if idx < len(self.realdata) * self.real_ratio:
             return self.load_realdata(idx % len(self.realdata))
-        idx -= len(self.realdata) * 10
+        idx -= len(self.realdata) * self.real_ratio
         if idx < len(self.txtfile):
             vert_ok = os.path.basename(os.path.dirname(self.txtfile[idx])) in ['aozora','wikipedia_ja']
             return self.load_textfile(self.txtfile[idx], orientation='both' if vert_ok else 'horizontal')
