@@ -116,7 +116,7 @@ class MultiheadDiffAttn(nn.Module):
         self.lambda_q2 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
         self.lambda_k2 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
 
-        self.subln = nn.LayerNorm([2 * self.head_dim])
+        self.subln = nn.LayerNorm([2 * self.head_dim], bias=False)
         self.dropout = nn.Dropout(p = dropout, inplace=True)
 
     def forward(
