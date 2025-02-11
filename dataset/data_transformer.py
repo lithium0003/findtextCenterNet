@@ -463,9 +463,9 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         feat = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
         feat[0,:] = 1 # SOT
         txt = text[index[start_idx]:index[end_idx]]
-        feat[0:end_idx-start_idx] += self.realdata[idx]['feature'][start_idx:end_idx]
+        feat[0:end_idx-start_idx,:] += self.realdata[idx]['feature'][start_idx:end_idx]
         if end_idx-start_idx < max_encoderlen:
-            feat[end_idx-start_idx] = -1 # EOT
+            feat[end_idx-start_idx,:] = -1 # EOT
         return self.pad_output(txt, feat)
 
     def generage_feature(self, code, horizontal):
