@@ -141,14 +141,14 @@ def train():
 
     @torch.compile
     def train_step(encoder_input, decoder_input, label_code):
-        with torch.autocast(device_type='cuda', dtype=torch.float16):
+        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             outputs = model(encoder_input, decoder_input)
             rawloss = loss_function3(outputs, label_code)
         return rawloss['loss'], rawloss
 
     @torch.compile
     def test_step(encoder_input, decoder_input, label_code):
-        with torch.autocast(device_type='cuda', dtype=torch.float16):
+        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             outputs = model(encoder_input, decoder_input)
             rawloss = loss_function3(outputs, label_code)
         return rawloss['loss'], rawloss
