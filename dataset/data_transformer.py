@@ -259,6 +259,9 @@ class TransformerDataDataset(torch.utils.data.Dataset):
 
     def __init__(self, codes, charparam, train=True):
         super().__init__()
+        self.SP_token = np.zeros([encoder_dim], dtype=np.float16)
+        self.SP_token[0:feature_dim:2] = 5
+        self.SP_token[1:feature_dim:2] = -5
         txtfiles = sorted(glob.glob(os.path.join(train_data3,'*','*.txt')))
         if train:
             idx = [i for i in range(len(txtfiles)) if i % 10 > 0]
@@ -462,11 +465,11 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             end_idx = start_idx+max_encoderlen-2
 
         feat = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
-        feat[0,:] = 1 # SOT
+        feat[0,:] = self.SP_token # SOT
         txt = text[index[start_idx]:index[end_idx]]
         feat[0:end_idx-start_idx,:] += self.add_noize(self.realdata[idx]['feature'][start_idx:end_idx])
         if end_idx-start_idx < max_encoderlen:
-            feat[end_idx-start_idx,:] = -1 # EOT
+            feat[end_idx-start_idx,:] = -self.SP_token # EOT
         return self.pad_output(txt, feat)
 
     def add_noize(self, value):
@@ -515,9 +518,8 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                     break
         # print(emphasis_idx)
         ret = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
-        idx = 0
-        ret[idx,:] = 1 # SOT
-        idx += 1
+        ret[0,:] = self.SP_token # SOT
+        idx = 1
         for i,c in enumerate(text):
             if idx >= max_encoderlen:
                 break
@@ -555,8 +557,8 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                 ret[idx,feature_dim+4] = 5
             idx += 1
 
-        if idx < max_encoderlen-1:
-            ret[idx,:] = -1 # EOT
+        if idx < max_encoderlen:
+            ret[idx,:] = -self.SP_token # EOT
 
         return ret
 
@@ -612,8 +614,8 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             return text, self.gen_feature(text, orientation=orientation)
         else:
             ret = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
-            ret[0,:] = 1 # SOT
-            ret[1,:] = -1 # EOT
+            ret[0,:] = self.SP_token # SOT
+            ret[1,:] = -self.SP_token # EOT
             return '', ret
 
     def pad_output(self, text, feature):
@@ -631,8 +633,8 @@ class TransformerDataDataset(torch.utils.data.Dataset):
 #  100(feature) + 6(add)
 #                 [vertical,rubybase,ruby,space,emphasis,newline]
 #
-# sot = all(5)
-# eot = all(-5)
+# sot = [5,-5, ...]
+# eot = [-5,5, ...]
 #######################################################
 # decoder
 #
