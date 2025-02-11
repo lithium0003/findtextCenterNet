@@ -279,7 +279,6 @@ class Transformer(nn.Module):
 
     def forward(self, enc_input, dec_input):
         key_mask = torch.all(enc_input == 0, dim=-1)
-        key_mask = torch.logical_and(key_mask, torch.any(torch.logical_not(key_mask), dim=-1).unsqueeze(1))
         key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0).expand(-1,-1,self.max_len,-1)
         enc_output = self.encoder(enc_input, key_mask=key_mask)
         output = self.decoder(dec_input, enc_output, causal_mask=self.causal_mask, key_mask=key_mask)
@@ -288,8 +287,8 @@ class Transformer(nn.Module):
 @dataclass
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
-    embed_dim: int = 2048
-    head_num: int = 32
+    embed_dim: int = 1536
+    head_num: int = 48
     enc_block_num: int = 6
     dec_block_num: int = 6
     max_enc_seq_len: int = 256
