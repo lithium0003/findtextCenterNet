@@ -14,7 +14,7 @@ from models.transformer import ModelDimensions, Transformer, TransformerPredicto
 from dataset.data_transformer import TransformerDataDataset
 from loss_func import loss_function3
 
-lr = 4e-4
+lr = 1e-4
 wd = 1e-2
 EPOCHS = 1000
 batch=256
@@ -141,14 +141,14 @@ def train():
 
     @torch.compile
     def train_step(encoder_input, decoder_input, label_code):
-        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+        with torch.autocast(device_type='cuda', dtype=torch.float16):
             outputs = model(encoder_input, decoder_input)
             rawloss = loss_function3(outputs, label_code)
         return rawloss['loss'], rawloss
 
     @torch.compile
     def test_step(encoder_input, decoder_input, label_code):
-        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+        with torch.autocast(device_type='cuda', dtype=torch.float16):
             outputs = model(encoder_input, decoder_input)
             rawloss = loss_function3(outputs, label_code)
         return rawloss['loss'], rawloss
@@ -161,7 +161,7 @@ def train():
         print('logstep', logstep, file=wf, flush=True)
         print('lr', lr, file=wf, flush=True)
 
-    # scaler = torch.amp.GradScaler()
+    scaler = torch.amp.GradScaler()
     last_epoch = 0
     loss_down = 0
     for epoch in range(last_epoch, EPOCHS):
@@ -181,11 +181,11 @@ def train():
             codes = codes.to(device=device, non_blocking=True)
 
             loss, rawloss = train_step(feature, codes[:,:-1], codes[:,1:])
-            loss.backward()
-            optimizer.step()
-            # scaler.scale(loss).backward()
-            # scaler.step(optimizer)
-            # scaler.update()
+            # loss.backward()
+            # optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
             optimizer.zero_grad()
 
             # Gather data and report
