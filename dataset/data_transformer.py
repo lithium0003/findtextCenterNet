@@ -463,10 +463,13 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         feat = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
         feat[0,:] = 1 # SOT
         txt = text[index[start_idx]:index[end_idx]]
-        feat[0:end_idx-start_idx,:] += self.realdata[idx]['feature'][start_idx:end_idx]
+        feat[0:end_idx-start_idx,:] += self.add_noize(self.realdata[idx]['feature'][start_idx:end_idx])
         if end_idx-start_idx < max_encoderlen:
             feat[end_idx-start_idx,:] = -1 # EOT
         return self.pad_output(txt, feat)
+
+    def add_noize(self, value):
+        return value * (1 + rng.normal(loc=0, scale=0.05, size=value.shape))
 
     def generage_feature(self, code, horizontal):
         hori, vert = self.charparam.get(code, (None, None))
@@ -537,7 +540,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                 ruby = 0
                 continue
             
-            ret[idx,:feature_dim] = self.generage_feature(ord(c), horizontal)
+            ret[idx,:feature_dim] = self.add_noize(self.generage_feature(ord(c), horizontal))
             if ruby == 1:
                 ret[idx,feature_dim+1] = 5
             elif ruby == 2:
