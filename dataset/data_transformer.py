@@ -607,7 +607,10 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         if text:
             return text, self.gen_feature(text, orientation=orientation)
         else:
-            return '', np.zeros((max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float32)
+            ret = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
+            ret[0,:] = 1 # SOT
+            ret[1,:] = -1 # EOT
+            return '', ret
 
     def pad_output(self, text, feature):
         b = text.encode('utf-32-le')
