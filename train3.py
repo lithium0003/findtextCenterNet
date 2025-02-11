@@ -247,7 +247,7 @@ def train():
         if 0 < scheduler_gamma < 1.0:
             scheduler.step() 
 
-        if loss_down == 0 and loss_value < 1:
+        if loss_down == 0 and loss_value < 0.5:
             loss_down += 1
             for group in optimizer.param_groups:
                 group['lr'] /= 10
