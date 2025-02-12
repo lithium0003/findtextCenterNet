@@ -250,7 +250,7 @@ def train():
         if loss_down == 0 and loss_value < 2:
             loss_down += 1
             for group in optimizer.param_groups:
-                group['lr'] /= 2
+                group['lr'] /= 4
         elif loss_down == 1 and loss_value < 0.8:
             loss_down += 1
             for group in optimizer.param_groups:
