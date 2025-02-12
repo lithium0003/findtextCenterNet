@@ -98,7 +98,7 @@ def get_random_furigana():
     # 5: 亜
     # 8: 弌
 
-    out_count = rng.integers(1, max_decoderlen-10)
+    out_count = rng.integers(1, max_decoderlen)
 
     count = 100
     txt = '　'
@@ -119,7 +119,10 @@ def get_random_furigana():
                 after = ''.join(rng.choice(jp_type_list[5], rng.integers(1,5)))
             else:
                 after = ''.join(rng.choice(jp_type_list[3], 1))
-            txt += before+'\uFFF9'+main+'\uFFFA'+ruby+'\uFFFB'+after
+            if rng.random() < 0.5:
+                txt += '\uFFF9'+main+'\uFFFA'+ruby+'\uFFFB'
+            else:
+                txt += before+'\uFFF9'+main+'\uFFFA'+ruby+'\uFFFB'+after
         elif p < 0.35:
             # 日本語に傍点
             m_l = rng.integers(1, 15)
@@ -199,32 +202,35 @@ def get_random_furigana():
             ruby = ''.join(rng.choice(jp_type_list[3]+jp_type_list[4]+kanjis+['ー'], m_l2))
             txt += '\uFFF9'+main+'\uFFFA'+ruby+'\uFFFB'
 
-        m_l = rng.integers(1, 10)
-        main = ''.join(rng.choice(jp_type_list[3]+list(rng.choice(jp_type_list[5]+jp_type_list[8]+jp_type_list[9]+jp_type_list[10], 100)), m_l))
-        txt += main
+        if rng.random() < 0.2:
+            txt += '\n'
+        else:
+            m_l = rng.integers(1, 10)
+            main = ''.join(rng.choice(jp_type_list[3]+list(rng.choice(jp_type_list[5]+jp_type_list[8]+jp_type_list[9]+jp_type_list[10], 100)), m_l))
+            txt += main
 
-        if rng.random() < 0.05:
-            txt += '\n　'
-        elif rng.random() < 0.1:
-            txt += '　'
-        elif rng.random() < 0.4:
-            txt += '、'
-        elif rng.random() < 0.4:
-            txt += '。'
-        elif rng.random() < 0.4:
-            txt += '——'
-        elif rng.random() < 0.1:
-            txt += '！　'
-        elif rng.random() < 0.1:
-            txt += '？　'
-        elif rng.random() < 0.1:
-            txt += '‼　'
-        elif rng.random() < 0.1:
-            txt += '⁉　'
-        elif rng.random() < 0.1:
-            txt += '⁇　'
-        elif rng.random() < 0.1:
-            txt += '⁈　'
+            if rng.random() < 0.05:
+                txt += '\n　'
+            elif rng.random() < 0.1:
+                txt += '　'
+            elif rng.random() < 0.4:
+                txt += '、'
+            elif rng.random() < 0.4:
+                txt += '。'
+            elif rng.random() < 0.4:
+                txt += '——'
+            elif rng.random() < 0.1:
+                txt += '！　'
+            elif rng.random() < 0.1:
+                txt += '？　'
+            elif rng.random() < 0.1:
+                txt += '‼　'
+            elif rng.random() < 0.1:
+                txt += '⁉　'
+            elif rng.random() < 0.1:
+                txt += '⁇　'
+            elif rng.random() < 0.1:
+                txt += '⁈　'
 
     txt = skip_remainruby(txt)
     for j in range(out_count):
