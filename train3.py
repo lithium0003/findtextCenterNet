@@ -247,7 +247,7 @@ def train():
         if 0 < scheduler_gamma < 1.0:
             scheduler.step() 
 
-        if loss_down == 0 and loss_value < 2:
+        if loss_down == 0 and loss_value < 3:
             loss_down += 1
             for group in optimizer.param_groups:
                 group['lr'] /= 4
@@ -264,7 +264,7 @@ def train():
             print('==================')
             print(text)
             feature = torch.tensor(feature[None,:,:], dtype=torch.float32, device=device)
-            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+            with torch.autocast(device_type='cuda', dtype=torch.float16):
                 pred = model2(feature).squeeze(0).cpu().numpy()
             predstr = ''
             for p in pred:
