@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import math
 
 from util_func import modulo_list, calc_predid, feature_dim
-from const import decoder_SOT, decoder_EOT, max_decoderlen, encoder_add_dim
+from const import decoder_SOT, decoder_EOT, max_decoderlen, max_encoderlen, encoder_add_dim
 
 encoder_dim = feature_dim + encoder_add_dim
 
@@ -291,8 +291,8 @@ class ModelDimensions:
     head_num: int = 32
     enc_block_num: int = 3
     dec_block_num: int = 3
-    max_enc_seq_len: int = 256
-    max_dec_seq_len: int = 256
+    max_enc_seq_len: int = max_encoderlen
+    max_dec_seq_len: int = max_decoderlen
 
 class TransformerPredictor(nn.Module):
     def __init__(self, encoder, decoder):
