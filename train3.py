@@ -14,7 +14,7 @@ from models.transformer import ModelDimensions, Transformer, TransformerPredicto
 from dataset.data_transformer import TransformerDataDataset
 from loss_func import loss_function3
 
-lr = 1e-4
+lr = 4e-4
 wd = 1e-2
 EPOCHS = 1000
 batch=512
@@ -247,10 +247,14 @@ def train():
         if 0 < scheduler_gamma < 1.0:
             scheduler.step() 
 
-        if loss_down == 0 and loss_value < 0.8:
+        if loss_down == 0 and loss_value < 2:
             loss_down += 1
             for group in optimizer.param_groups:
-                group['lr'] /= 10
+                group['lr'] /= 2
+        elif loss_down == 1 and loss_value < 0.8:
+            loss_down += 1
+            for group in optimizer.param_groups:
+                group['lr'] /= 2
 
         model2.eval()
         idx = rng.integers(len(validation_dataset))
