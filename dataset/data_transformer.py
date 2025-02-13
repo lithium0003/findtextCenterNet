@@ -317,6 +317,9 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                         g[-1] = 5
                         feature_values.append(g)
                         feature_idx.append(len(target_text))
+                        if ruby_state == 2:
+                            target_text += '\uFFFB'
+                        ruby_state = 0
                         target_text += '\n'
                         prev_line = -1
                     if prev_line != lineid:
@@ -326,6 +329,9 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                         g[-1] = 5
                         feature_values.append(g)
                         feature_idx.append(len(target_text))
+                        if ruby_state == 2:
+                            target_text += '\uFFFB'
+                        ruby_state = 0
                         target_text += '\n'
 
                     cur_idx = len(target_text)
@@ -343,6 +349,8 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                             target_text += '\uFFFA'
                         ruby_state = 2
                     elif subtype & (2+4) == 2:
+                        if ruby_state == 2:
+                            target_text += '\uFFFB'
                         if ruby_state == 0:
                             target_text += '\uFFF9'
                         ruby_state = 1
