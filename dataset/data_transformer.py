@@ -284,7 +284,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                 self.vcodes.append(c)
         self.charparam = charparam
 
-        self.real_ratio = 100
+        self.real_ratio = 1000
         self.realdata = []
         if train:
             npyfiles = sorted(glob.glob(os.path.join(train_data4, '*.npy')))
@@ -487,7 +487,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         return self.pad_output(txt, feat)
 
     def add_noize(self, value):
-        return value * (1 + 0.01 * rng.normal(loc=0, scale=1, size=value.shape)) + 0.05 * rng.normal(loc=0, scale=1, size=value.shape)
+        return value * (1 + 0.05 * rng.normal(loc=0, scale=1, size=value.shape)) + 0.1 * rng.normal(loc=0, scale=1, size=value.shape)
 
     def generage_feature(self, code, horizontal):
         hori, vert = self.charparam.get(code, (None, None))
