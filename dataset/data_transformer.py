@@ -409,7 +409,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             self.text[filename] = txt
 
     def __len__(self):
-        return len(self.realdata) * self.real_ratio + len(self.txtfile) * 2
+        return (len(self.realdata) * self.real_ratio + len(self.txtfile) + 1) * 2
     
     def __getitem__(self, idx):
         if idx < len(self.realdata) * self.real_ratio:
