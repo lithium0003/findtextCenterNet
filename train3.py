@@ -21,6 +21,7 @@ batch=512
 logstep=10
 output_iter=None
 scheduler_gamma = 1.0
+save_all=False
 
 rng = np.random.default_rng()
 
@@ -200,12 +201,20 @@ def train():
                     print(epoch, i+1, datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
             if output_iter is not None and (i + 1) % output_iter == 0:
-                torch.save({
-                    'epoch': epoch,
-                    'step': i,
-                    'config': config.__dict__,
-                    'model_state_dict': model.state_dict(),
-                    }, 'result3/model.pt')
+                if save_all:
+                    torch.save({
+                        'epoch': epoch,
+                        'step': i,
+                        'config': config.__dict__,
+                        'model_state_dict': model.state_dict(),
+                        }, f'result3/model-epoch{epoch:08}-step{i:08}.pt')
+                else:
+                    torch.save({
+                        'epoch': epoch,
+                        'step': i,
+                        'config': config.__dict__,
+                        'model_state_dict': model.state_dict(),
+                        }, 'result3/model.pt')
 
         running_loss.write(losslog)
         loss_value = losslog['loss'].item()
@@ -216,11 +225,18 @@ def train():
 
         running_loss.reset()
 
-        torch.save({
-            'epoch': epoch,
-            'config': config.__dict__,
-            'model_state_dict': model.state_dict(),
-            }, 'result3/model.pt')
+        if save_all:
+            torch.save({
+                'epoch': epoch,
+                'config': config.__dict__,
+                'model_state_dict': model.state_dict(),
+                }, f'result3/model-epoch{epoch:08}.pt')
+        else:
+            torch.save({
+                'epoch': epoch,
+                'config': config.__dict__,
+                'model_state_dict': model.state_dict(),
+                }, 'result3/model.pt')
 
         model.eval()
         running_loss.eval()
@@ -299,6 +315,8 @@ if __name__=='__main__':
                 output_iter = int(arg.split('=')[1])
             elif arg.startswith('--gamma'):
                 scheduler_gamma = float(arg.split('=')[1])
+            elif arg.startswith('--all'):
+                save_all = True
             else:
                 batch = int(arg)
 
