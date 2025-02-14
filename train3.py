@@ -286,7 +286,7 @@ def train():
                 pred = model2(feature).squeeze(0).cpu().numpy()
             predstr = ''
             for p in pred:
-                if p == 0:
+                if p == 0 or p == 2:
                     break
                 if p < 0x10FFFF:
                     predstr += chr(p)

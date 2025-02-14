@@ -324,6 +324,8 @@ class TransformerPredictor(nn.Module):
             pred_p /= len(outputs)
             pred_p = pred_p.exp()
             if k < rep_count-1:
+                i = max_decoderlen // rep_count * (k + 1)
+                pred_p[:,i:] *= 0.1
                 last_value = torch.topk(pred_p, top)[0][:,-1:]
                 decoder_output = torch.where(pred_p >= last_value, decoder_output, decoder_MSK)
                 decoder_output = torch.where(decoder_output < 0x10FFFF, decoder_output, decoder_MSK)
