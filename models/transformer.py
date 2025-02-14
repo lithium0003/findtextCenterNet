@@ -191,7 +191,7 @@ class EncoderBlock(nn.Module):
         return x
 
 class Encoder(nn.Module):
-    def __init__(self, input_dim, embed_dim, head_num, max_seq_len=5000, block_num = 6, dropout = 0.2):
+    def __init__(self, input_dim, embed_dim, head_num, max_seq_len=5000, block_num = 6, dropout = 0.01):
         super().__init__()
         self.dim = embed_dim
         self.head_num = head_num
@@ -242,7 +242,7 @@ class DecoderBlock(nn.Module):
         return x
 
 class Decoder(nn.Module):
-    def __init__(self, embed_dim, head_num, max_seq_len=5000, block_num = 6, dropout = 0.2):
+    def __init__(self, embed_dim, head_num, max_seq_len=5000, block_num = 6, dropout = 0.01):
         super().__init__()
         self.head_num = head_num
         self.max_seq_len = max_seq_len
