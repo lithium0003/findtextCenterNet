@@ -645,7 +645,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         codes += [0] * max(0,max_decoderlen+1-len(codes))
         codes = np.array(codes, dtype=int)
         input_codes = codes[:max_decoderlen]
-        true_codes = codes[1:max_decoderlen+1]
+        true_codes = np.array(codes[1:max_decoderlen+1])
         if rng.uniform() < 0.1:
             input_codes[1:] = decoder_MSK
         else:
@@ -745,4 +745,5 @@ if __name__=='__main__':
         print(decode_ruby(data[0][0]))
         print(data[1][0])
         print(data[2][0])
+        print(data[3][0])
         print('---------')
