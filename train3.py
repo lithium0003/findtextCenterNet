@@ -278,7 +278,7 @@ def train():
         idx = rng.integers(len(validation_dataset))
         with torch.no_grad():
             vdata = validation_dataset[idx]
-            text, feature, codes = vdata
+            text, feature, in_codes, out_codes = vdata
             print('==================')
             print(text)
             feature = torch.tensor(feature[None,:,:], dtype=torch.float32, device=device)
