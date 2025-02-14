@@ -191,7 +191,7 @@ class EncoderBlock(nn.Module):
         return x
 
 class Encoder(nn.Module):
-    def __init__(self, input_dim, embed_dim, head_num, max_seq_len=5000, block_num = 6, dropout = 0.01):
+    def __init__(self, input_dim, embed_dim, head_num, max_seq_len=5000, block_num = 6, dropout = 0.1):
         super().__init__()
         self.dim = embed_dim
         self.head_num = head_num
@@ -242,7 +242,7 @@ class DecoderBlock(nn.Module):
         return x
 
 class Decoder(nn.Module):
-    def __init__(self, embed_dim, head_num, max_seq_len=5000, block_num = 6, dropout = 0.01):
+    def __init__(self, embed_dim, head_num, max_seq_len=5000, block_num = 6, dropout = 0.1):
         super().__init__()
         self.head_num = head_num
         self.max_seq_len = max_seq_len
@@ -275,13 +275,12 @@ class Transformer(nn.Module):
         self.max_len = max(max_enc_seq_len, max_dec_seq_len)
         self.encoder = Encoder(input_dim=enc_input_dim, embed_dim=embed_dim, head_num=head_num, max_seq_len=max_enc_seq_len, block_num=enc_block_num)
         self.decoder = Decoder(embed_dim=embed_dim, head_num=head_num, max_seq_len=max_dec_seq_len, block_num=dec_block_num)
-        self.causal_mask = nn.Buffer(torch.triu(torch.empty([max_dec_seq_len, max_dec_seq_len]).fill_(-float("inf")),1).requires_grad_(False))
 
     def forward(self, enc_input, dec_input):
         key_mask = torch.all(enc_input == 0, dim=-1)
         key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0).expand(-1,-1,self.max_len,-1)
         enc_output = self.encoder(enc_input, key_mask=key_mask)
-        output = self.decoder(dec_input, enc_output, causal_mask=self.causal_mask, key_mask=key_mask)
+        output = self.decoder(dec_input, enc_output, key_mask=key_mask)
         return output
 
 @dataclass
@@ -289,8 +288,8 @@ class ModelDimensions:
     enc_input_dim: int = encoder_dim
     embed_dim: int = 1024
     head_num: int = 16
-    enc_block_num: int = 5
-    dec_block_num: int = 5
+    enc_block_num: int = 4
+    dec_block_num: int = 4
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
 

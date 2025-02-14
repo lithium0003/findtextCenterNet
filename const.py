@@ -11,3 +11,4 @@ max_encoderlen = 128
 
 decoder_SOT = 1
 decoder_EOT = 2
+decoder_MSK = 3

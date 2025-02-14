@@ -177,11 +177,12 @@ def train():
 
         optimizer.zero_grad()
         for i, data in enumerate(training_loader):
-            text, feature, codes = data
+            text, feature, in_codes, out_codes = data
             feature = feature.to(dtype=torch.float32, device=device, non_blocking=True)
-            codes = codes.to(device=device, non_blocking=True)
+            in_codes = in_codes.to(device=device, non_blocking=True)
+            out_codes = out_codes.to(device=device, non_blocking=True)
 
-            loss, rawloss = train_step(feature, codes[:,:-1], codes[:,1:])
+            loss, rawloss = train_step(feature, in_codes, out_codes)
             # loss.backward()
             # optimizer.step()
             scaler.scale(loss).backward()
@@ -243,11 +244,12 @@ def train():
 
         with torch.no_grad():
             for vdata in validation_loader:
-                text, feature, codes = vdata
+                text, feature, in_codes, out_codes = vdata
                 feature = feature.to(dtype=torch.float32, device=device, non_blocking=True)
-                codes = codes.to(device=device, non_blocking=True)
+                in_codes = in_codes.to(device=device, non_blocking=True)
+                out_codes = out_codes.to(device=device, non_blocking=True)
 
-                loss, rawloss = test_step(feature, codes[:,:-1], codes[:,1:])
+                loss, rawloss = test_step(feature, in_codes, out_codes)
                 running_loss(rawloss)
 
         losslog = running_loss.write()
