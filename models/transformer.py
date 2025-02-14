@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import math
 
 from util_func import modulo_list, calc_predid, feature_dim
-from const import decoder_SOT, decoder_EOT, max_decoderlen, max_encoderlen, encoder_add_dim
+from const import decoder_SOT, decoder_EOT, decoder_MSK, max_decoderlen, max_encoderlen, encoder_add_dim
 
 encoder_dim = feature_dim + encoder_add_dim
 
@@ -300,30 +300,36 @@ class TransformerPredictor(nn.Module):
         self.max_len = decoder.max_seq_len
         self.encoder = encoder
         self.decoder = decoder
-        self.causal_mask = nn.Buffer(torch.triu(torch.empty([self.max_len, self.max_len]).fill_(-float("inf")),1).requires_grad_(False))
 
     def forward(self, enc_input):
         key_mask = torch.all(enc_input == 0, dim=-1)
         key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0).expand(-1,-1,self.max_len,-1)
         enc_output = self.encoder(enc_input, key_mask=key_mask)
-        decoder_output = torch.zeros((enc_input.shape[0],max_decoderlen), dtype=torch.long, device=enc_input.device)
-        decoder_output[:,0] = decoder_SOT
-        for i in range(max_decoderlen):
-            outputs = self.decoder(decoder_output, enc_output, causal_mask=self.causal_mask, key_mask=key_mask)
+        decoder_input = torch.zeros((enc_input.shape[0],max_decoderlen), dtype=torch.long, device=enc_input.device)
+        decoder_input[:,0] = decoder_SOT
+        decoder_input[:,1:] = decoder_MSK
+        rep_count = 16
+        top = max_decoderlen // rep_count
+        for k in range(rep_count):
+            outputs = self.decoder(decoder_input, enc_output, key_mask=key_mask)
             pred_ids = []
+            pred_p = torch.zeros(size=(enc_input.shape[0],max_decoderlen), device=enc_input.device)
             for decoder_id1 in outputs:
-                pred_id1 = torch.argmax(decoder_id1, dim=-1)[:,i]
+                pred_p1 = torch.softmax(decoder_id1, dim=-1)
+                pred_id1 = torch.argmax(pred_p1, dim=-1)
+                pred_p1 = torch.gather(pred_p1, -1, pred_id1.unsqueeze(-1)).squeeze(-1)
+                pred_p += pred_p1.clamp_min(1e-10).log()
                 pred_ids.append(pred_id1)
-            ids = []
-            for args in zip(*pred_ids):
-                id = calc_predid(*args)
-                ids.append(id)
-            ids = torch.tensor(ids, dtype=torch.long, device=enc_input.device)
-            if torch.all(ids == decoder_EOT):
-                break
-            if i+1 < max_decoderlen:
-                decoder_output[:,i+1] = ids
-        return decoder_output[:,1:]
+            decoder_output = calc_predid(*pred_ids)
+            pred_p /= len(outputs)
+            pred_p = pred_p.exp()
+            if k < rep_count-1:
+                last_value = torch.topk(pred_p, top)[0][:,-1:]
+                decoder_output = torch.where(pred_p >= last_value, decoder_output, decoder_MSK)
+                decoder_output = torch.where(decoder_output < 0x10FFFF, decoder_output, decoder_MSK)
+                decoder_input[:,1:] = decoder_output[:,:-1]
+                top += max_decoderlen // rep_count
+        return decoder_output
 
 class TransformerEncoderPredictor(nn.Module):
     def __init__(self, encoder):
@@ -347,12 +353,12 @@ class TransformerDecoderPredictor(nn.Module):
 
 if __name__ == '__main__':
     model = Transformer(enc_input_dim=100, embed_dim=512, head_num=8)
-    print(model)
-    out = model(torch.ones(3,1,100),torch.ones(3,2, dtype=torch.long))
-    print(out)
-    print([o.shape for o in out])
+    # print(model)
+    # out = model(torch.ones(3,1,100),torch.ones(3,2, dtype=torch.long))
+    # print(out)
+    # print([o.shape for o in out])
 
-    # model2 = TransformerPredictor(model.encoder, model.decoder)
-    # print(model2)
-    # d = model2(torch.ones(3,1,100))
-    # print(d)
+    model2 = TransformerPredictor(model.encoder, model.decoder)
+    print(model2)
+    d = model2(torch.ones(3,1,100))
+    print(d)
