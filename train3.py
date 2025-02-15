@@ -10,17 +10,15 @@ import numpy as np
 
 torch.set_float32_matmul_precision('high')
 
+from models.radam_schedulefree import RAdamScheduleFree
 from models.transformer import ModelDimensions, Transformer, TransformerPredictor
 from dataset.data_transformer import TransformerDataDataset
 from loss_func import loss_function3
 
-lr = 4e-4
-wd = 1e-2
 EPOCHS = 1000
 batch=512
 logstep=10
 output_iter=None
-scheduler_gamma = 1.0
 save_all=False
 
 rng = np.random.default_rng()
@@ -81,6 +79,7 @@ class RunningLoss(torch.nn.modules.Module):
 
 def train():
     prep = TransformerDataDataset.prepare()
+    last_epoch = 0
 
     if torch.cuda.is_available():
         device = 'cuda'
@@ -106,6 +105,7 @@ def train():
         config = ModelDimensions(**data['config'])
         model = Transformer(**config.__dict__)
         model.load_state_dict(data['model_state_dict'])
+        last_epoch = data['epoch']
     else:
         config = ModelDimensions()
         model = Transformer(**config.__dict__)
@@ -113,28 +113,8 @@ def train():
     model.to(device)
     model2.to(device)
 
-    # all_params = set(filter(lambda p: p.requires_grad, model.parameters()))
-    # no_wd = set()
-    # for m in model.modules():
-    #     if isinstance(m, (torch.nn.LayerNorm)):
-    #         no_wd |= set(m.parameters())
-    #     else:
-    #         for key, value in m.named_parameters(recurse=False):
-    #             if key == 'bias':
-    #                 no_wd |= set([value])
-    # params = all_params - no_wd
-    # params = list(params)
-    # no_wd = list(no_wd)
-
-    # optimizer = torch.optim.RAdam([
-    #     {'params': no_wd, 'weight_decay': 0}, 
-    #     {'params': params},
-    # ], lr=lr, weight_decay=wd)
-
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
-    optimizer = torch.optim.RAdam(all_params, lr=lr)
-    if 0 < scheduler_gamma < 1.0:
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=scheduler_gamma)
+    optimizer = RAdamScheduleFree(all_params)
 
     running_loss = RunningLoss(device=device, runningcount=100, losses=[
         'loss',
@@ -156,15 +136,11 @@ def train():
 
     print('batch', batch, flush=True)
     print('logstep', logstep, flush=True)
-    print('lr', lr, flush=True)
     with open('log.txt','a') as wf:
         print('batch', batch, file=wf, flush=True)
         print('logstep', logstep, file=wf, flush=True)
-        print('lr', lr, file=wf, flush=True)
 
     scaler = torch.amp.GradScaler()
-    last_epoch = 0
-    loss_down = 0
     for epoch in range(last_epoch, EPOCHS):
         print(datetime.datetime.now(), 'epoch', epoch, flush=True)
         print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], flush=True)
@@ -174,6 +150,7 @@ def train():
 
         model.train()
         running_loss.train()
+        optimizer.train()
 
         optimizer.zero_grad()
         for i, data in enumerate(training_loader):
@@ -241,6 +218,7 @@ def train():
 
         model.eval()
         running_loss.eval()
+        optimizer.eval()
 
         with torch.no_grad():
             for vdata in validation_loader:
@@ -261,18 +239,6 @@ def train():
             print(epoch, 'val', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
         running_loss.reset()
-
-        if 0 < scheduler_gamma < 1.0:
-            scheduler.step() 
-
-        if loss_down == 0 and loss_value < 3:
-            loss_down += 1
-            for group in optimizer.param_groups:
-                group['lr'] /= 4
-        elif loss_down == 1 and loss_value < 0.8:
-            loss_down += 1
-            for group in optimizer.param_groups:
-                group['lr'] /= 2
 
         model2.eval()
         idx = rng.integers(len(validation_dataset))
@@ -307,16 +273,10 @@ if __name__=='__main__':
         for arg in argv:
             if arg.startswith('--epoch'):
                 EPOCHS = int(arg.split('=')[1])
-            elif arg.startswith('--lr'):
-                lr = float(arg.split('=')[1])
-            elif arg.startswith('--wd'):
-                wd = float(arg.split('=')[1])
             elif arg.startswith('--logstep'):
                 logstep = int(arg.split('=')[1])
             elif arg.startswith('--output'):
                 output_iter = int(arg.split('=')[1])
-            elif arg.startswith('--gamma'):
-                scheduler_gamma = float(arg.split('=')[1])
             elif arg.startswith('--all'):
                 save_all = True
             else:
