@@ -328,7 +328,8 @@ class TransformerPredictor(nn.Module):
             if k < rep_count-1:
                 decoder_output = torch.where(pred_p < 1/rep_count*k, decoder_MSK, decoder_output)
                 decoder_output = torch.where(decoder_output > 0x10FFFF, decoder_MSK, decoder_output)
-                decoder_input[:,1:] = decoder_output[:,:-1]
+                decoder_input = decoder_output
+                decoder_input[:,0] = decoder_SOT
 
         return decoder_output
 
