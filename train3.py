@@ -16,7 +16,7 @@ from dataset.data_transformer import TransformerDataDataset
 from loss_func import loss_function3
 
 EPOCHS = 100
-lr=2.5e-3
+lr=1e-3
 batch=256
 logstep=10
 output_iter=None
