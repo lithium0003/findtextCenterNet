@@ -6,8 +6,8 @@ encoder_add_dim = 6
 # 5 emphasis
 # 6 newline
 
-max_decoderlen = 512
-max_encoderlen = 512
+max_decoderlen = 256
+max_encoderlen = 256
 
 decoder_SOT = 1
 decoder_EOT = 2

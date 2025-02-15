@@ -288,8 +288,8 @@ class ModelDimensions:
     enc_input_dim: int = encoder_dim
     embed_dim: int = 1024
     head_num: int = 16
-    enc_block_num: int = 4
-    dec_block_num: int = 4
+    enc_block_num: int = 8
+    dec_block_num: int = 8
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
 
@@ -320,6 +320,7 @@ class TransformerPredictor(nn.Module):
                 pred_p += pred_p1.clamp_min(1e-10).log()
                 pred_ids.append(pred_id1)
             decoder_output = calc_predid(*pred_ids)
+            print(decoder_output)
             pred_p /= len(outputs)
             pred_p = pred_p.exp()
             pred_p = torch.where(decoder_output == 0, 0., pred_p)
@@ -328,6 +329,7 @@ class TransformerPredictor(nn.Module):
             if k < rep_count-1:
                 decoder_output = torch.where(pred_p < 1/rep_count*k, decoder_MSK, decoder_output)
                 decoder_output = torch.where(decoder_output > 0x10FFFF, decoder_MSK, decoder_output)
+                decoder_output = torch.where(decoder_output == 0, decoder_MSK, decoder_output)
                 decoder_input = decoder_output
                 decoder_input[:,0] = decoder_SOT
 
