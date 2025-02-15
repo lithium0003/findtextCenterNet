@@ -88,7 +88,6 @@ def train():
     else:
         device = 'cpu'
     device = torch.device(device)
-    print('using device:', device, flush=True)
 
     num_workers = os.cpu_count()
     training_dataset = TransformerDataDataset(*prep, train=True)
@@ -97,6 +96,7 @@ def train():
     validation_dataset = TransformerDataDataset(*prep, train=False)
     validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=num_workers, drop_last=True, pin_memory=True)
 
+    print('using device:', device, flush=True)
     with open('log.txt','w') as wf:
         print(datetime.datetime.now(), 'using device:', device, file=wf, flush=True)
 
@@ -106,6 +106,7 @@ def train():
         model = Transformer(**config.__dict__)
         model.load_state_dict(data['model_state_dict'])
         last_epoch = data['epoch']
+        print('loaded', last_epoch, 'epoch', flush=True)
     else:
         config = ModelDimensions()
         model = Transformer(**config.__dict__)
@@ -114,7 +115,7 @@ def train():
     model2.to(device)
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
-    optimizer = RAdamScheduleFree(all_params)
+    optimizer = RAdamScheduleFree(all_params, lr=1e-4)
 
     running_loss = RunningLoss(device=device, runningcount=100, losses=[
         'loss',
