@@ -139,6 +139,7 @@ def train():
     with open('log.txt','a') as wf:
         print('batch', batch, file=wf, flush=True)
         print('logstep', logstep, file=wf, flush=True)
+    print(len(training_loader))
 
     scaler = torch.amp.GradScaler()
     for epoch in range(last_epoch, EPOCHS):
