@@ -16,7 +16,8 @@ from dataset.data_transformer import TransformerDataDataset
 from loss_func import loss_function3
 
 EPOCHS = 1000
-batch=512
+lr=1e-4
+batch=128
 logstep=10
 output_iter=None
 save_all=False
@@ -114,7 +115,7 @@ def train():
     model2.to(device)
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
-    optimizer = RAdamScheduleFree(all_params)
+    optimizer = RAdamScheduleFree(all_params, lr=lr)
 
     running_loss = RunningLoss(device=device, runningcount=100, losses=[
         'loss',
@@ -277,6 +278,8 @@ if __name__=='__main__':
         for arg in argv:
             if arg.startswith('--epoch'):
                 EPOCHS = int(arg.split('=')[1])
+            elif arg.startswith('--lr'):
+                lr = float(arg.split('=')[1])
             elif arg.startswith('--logstep'):
                 logstep = int(arg.split('=')[1])
             elif arg.startswith('--output'):
