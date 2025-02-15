@@ -180,6 +180,7 @@ def train():
                     print(epoch, i+1, datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
             if output_iter is not None and (i + 1) % output_iter == 0:
+                optimizer.eval()
                 if save_all:
                     torch.save({
                         'epoch': epoch,
@@ -204,6 +205,7 @@ def train():
 
         running_loss.reset()
 
+        optimizer.eval()
         if save_all:
             torch.save({
                 'epoch': epoch,
@@ -219,7 +221,6 @@ def train():
 
         model.eval()
         running_loss.eval()
-        optimizer.eval()
 
         with torch.no_grad():
             for vdata in validation_loader:
