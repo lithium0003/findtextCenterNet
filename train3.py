@@ -115,7 +115,7 @@ def train():
     model2.to(device)
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
-    optimizer = RAdamScheduleFree(all_params, lr=4e-4)
+    optimizer = RAdamScheduleFree(all_params)
 
     running_loss = RunningLoss(device=device, runningcount=100, losses=[
         'loss',
