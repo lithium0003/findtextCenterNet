@@ -657,7 +657,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
     def pad_output(self, text, feature):
         b = text.encode('utf-32-le')
         codes = [decoder_SOT] + [int.from_bytes(b[i:i+4], 'little') for i in range(0,len(b),4)] + [decoder_EOT]
-        codes += [0] * max(0,max_decoderlen-len(codes))
+        codes += [0] * max(0,max_decoderlen+1-len(codes))
         codes = np.array(codes, dtype=int)
         input_codes = codes[:max_decoderlen]
         true_codes = np.array(codes[1:max_decoderlen+1])
