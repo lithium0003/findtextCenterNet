@@ -591,7 +591,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         txt = txt[start_idx:]
         txt = skip_remainruby(txt)
         if rng.uniform() < 0.5:
-            out_count = max_decoderlen-2
+            out_count = min(max_decoderlen-2,len(txt))
         else:
             out_count = rng.integers(1, min(max_decoderlen-2,len(txt)))
         for j in range(out_count):
