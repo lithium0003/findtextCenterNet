@@ -140,7 +140,7 @@ def train():
     with open('log.txt','a') as wf:
         print('batch', batch, file=wf, flush=True)
         print('logstep', logstep, file=wf, flush=True)
-    print(len(training_loader))
+    loader_len = len(training_loader)
 
     scaler = torch.amp.GradScaler()
     for epoch in range(last_epoch, EPOCHS):
@@ -176,7 +176,7 @@ def train():
             if (i + 1) % logstep == 0 or i == 0:
                 loss_value = losslog['loss'].item()
                 acc_value = losslog['accuracy'].item()
-                print(epoch, i+1, datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, flush=True)
+                print(epoch, i+1, f'{(i+1)/loader_len:.2%}', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, flush=True)
                 with open('log.txt','a') as wf:
                     print(epoch, i+1, datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
@@ -200,7 +200,7 @@ def train():
         running_loss.write(losslog)
         loss_value = losslog['loss'].item()
         acc_value = losslog['accuracy'].item()
-        print(epoch, i+1, datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, flush=True)
+        print(epoch, i+1, f'{(i+1)/loader_len:.2%}', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, flush=True)
         with open('log.txt','a') as wf:
             print(epoch, i+1, datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
