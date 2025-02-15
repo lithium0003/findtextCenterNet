@@ -286,10 +286,10 @@ class Transformer(nn.Module):
 @dataclass
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
-    embed_dim: int = 1024
-    head_num: int = 16
-    enc_block_num: int = 12
-    dec_block_num: int = 12
+    embed_dim: int = 2048
+    head_num: int = 32
+    enc_block_num: int = 6
+    dec_block_num: int = 6
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
 
@@ -315,19 +315,20 @@ class TransformerPredictor(nn.Module):
             pred_p = torch.zeros(size=(enc_input.shape[0],max_decoderlen), device=enc_input.device)
             for decoder_id1 in outputs:
                 pred_p1 = torch.softmax(decoder_id1, dim=-1)
-                pred_id1 = torch.distributions.Categorical(logits=decoder_id1).sample()
+                pred_id1 = torch.argmax(decoder_id1, dim=-1)
                 pred_p1 = torch.gather(pred_p1, -1, pred_id1.unsqueeze(-1)).squeeze(-1)
                 pred_p += pred_p1.clamp_min(1e-10).log()
                 pred_ids.append(pred_id1)
             decoder_output = calc_predid(*pred_ids)
             pred_p /= len(outputs)
             pred_p = pred_p.exp()
-            if pred_p[decoder_output > 0].mean() > 0.99 and (decoder_output > 0x10FFFF).sum() == 0:
+            if pred_p[decoder_output > 0].mean() > 0.9 and (decoder_output > 0x3FFFF).sum() == 0:
+                print('---[early stop]---')
                 break
             if k < rep_count-1:
-                pred_p = torch.where(decoder_output < 0x10FFFF, pred_p, 0)
+                pred_p = torch.where(decoder_output < 0x3FFFF, pred_p, 0)
                 decoder_input[:,1:] = torch.where(pred_p < 1/rep_count*k, decoder_MSK, decoder_output)[:,:-1]
-
+        print(f'---repeat:{k}---')
         return decoder_output
 
 class TransformerEncoderPredictor(nn.Module):
