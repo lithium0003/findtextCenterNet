@@ -287,10 +287,10 @@ class Transformer(nn.Module):
 @dataclass
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
-    embed_dim: int = 1024
-    head_num: int = 32
-    enc_block_num: int = 6
-    dec_block_num: int = 6
+    embed_dim: int = 512
+    head_num: int = 16
+    enc_block_num: int = 10
+    dec_block_num: int = 10
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
 
@@ -330,11 +330,10 @@ class TransformerPredictor(nn.Module):
             decoder_output = torch.gather(decoder_output, 0, maxi.unsqueeze(0))[0]
             pred_p = torch.gather(pred_p, 0, maxi.unsqueeze(0))[0]
             if torch.all(pred_p[decoder_output > 0] > 0.99):
-                print('---[early stop]---')
+                print(f'[{k} early stop]')
                 break
             if k < rep_count-1:
                 decoder_input[:,1:] = torch.where(pred_p < 1/rep_count*k, decoder_MSK, decoder_output)[:,:-1]
-        print(f'---repeat:{k}---')
         return decoder_output
 
 class TransformerEncoderPredictor(nn.Module):
