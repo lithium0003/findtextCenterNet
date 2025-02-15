@@ -17,7 +17,7 @@ from loss_func import loss_function3
 
 EPOCHS = 100
 lr=1e-3
-batch=256
+batch=1024
 logstep=10
 output_iter=None
 save_all=False
