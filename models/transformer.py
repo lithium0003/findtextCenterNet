@@ -308,7 +308,7 @@ class TransformerPredictor(nn.Module):
         decoder_input = torch.zeros((enc_input.shape[0],max_decoderlen), dtype=torch.long, device=enc_input.device)
         decoder_input[:,0] = decoder_SOT
         decoder_input[:,1:] = decoder_MSK
-        rep_count = max_decoderlen // 32
+        rep_count = max_decoderlen // 4
         for k in range(rep_count):
             outputs = self.decoder(decoder_input, enc_output, key_mask=key_mask)
             pred_ids = []
@@ -322,15 +322,11 @@ class TransformerPredictor(nn.Module):
             decoder_output = calc_predid(*pred_ids)
             pred_p /= len(outputs)
             pred_p = pred_p.exp()
-            pred_p = torch.where(decoder_output == 0, 0., pred_p)
-            if pred_p[pred_p > 0].mean() > 0.99 and (decoder_output > 0x10FFFF).sum() == 0:
+            if pred_p[decoder_output > 0].mean() > 0.99 and (decoder_output > 0x10FFFF).sum() == 0:
                 break
-            pred_p = torch.where(decoder_output > 0x10FFFF, 0., pred_p)
             if k < rep_count-1:
-                decoder_output = torch.where(pred_p < 1/rep_count*k, decoder_MSK, decoder_output)
-                decoder_output = torch.where(decoder_output == 0, decoder_MSK, decoder_output)
-                decoder_input = decoder_output
-                decoder_input[:,0] = decoder_SOT
+                pred_p = torch.where(decoder_output < 0x10FFFF, pred_p, 0)
+                decoder_input[:,1:] = torch.where(pred_p < 1/rep_count*k, decoder_MSK, decoder_output)[:,:-1]
 
         return decoder_output
 
