@@ -652,6 +652,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         elif p < 0.2:
             p = rng.uniform()
             input_codes[1:] = np.where(rng.uniform(size=(max_decoderlen-1,)) < p, rng.integers(20, 0x10FFFF, size=(max_decoderlen-1,)), input_codes[1:])
+            p = rng.uniform()
             input_codes[1:] = np.where(rng.uniform(size=(max_decoderlen-1,)) < p, decoder_MSK, input_codes[1:])
         else:
             p = rng.uniform()
