@@ -496,7 +496,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         return self.pad_output(txt, feat)
 
     def add_noize(self, value):
-        return value * (1 + 1e-3 * rng.normal(loc=0, scale=1, size=value.shape)) + 1e-2 * rng.normal(loc=0, scale=1, size=value.shape)
+        return value * (1 + 1e-2 * rng.normal(loc=0, scale=1, size=value.shape)) + 1e-1 * rng.normal(loc=0, scale=1, size=value.shape)
 
     def generage_feature(self, code, horizontal):
         hori, vert = self.charparam.get(code, (None, None))

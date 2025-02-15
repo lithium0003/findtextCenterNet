@@ -3,6 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 from dataclasses import dataclass
 import math
+import itertools
 
 from util_func import modulo_list, calc_predid, feature_dim
 from const import decoder_SOT, decoder_EOT, decoder_MSK, max_decoderlen, max_encoderlen, encoder_add_dim
@@ -286,7 +287,7 @@ class Transformer(nn.Module):
 @dataclass
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
-    embed_dim: int = 512
+    embed_dim: int = 1024
     head_num: int = 16
     enc_block_num: int = 4
     dec_block_num: int = 4
@@ -308,25 +309,30 @@ class TransformerPredictor(nn.Module):
         decoder_input = torch.zeros((enc_input.shape[0],max_decoderlen), dtype=torch.long, device=enc_input.device)
         decoder_input[:,0] = decoder_SOT
         decoder_input[:,1:] = decoder_MSK
-        rep_count = max_decoderlen // 4
+        rep_count = 16
         for k in range(rep_count):
             outputs = self.decoder(decoder_input, enc_output, key_mask=key_mask)
-            pred_ids = []
-            pred_p = torch.zeros(size=(enc_input.shape[0],max_decoderlen), device=enc_input.device)
+            listp = []
+            listi = []
             for decoder_id1 in outputs:
                 pred_p1 = torch.softmax(decoder_id1, dim=-1)
-                pred_id1 = torch.argmax(decoder_id1, dim=-1)
-                pred_p1 = torch.gather(pred_p1, -1, pred_id1.unsqueeze(-1)).squeeze(-1)
-                pred_p += pred_p1.clamp_min(1e-10).log()
-                pred_ids.append(pred_id1)
+                topp, topi = torch.topk(pred_p1, 4)
+                listp.append(topp.permute(2,0,1))
+                listi.append(topi.permute(2,0,1))
+
+            pred_ids = torch.stack([torch.stack(x) for x in itertools.product(*listi)]).transpose(0,1)
+            pred_p = torch.stack([torch.stack(x) for x in itertools.product(*listp)]).transpose(0,1)
+            pred_p = pred_p.clamp_min(1e-10).log().mean(dim=0).exp()
             decoder_output = calc_predid(*pred_ids)
-            pred_p /= len(outputs)
-            pred_p = pred_p.exp()
-            if pred_p[decoder_output > 0].mean() > 0.9 and (decoder_output > 0x3FFFF).sum() == 0:
+            maxi = torch.argmax(pred_p, dim=0)
+            pred_p[decoder_output > 0x3FFFF] = 0
+            maxi = torch.argmax(pred_p, dim=0)
+            decoder_output = torch.gather(decoder_output, 0, maxi.unsqueeze(0))[0]
+            pred_p = torch.gather(pred_p, 0, maxi.unsqueeze(0))[0]
+            if torch.all(pred_p[decoder_output > 0] > 0.99):
                 print('---[early stop]---')
                 break
             if k < rep_count-1:
-                pred_p = torch.where(decoder_output < 0x3FFFF, pred_p, 0)
                 decoder_input[:,1:] = torch.where(pred_p < 1/rep_count*k, decoder_MSK, decoder_output)[:,:-1]
         print(f'---repeat:{k}---')
         return decoder_output
@@ -360,5 +366,5 @@ if __name__ == '__main__':
 
     model2 = TransformerPredictor(model.encoder, model.decoder)
     print(model2)
-    d = model2(torch.ones(3,1,100))
+    d = model2(torch.ones(4,5,100))
     print(d)

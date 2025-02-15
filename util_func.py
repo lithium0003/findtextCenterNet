@@ -100,6 +100,8 @@ def calc_predid(*args):
         for j in range(k):
             if torch.is_tensor(t[j]):
                 w = t[j].clone()
+            elif isinstance(t[j],np.ndarray):
+                w = np.array(t[j])
             else:
                 w = t[j]
             for i in range(j):
