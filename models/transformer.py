@@ -289,8 +289,8 @@ class ModelDimensions:
     enc_input_dim: int = encoder_dim
     embed_dim: int = 512
     head_num: int = 16
-    enc_block_num: int = 4
-    dec_block_num: int = 4
+    enc_block_num: int = 6
+    dec_block_num: int = 6
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
 
@@ -329,7 +329,7 @@ class TransformerPredictor(nn.Module):
             maxi = torch.argmax(pred_p, dim=0)
             decoder_output = torch.gather(decoder_output, 0, maxi.unsqueeze(0))[0]
             pred_p = torch.gather(pred_p, 0, maxi.unsqueeze(0))[0]
-            if torch.all(pred_p[decoder_output > 0] > 0.99):
+            if k > 0 and torch.all(pred_p[decoder_output > 0] > 0.99):
                 print(f'[{k} early stop]')
                 break
             if k < rep_count-1:

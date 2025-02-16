@@ -260,7 +260,7 @@ def train():
                     continue
                 if p == 0 or p == 2:
                     break
-                if p < 0x10FFFF:
+                if p < 0x3FFFF:
                     predstr += chr(p)
                 else:
                     predstr += '\uFFFD'
@@ -270,7 +270,10 @@ def train():
             except UnicodeEncodeError:
                 pass
         running_loss.writer.add_text('true', text, global_step=running_loss.step)
-        running_loss.writer.add_text('pred', predstr, global_step=running_loss.step)
+        try:
+            running_loss.writer.add_text('pred', predstr, global_step=running_loss.step)
+        except UnicodeEncodeError:
+            pass
         running_loss.writer.flush()
 
 if __name__=='__main__':
