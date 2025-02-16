@@ -204,8 +204,8 @@ class Encoder(nn.Module):
 
     def forward(self, x, key_mask=None):
         x = self.embed(x)
-        x = self.pos_emb(x)
         x = self.norm(x)
+        x = self.pos_emb(x)
         x = self.dropout(x)
         for block in self.blocks:
             x = block(x, key_mask=key_mask)
@@ -262,8 +262,8 @@ class Decoder(nn.Module):
                 x = layer(x2)
             else:
                 x += layer(x2)
-        x = self.pos_emb(x)
         x = self.norm(x)
+        x = self.pos_emb(x)
         x = self.dropout(x)
         for block in self.blocks:
             x = block(x, y, causal_mask=causal_mask, key_mask=key_mask)
