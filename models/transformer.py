@@ -141,12 +141,12 @@ class MultiheadDiffAttn(nn.Module):
         bsz, tgt_len, embed_dim = query.size()
         bsz, src_len, embed_dim = key.size()
 
+        query = self.pos_emb_q(query)
+        key = pos_emb_k(key)
+
         q = self.q_proj(query)
         k = self.k_proj(key)
         v = self.v_proj(value)
-
-        q = self.pos_emb_q(q)
-        k = pos_emb_k(k)
 
         q = q.view(bsz, tgt_len, 2 * self.num_heads, self.head_dim)
         k = k.view(bsz, src_len, 2 * self.num_kv_heads, self.head_dim)
