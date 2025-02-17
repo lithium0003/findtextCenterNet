@@ -16,7 +16,7 @@ from dataset.data_transformer import TransformerDataDataset
 from loss_func import loss_function3
 
 EPOCHS = 100
-lr=1e-3
+lr=4e-4
 batch=1024
 logstep=10
 output_iter=None
@@ -260,7 +260,9 @@ def train():
                     continue
                 if p == 0 or p == 2:
                     break
-                if p < 0x3FFFF:
+                if p >= 0xD800 and p <= 0xDFFF:
+                    predstr += '\uFFFD'
+                elif p < 0x3FFFF:
                     predstr += chr(p)
                 else:
                     predstr += '\uFFFD'
