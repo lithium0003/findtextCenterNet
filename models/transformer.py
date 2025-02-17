@@ -40,7 +40,8 @@ class PositionalEncoding(nn.Module):
         encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
         # compute positional encoding to consider positional information of words
 
-        self.encoding = nn.Buffer(encoding).requires_grad_(False)
+        # self.encoding = nn.Buffer(encoding).requires_grad_(False)
+        self.encoding = nn.Parameter(encoding, requires_grad=True)
 
     def forward(self, x):
         # self.encoding
@@ -112,7 +113,8 @@ class MultiheadDiffAttn(nn.Module):
         self.v_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
 
-        self.pos_emb = PositionalEncoding(embed_dim, max_len=max_seq_len)
+        self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
+        self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
 
         self.lambda_init = lambda_init_fn(depth)
         self.lambda_q1 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
@@ -131,6 +133,9 @@ class MultiheadDiffAttn(nn.Module):
     ):
         if key is None:
             key = query
+            pos_emb_k = self.pos_emb_q
+        else:
+            pos_emb_k = self.pos_emb_k
         if value is None:
             value = key
         bsz, tgt_len, embed_dim = query.size()
@@ -140,8 +145,8 @@ class MultiheadDiffAttn(nn.Module):
         k = self.k_proj(key)
         v = self.v_proj(value)
 
-        q = self.pos_emb(q)
-        k = self.pos_emb(k)
+        q = self.pos_emb_q(q)
+        k = pos_emb_k(k)
 
         q = q.view(bsz, tgt_len, 2 * self.num_heads, self.head_dim)
         k = k.view(bsz, src_len, 2 * self.num_kv_heads, self.head_dim)
