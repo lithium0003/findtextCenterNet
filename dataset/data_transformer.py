@@ -98,7 +98,7 @@ def get_random_furigana():
     # 5: 亜
     # 8: 弌
 
-    if rng.uniform() < 0.5:
+    if rng.uniform() < 0.9:
         out_count = max_decoderlen-2
     else:
         out_count = rng.integers(1,max_decoderlen-2)
@@ -442,7 +442,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         out_count = 0
         ruby_state = 0
         
-        if rng.uniform() < 0.5:
+        if rng.uniform() < 0.9:
             count = min(max_decoderlen-2,index.shape[0]-start_idx)
         else:
             count = rng.integers(1, min(max_decoderlen-2,index.shape[0]-start_idx))
@@ -590,7 +590,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         start_idx = rng.integers(len(txt)-1)
         txt = txt[start_idx:]
         txt = skip_remainruby(txt)
-        if rng.uniform() < 0.5:
+        if rng.uniform() < 0.9:
             out_count = min(max_decoderlen-2,len(txt))
         else:
             out_count = rng.integers(1, min(max_decoderlen-2,len(txt)))
@@ -617,7 +617,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         if rng.uniform() < 0.5:
             return self.pad_output(*self.format_output(get_random_furigana(), orientation='both'))
 
-        if rng.uniform() < 0.5:
+        if rng.uniform() < 0.9:
             out_count = max_decoderlen-2
         else:
             out_count = rng.integers(1,max_decoderlen-2)
