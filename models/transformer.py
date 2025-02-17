@@ -91,6 +91,7 @@ class MultiheadDiffAttn(nn.Module):
         depth,
         num_heads,
         dropout = 0.1,
+        max_seq_len=5000,
     ):
         super().__init__()
         self.embed_dim = embed_dim
@@ -110,6 +111,8 @@ class MultiheadDiffAttn(nn.Module):
         self.k_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
         self.v_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
+
+        self.pos_emb = PositionalEncoding(embed_dim, max_len=max_seq_len)
 
         self.lambda_init = lambda_init_fn(depth)
         self.lambda_q1 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
@@ -136,6 +139,9 @@ class MultiheadDiffAttn(nn.Module):
         q = self.q_proj(query)
         k = self.k_proj(key)
         v = self.v_proj(value)
+
+        q = self.pos_emb(q)
+        k = self.pos_emb(k)
 
         q = q.view(bsz, tgt_len, 2 * self.num_heads, self.head_dim)
         k = k.view(bsz, src_len, 2 * self.num_kv_heads, self.head_dim)
@@ -169,9 +175,9 @@ class MultiheadDiffAttn(nn.Module):
         return attn
 
 class EncoderBlock(nn.Module):
-    def __init__(self, embed_dim, depth, num_heads, dropout = 0.1):
+    def __init__(self, embed_dim, depth, num_heads, dropout = 0.1, max_seq_len=5000):
         super().__init__()
-        self.mha = MultiheadDiffAttn(embed_dim=embed_dim, depth=depth, num_heads=num_heads, dropout=dropout)
+        self.mha = MultiheadDiffAttn(embed_dim=embed_dim, depth=depth, num_heads=num_heads, dropout=dropout, max_seq_len=max_seq_len)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.ff = SwiGLU(embed_dim, dropout=dropout)
@@ -200,7 +206,7 @@ class Encoder(nn.Module):
         self.pos_emb = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.norm = nn.LayerNorm([embed_dim])
         self.dropout = nn.Dropout(dropout, inplace=True)
-        self.blocks = nn.ModuleList([EncoderBlock(embed_dim, d, head_num, dropout=dropout) for d in range(block_num)])        
+        self.blocks = nn.ModuleList([EncoderBlock(embed_dim, d, head_num, dropout=dropout, max_seq_len=max_seq_len) for d in range(block_num)])        
 
     def forward(self, x, key_mask=None):
         x = self.embed(x)
@@ -212,10 +218,10 @@ class Encoder(nn.Module):
         return x
 
 class DecoderBlock(nn.Module):
-    def __init__(self, embed_dim, depth, head_num, dropout = 0.1):
+    def __init__(self, embed_dim, depth, head_num, dropout = 0.1, max_seq_len=5000):
         super().__init__()
-        self.self_attn = MultiheadDiffAttn(embed_dim, depth, head_num, dropout=dropout)
-        self.cross_attn = MultiheadDiffAttn(embed_dim, depth, head_num, dropout=dropout)
+        self.self_attn = MultiheadDiffAttn(embed_dim, depth, head_num, dropout=dropout, max_seq_len=max_seq_len)
+        self.cross_attn = MultiheadDiffAttn(embed_dim, depth, head_num, dropout=dropout, max_seq_len=max_seq_len)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.norm3 = nn.LayerNorm([embed_dim])
@@ -250,7 +256,7 @@ class Decoder(nn.Module):
         self.embed = nn.ModuleList([nn.Embedding(m, embed_dim) for m in modulo_list])
         self.pos_emb = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.norm = nn.LayerNorm([embed_dim])
-        self.blocks = nn.ModuleList([DecoderBlock(embed_dim, d, head_num, dropout=dropout) for d in range(block_num)])
+        self.blocks = nn.ModuleList([DecoderBlock(embed_dim, d, head_num, dropout=dropout, max_seq_len=max_seq_len) for d in range(block_num)])
         self.dropout = nn.Dropout(dropout, inplace=True)
         self.out_layers = nn.ModuleList([nn.Linear(embed_dim, m) for m in modulo_list])
 
