@@ -85,7 +85,7 @@ def find_splitpoint(txt, start=0, split_count=-1):
         return min(i+split_count+1, len(txt))
     idx2 = txt.find('\uFFFA', idx1)
     idx3 = txt.find('\uFFFB', idx1)
-    if idx3 >= i+split_count:
+    if idx3+1 >= i+split_count:
         return idx3+1
     return find_splitpoint(txt, start=idx3+1, split_count=i+split_count-idx3)
 
@@ -318,10 +318,10 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                         g = np.zeros([encoder_dim], np.float16)
                         g[feature_dim+0] = 5 * vertical
                         g[-1] = 5
-                        feature_values.append(g)
-                        feature_idx.append(len(target_text))
                         if ruby_state == 2:
                             target_text += '\uFFFB'
+                        feature_values.append(g)
+                        feature_idx.append(len(target_text))
                         ruby_state = 0
                         target_text += '\n'
                         prev_line = -1
@@ -330,10 +330,10 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                         g = np.zeros([encoder_dim], np.float16)
                         g[feature_dim+0] = 5 * vertical
                         g[-1] = 5
-                        feature_values.append(g)
-                        feature_idx.append(len(target_text))
                         if ruby_state == 2:
                             target_text += '\uFFFB'
+                        feature_values.append(g)
+                        feature_idx.append(len(target_text))
                         ruby_state = 0
                         target_text += '\n'
 
@@ -350,16 +350,19 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                     if subtype & (2+4) == 2+4:
                         if ruby_state == 1:
                             target_text += '\uFFFA'
+                            cur_idx = len(target_text)
                         ruby_state = 2
                     elif subtype & (2+4) == 2:
                         if ruby_state == 2:
                             target_text += '\uFFFB'
+                            cur_idx = len(target_text)
                         if ruby_state == 0:
                             target_text += '\uFFF9'
                         ruby_state = 1
                     elif subtype & (2+4) == 0:
                         if ruby_state == 2:
                             target_text += '\uFFFB'
+                            cur_idx = len(target_text)
                         ruby_state = 0
 
                     if subtype & 16 == 16:
@@ -392,6 +395,8 @@ class TransformerDataDataset(torch.utils.data.Dataset):
 
                 if len(feature_values) == 0:
                     continue
+                if ruby_state == 2:
+                    target_text += '\uFFFB'
                 feature_values.append(np.zeros([encoder_dim], np.float16))
                 feature_idx.append(len(target_text))
 
@@ -496,7 +501,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         return self.pad_output(txt, feat)
 
     def add_noize(self, value):
-        return value * (1 + 1e-2 * rng.normal(loc=0, scale=1, size=value.shape)) + 1e-1 * rng.normal(loc=0, scale=1, size=value.shape)
+        return value * (1 + 5e-2 * rng.normal(loc=0, scale=1, size=value.shape)) + 5e-1 * rng.normal(loc=0, scale=1, size=value.shape)
 
     def generage_feature(self, code, horizontal):
         hori, vert = self.charparam.get(code, (None, None))
