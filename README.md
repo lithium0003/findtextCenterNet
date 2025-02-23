@@ -28,7 +28,7 @@ https://lithium03.info/product/bunkoOCR.html
 
 入力画像は 768x768x3
 
-![TextDetector drawio](https://github.com/user-attachments/assets/927a04ad-8142-4f4b-bf85-68e479c9d5d8)
+![TextDetector diagram](https://github.com/lithium0003/findtextCenterNet/blob/develop/img/TextDetector.drawio.svg "TextDetector")
 
 EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズとなるのブロックからの途中出力を引き出し、UpSampling2Dで、最終的に
 (1/4サイズの)192x192xNの出力を得ます。
@@ -40,7 +40,7 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
 
 文字の特徴ベクトルの事前学習として、文字の特徴ベクトルを1文字ずつ文字コードに変換するモデルを後段に付けて学習を行います。
 
-![CodeDecoder drawio](https://github.com/user-attachments/assets/dd942351-dbff-4d9e-802e-619758fa40ec)
+![CodeDecoder diagram](https://github.com/lithium0003/findtextCenterNet/blob/develop/img/CodeDecoder.drawio.svg "CodeDecoder")
 
 文字は、UTF32で1つのコードポイントとして表されるとして、1091,1093,1097での剰余を学習させて、[Chinese remainder theorem](https://ja.wikipedia.org/wiki/%E4%B8%AD%E5%9B%BD%E3%81%AE%E5%89%B0%E4%BD%99%E5%AE%9A%E7%90%86)
 により算出した値のうち、0x10FFFFより小さいものが得られた場合に有効としています。
