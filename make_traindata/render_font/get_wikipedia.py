@@ -1,8 +1,6 @@
 import json
-import sys
 import urllib.parse
 import urllib.request
-import os
 
 # Wikipedia API
 WIKI_URL = "https://%s.wikipedia.org/w/api.php?"

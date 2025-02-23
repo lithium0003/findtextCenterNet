@@ -12,6 +12,9 @@ from processer3 import random_background, random_mono, random_single, random_dou
 if os.path.exists('TextDetector.mlpackage'):
     print('coreml')
     from process_coreml import call_model
+elif os.path.exists('TextDetector.onnx') or os.path.exists('TextDetector.quant.onnx') or os.path.exists('TextDetector.infer.onnx'):
+    print('onnx')
+    from process_onnx import call_model
 else:
     print('torch')
     from process_torch import call_model
