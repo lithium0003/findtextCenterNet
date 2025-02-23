@@ -120,7 +120,7 @@ sudo apt install libfreetype6-dev
 
 学習データを作成する前に、render_fontをコンパイルしておく必要があります。
 ```bash
-make -C render_font
+make -C make_traindata/render_font
 ```
 
 後段のTransformerに入れるために、検出した文字ボックスを整列させる必要があります。
