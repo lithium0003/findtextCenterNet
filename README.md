@@ -26,56 +26,26 @@ https://lithium03.info/product/bunkoOCR.html
 # Details 
 ## detector(step1)
 
-入力画像は 512x512x3
+入力画像は 768x768x3
+
+![TextDetector drawio](https://github.com/user-attachments/assets/927a04ad-8142-4f4b-bf85-68e479c9d5d8)
 
 EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズとなるのブロックからの途中出力を引き出し、UpSampling2Dで、最終的に
-256x256xNの出力を得ます。
+(1/4サイズの)192x192xNの出力を得ます。
 
-```mermaid
-  flowchart TD;
-      Input[Image 512x512x3]-->stem;
-      subgraph EfficientNetV2-XL;
-        stem-->block1;
-        block1-->block2;
-        block2-->block3;
-        block3-->block4;
-        block4-->block5;
-        block5-->block6;
-        block6-->block7;
-        block7-->top;
-      end;
-      block7 -- BatchNormalization --> P5_in[16x16x640];
-      block5 -- BatchNormalization --> P4_in[32x32x256];
-      block3 -- BatchNormalization --> P3_in[64x64x96];
-      block2 -- BatchNormalization --> P2_in[128x128x64];
-      subgraph LeafMap;
-        P5_in -- Conv2D k5x5 --> P5[16x16x32] -- UpSampling2D x16 --> P5_out[256x256x32];
-        P4_in -- Conv2D k5x5 --> P4[32x32x16] -- UpSampling2D x8 --> P4_out[256x256x16];
-        P3_in -- Conv2D k5x5 --> P3[64x64x8] -- UpSampling2D x4 --> P3_out[256x256x8];
-        P2_in -- Conv2D k5x5 --> P2[128x128x8] -- UpSampling2D x2 --> P2_out[256x256x8];
-        P5_out & P4_out & P3_out & P2_out -- Concat --> top_1[256x256x64] -- Conv2D k3x3 --> top_2[256x256xM2] -- Conv2D k3x3 --> LeafOut[256x256xN];
-      end;
-
-```
-
-モデルの出力は、中心位置のヒートマップ(keyheatmap)x1、ボックスサイズ(sizes)x2、オフセット(offsets)x2、
+モデルの出力は、中心位置のヒートマップ(keyheatmap)x1、ボックスサイズ(sizes)x2、
 文字の連続ライン(textline)x1、文字ブロックの分離線(separator)ｘ1、ルビである文字(code1_ruby)x1、
-ルビの親文字(code2_rubybase)x1、圏点(code4_emphasis)x1、空白の次文字(code8_space)x1の 256x256x11のマップと、
-文字の64次元特徴ベクトル 256x256x64のマップが出力されます。
+ルビの親文字(code2_rubybase)x1、圏点(code4_emphasis)x1、空白の次文字(code8_space)x1の 192x192x9のマップと、
+文字の100次元特徴ベクトル 192x192x100のマップが出力されます。
 
 文字の特徴ベクトルの事前学習として、文字の特徴ベクトルを1文字ずつ文字コードに変換するモデルを後段に付けて学習を行います。
 
-```mermaid
-  flowchart TD;
-    Input[Feature 64]-- Dense --> Output1091[modulo 1091];
-    Input[Feature 64]-- Dense --> Output1093[modulo 1093];
-    Input[Feature 64]-- Dense --> Output1097[modulo 1097];
-```
+![CodeDecoder drawio](https://github.com/user-attachments/assets/dd942351-dbff-4d9e-802e-619758fa40ec)
 
 文字は、UTF32で1つのコードポイントとして表されるとして、1091,1093,1097での剰余を学習させて、[Chinese remainder theorem](https://ja.wikipedia.org/wiki/%E4%B8%AD%E5%9B%BD%E3%81%AE%E5%89%B0%E4%BD%99%E5%AE%9A%E7%90%86)
 により算出した値のうち、0x10FFFFより小さいものが得られた場合に有効としています。
 
-最終的には、この後段は使用せず、文字の特徴ベクトルの連続をTransformerに入力して、文字コードの列を得る予定です。
+最終的には、この後段は使用せず、文字の特徴ベクトルの連続をTransformerに入力して、文字コード列を得ます。
 
 ## result image
 
@@ -97,68 +67,14 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
 
 ## transformer(step2)
 
-step1により、入力画像は、64次元特徴ベクトルの列に変換されます。
-各文字には、空白の次の文字であるかのフラグ、ふりがなであるかどうかのフラグ、ふりがなの親文字であるかのフラグ、改行フラグの4次元を付加します。
-こうして得られた68次元のベクトル列を、Transformerにより文字コードに変換します。
+step1により、入力画像は、100次元特徴ベクトルの列に変換されます。
+各文字には、縦書きかよこがきかのフラグ、空白の次の文字であるかのフラグ、ふりがなであるかどうかのフラグ、ふりがなの親文字であるかのフラグ、圏点が振られているかのフラグ、
+改行フラグの6次元を付加します。
+こうして得られた106次元のベクトル列を、Transformerにより文字コードに変換します。
 
-Transformerのエンコーダは最大128文字、デコーダーは最大128文字としました。
-Encoder、Decoder共に、hidden_dim=512, head_num=16, hopping_num=4とし、PositionalEncodingはランダム初期化の学習ありです。
+Transformerのエンコーダは最大100文字、デコーダーは最大100文字としました。
+Encoder、Decoder共に、hidden_dim=512, head_num=16, hopping_num=16とし、PositionalEncodingはsin初期化の学習ありです。
 Decoderの出力は、1091,1093,1097での剰余により符号化します。
-
-```mermaid
-  flowchart TD;
-  EncoderInput[EncoderInput 68x128]-- input_dense --> encoder_embedding[Encoder InputEmbedding 512x128];
-  PositionalEncoding1[PositionalEncoding] & encoder_embedding --> encoder_input1[512x128];
-
-  subgraph Encoder1;
-    encoder_input1 --> MultiHeadAttention1[MultiHeadAttention];
-    encoder_input1 & MultiHeadAttention1 --> add1[Add];
-    add1 --> LayerNorm1[LayerNorm];
-    LayerNorm1 --> FFN1[FFN];
-    encoder_input1 & LayerNorm1 & FFN1 --> add2[Add];
-    add2 --> LayerNorm2[LayerNorm];
-  end;
-  subgraph Encoder2;
-    LayerNorm2 --> encoder2[EncoderBlock];
-  end;
-  subgraph Encoder3;
-    encoder2 --> encoder3[EncoderBlock];
-  end;
-  subgraph Encoder4;
-    encoder3 --> encoder4[EncoderBlock];
-  end;
-
-  DecoderInput[DecoderInput 68x128]-- Embedding --> decoder_embedding[Decoder InputEmbedding 512x128];
-  PositionalEncoding2[PositionalEncoding] & decoder_embedding --> decoder_input1[512x128];
-  subgraph Decoder1;
-    decoder_input1 --> SelfAttention1[MultiHead SelfAttention];
-    decoder_input1 & SelfAttention1 --> add3[Add];
-    add3 --> LayerNorm3[LayerNorm];
-    LayerNorm3 & encoder4 --> CrossAttention1[MultiHead CrossAttention];
-    LayerNorm3 & CrossAttention1 --> add4[Add];
-    add4 --> LayerNorm4[LayerNorm];
-    LayerNorm4 --> FFN2[FFN];
-    decoder_input1 & LayerNorm4 & FFN2 --> add5[Add];
-    add5 --> LayerNorm5[LayerNorm];
-  end;
-  subgraph Decoder2;
-    LayerNorm5 & encoder4 --> decoder2[DecoderBlock];
-  end;
-  subgraph Decoder3;
-    decoder2 & encoder4 --> decoder3[DecoderBlock];
-  end;
-  subgraph Decoder4;
-    decoder3 & encoder4 --> decoder4[DecoderBlock];
-  end;
-
-  subgraph modulo;
-    decoder4 -- Dense --> Output1091[modulo 1091x128];
-    decoder4 -- Dense --> Output1093[modulo 1093x128];
-    decoder4 -- Dense --> Output1097[modulo 1097x128];
-  end;
-
-  Output1091 & Output1093 & Output1097 --> ChineseRemainderTheorem --> output[Unicode Textoutput x128];
-```
 
 Decoderは、SOT=1で開始し、EOT=2で終了するまでの数値をUnicodeコードポイントとして学習させます。
 
