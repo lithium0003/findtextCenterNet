@@ -43,7 +43,7 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
 ![CodeDecoder diagram](https://github.com/lithium0003/findtextCenterNet/blob/develop/img/CodeDecoder.drawio.svg "CodeDecoder")
 
 文字は、UTF32で1つのコードポイントとして表されるとして、1091,1093,1097での剰余を学習させて、[Chinese remainder theorem](https://ja.wikipedia.org/wiki/%E4%B8%AD%E5%9B%BD%E3%81%AE%E5%89%B0%E4%BD%99%E5%AE%9A%E7%90%86)
-により算出した値のうち、0x10FFFFより小さいものが得られた場合に有効としています。
+により算出した値のうち、0x3FFFFより小さいものが得られた場合に有効としています。
 
 最終的には、この後段は使用せず、文字の特徴ベクトルの連続をTransformerに入力して、文字コード列を得ます。
 
@@ -76,16 +76,40 @@ Transformerのエンコーダは最大100文字、デコーダーは最大100文
 Encoder、Decoder共に、hidden_dim=512, head_num=16, hopping_num=16とし、PositionalEncodingはsin初期化の学習ありです。
 Decoderの出力は、1091,1093,1097での剰余により符号化します。
 
-Decoderは、SOT=1で開始し、EOT=2で終了するまでの数値をUnicodeコードポイントとして学習させます。
+![Transformer diagram](https://github.com/lithium0003/findtextCenterNet/blob/develop/img/Transformer.drawio.svg "Transformer")
 
+
+Decoderは、SOT=1で開始し、EOT=2で終了するまでの数値をUnicodeコードポイントとして学習させます。
+このとき、高速に並列推論できるように、MSK=3でマスクした場所を、応答させるように学習させます。
+空白梅は、PAD=0です。
+
+マスクがないとき
+| Index | 0 | 1 | 2 | 3 | 4 | 5 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Input | SOT | t | e | s | t | PAD |
+| Output | t | e | s | t | EOT | PAD |
+
+全てマスクがあるとき
+| Index | 0 | 1 | 2 | 3 | 4 | 5 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Input | SOT | MSK | MSK | MSK | MSK | MSK |
+| Output | t | e | s | t | EOT | PAD |
+
+一部マスクがあるとき
+| Index | 0 | 1 | 2 | 3 | 4 | 5 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Input | SOT | MSK | e | MSK | t | PAD |
+| Output | t | e | s | t | EOT | PAD |
 
 # Prepare
-Python3でtensorflowを使用します。
+Python3でPyTorchを使用します。
 
 ```bash
-pip3 istall tensorflow
-pip3 install matplotlib
-pip3 install scikit-image
+sudo apt install -y python3-pip pkg-config libcurl4-openssl-dev
+python3 -m venv venv/torch
+. venv/torch/bin/activate
+pip3 install torch torchvision torchaudio
+pip3 install tensorboard einops webdataset scipy boto3 pyzmq cython pillow-heif
 ```
 
 学習データを作成するのに使用する、render_fontをコンパイルするのに、libfreetype6-devが必要です
