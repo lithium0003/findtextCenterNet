@@ -15,7 +15,7 @@ from models.transformer import ModelDimensions, Transformer, TransformerPredicto
 from dataset.data_transformer import TransformerDataDataset
 from loss_func import loss_function3
 
-EPOCHS = 50
+EPOCHS = 100
 lr=1e-4
 batch=512
 logstep=10
@@ -108,6 +108,7 @@ def train():
         model.load_state_dict(data['model_state_dict'])
         last_epoch = data['epoch']
         print('loaded', last_epoch, 'epoch', flush=True)
+        last_epoch += 1
     else:
         config = ModelDimensions()
         model = Transformer(**config.__dict__)
