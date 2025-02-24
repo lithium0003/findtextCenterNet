@@ -16,12 +16,12 @@ https://lithium03.info/product/bunkoOCR.html
 
 # Example
 ## 手書き文字
-![手書き文字サンプル1入力](https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1.png "入力1")
-![手書き文字サンプル1出力](https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1_result.png "出力1")
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test1.png" width="500">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test1_result.png" width="500">
 
 ## フォント
-![フォントサンプル2入力](https://github.com/lithium0003/findtextCenterNet/blob/main/img/test2.png "入力2")
-![フォントサンプル2出力](https://github.com/lithium0003/findtextCenterNet/blob/main/img/test2_result.png "出力2")
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test2.png" width="1400">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test2_result.png" width="1400">
 
 # Details 
 ## detector(step1)
@@ -54,21 +54,28 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
 | 項目 | image |
 | --- | ------ |
 | 元画像 | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1.png" width="400"> |
-| 中心位置のヒートマップ(keyheatmap) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1_keymap.png" width="400"> |
-| 文字の連続ライン(textline) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1_textline.png" width="400"> |
-| 文字ブロックの分離線(separator) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1_separator.png" width="400"> |
-| 空白の次文字(code8_space) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1_code8.png" width="400"> |
+| 中心位置のヒートマップ(keyheatmap) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test1_keymap.png" width="400"> |
+| 文字の連続ライン(textline) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test1_textline.png" width="400"> |
+| 文字ブロックの分離線(separator) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test1_separator.png" width="400"> |
+
+| 項目 | image |
+| --- | ------ |
+| 元画像 | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test2.png" width="1400"> |
+| 中心位置のヒートマップ(keyheatmap) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test2_keymap.png" width="1400"> |
+| 文字の連続ライン(textline) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test2_textline.png" width="1400"> |
+| ふりがな(code1) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test2_code1.png" width="1400"> |
+| 親文字(code2) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test2_code2.png" width="1400"> |
 
 中心位置のヒートマップ(keyheatmap)のピーク位置から、文字位置を特定します。文字位置のボックスを、文字の連続ライン(textline)に沿って並べて、文字列の並びを得ます。
 このとき、文字ブロックの分離線(separator)で認識したブロック境界を越えないように文章列を分離します。
 
-また、この例では空白の次文字(code8_space)のみが検出されていますが、ふりがな、ふりがなの親文字についても同様に検出し、マークしておき、後段のTransformerに入れるときに
+また、この例ではふりがなと親文字が検出されていますが、圏点文字(code4)と空白の次の文字(code8)についても同様に検出し、マークしておき、後段のTransformerに入れるときに
 追加して入れます。
 
 ## transformer(step2)
 
 step1により、入力画像は、100次元特徴ベクトルの列に変換されます。
-各文字には、縦書きかよこがきかのフラグ、空白の次の文字であるかのフラグ、ふりがなであるかどうかのフラグ、ふりがなの親文字であるかのフラグ、圏点が振られているかのフラグ、
+各文字には、縦書きか横書きかのフラグ、空白の次の文字であるかのフラグ、ふりがなであるかどうかのフラグ、ふりがなの親文字であるかのフラグ、圏点が振られているかのフラグ、
 改行フラグの6次元を付加します。
 こうして得られた106次元のベクトル列を、Transformerにより文字コードに変換します。
 
