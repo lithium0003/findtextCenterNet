@@ -136,24 +136,19 @@ make -C make_traindata/render_font
 make -C textline_detect
 ```
 
-Windowsの場合は、Makefile.makを使用してください。
-```cmd
-cd textline_detect
-nmake -f Makefile.mak
-```
-
 # Make train dataset for step1
-学習用データセットは、https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/tree/20230627/train_data1/ 以下にあります。
+学習用データセットは、https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/ 以下にあります。
+Step1を学習する際には、データセットをWebから直接ロードして学習できるようになっていますが、帯域が必要となるのでダウンロードしてから学習することもできます。
 ダウンロードするに次のようにします。
 ```bash
 mkdir train_data1 && cd train_data1
-curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/20230627/train_data1/test0000000[0-4].tfrecords"
-curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/20230627/train_data1/train00000[000-299].tfrecords"
+curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/train{00000000..00001023}.tar"
+curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test{00000000..00000063}.tar"
 ```
 
 自身で学習データを作成するには、フォントデータが必要です。
-resource_list.txtを参照して、適宜フォントデータを配置してください。
-著作権法30条の4の規定により、機械学習の学習を目的とする場合はこれらのデータをお渡しすることができます。
+適宜フォントデータを配置してください。
+著作権法30条の4の規定により、機械学習の学習を目的とする場合は筆者が使用したデータをお渡しすることができます。
 希望する方は、https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/data.tar.gz よりダウンロードしてください。
 
 展開してできる、data フォルダを置いた上で、以下のコマンドにより、train_data1 フォルダに学習用データセットを準備します。
