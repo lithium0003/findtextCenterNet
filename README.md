@@ -173,6 +173,7 @@ curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/
 適宜フォントデータを配置してください。
 著作権法30条の4の規定により、機械学習の学習を目的とする場合は筆者が使用したデータをお渡しすることができます。
 希望する方は、https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/data.tar.gz よりダウンロードしてください。
+ここに含まれるフォントデータは機械学習のためにのみ使用できるので、その他の目的に使用する場合は別途自分でオリジナル配布元から用意してください。
 
 展開してできる、data フォルダを置いた上で、以下のコマンドにより、train_data1 フォルダに学習用データセットを準備します。
 ```bash
