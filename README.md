@@ -112,7 +112,7 @@ Decoderは、SOT=1で開始し、EOT=2で終了するまでの数値をUnicode�
 Python3でPyTorchを使用します。
 
 ```bash
-sudo apt install -y python3-pip pkg-config libcurl4-openssl-dev
+sudo apt install -y python3-pip pkg-config
 python3 -m venv venv/torch
 . venv/torch/bin/activate
 pip3 install torch torchvision torchaudio
@@ -130,16 +130,33 @@ sudo apt install libfreetype6-dev
 make -C make_traindata/render_font
 ```
 
+Transformerの学習データを作成する前に、processer3.pyxをコンパイルしておく必要があります。
+```bash
+CPLUS_INCLUDE_PATH=$(python3 -c 'import numpy; print(numpy.get_include())') cythonize -i make_traindata/processer3.pyx
+```
+
+step1の学習をするのに使用する、downloaderをコンパイルするのに、libcurl4-openssl-devが必要です
+
+```bash
+sudo apt install libcurl4-openssl-dev
+```
+
+step1の学習をするのに、downloaderをコンパイルしておく必要があります。
+
+```bash
+make -C dataset/downloader_src && cp dataset/downloader_src/downloader dataset/
+```
+
+step1の学習をするのに、processer.pyxをコンパイルしておく必要があります。
+
+```bash
+CPLUS_INCLUDE_PATH=$(python3 -c 'import numpy; print(numpy.get_include())') cythonize -i dataset/processer.pyx
+```
+
 後段のTransformerに入れるために、検出した文字ボックスを整列させる必要があります。
 このためのプログラムlinedetectはcppで記述しています。
 ```bash
 make -C textline_detect
-```
-
-Windowsの場合は、Makefile.makを使用してください。
-```cmd
-cd textline_detect
-nmake -f Makefile.mak
 ```
 
 # Make train dataset for step1
