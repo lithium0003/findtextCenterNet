@@ -178,6 +178,7 @@ curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/
 
 展開してできる、data フォルダを置いた上で、以下のコマンドにより、train_data1 フォルダに学習用データセットを準備します。
 ```bash
+cd make_taindata
 ./make_traindata1.py 64 1024
 mv train_data1 ../
 ```
@@ -252,21 +253,33 @@ test_image1_torch.pyを実行すると推論できます。
 ./test_image1_torch.py img/test1.png
 ```
 
-# Make train dataset for step2
-step1の文字検出器が学習できたら、後段のTransformerの学習データを作成します。
+# Training for Transformer(step3) 
+step3の学習用データセットは、
+* https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data3.tar.gz 
+* https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data4.tar.gz 
+に用意しています。この中に含まれる著作物は、著作権法30条の4の規定により再配布いていますので、法の規定に従って使用してください。
 
-# 文字特徴量のサンプリング
-make_chardata.pyを用いて、文字の画像データから、文字検出器が出力する各文字ごとの特徴量を収集します。
+自分で用意する場合は以下のようにします。
+
+detectorの文字検出器が学習できたら、後段のTransformerの学習データを作成します。
+
+## 文字特徴量のサンプリング
+make_traindata3.pyを用いて、文字の画像データから、文字検出器が出力する各文字ごとの特徴量を収集します。
+
 ```bash
-./make_chardata.py
+cd make_traindata
+./make_traindata3.py
 ```
+このプロセスは、無限に生成し続けますので適当なところで止めてください。
+おおむね必要な文字コードが全部出てきたくらいで止めるといいでしょう。
 
-chardata_fontフォルダ以下に、各文字の文字コードごとにファイルができます。
+
+code_featuresフォルダ以下に、各文字の文字コードごとにファイルができます。
 次に、1つのファイルにまとめます。
 
-convert_chardata.pyを用いて、charparam.npzを生成します。
+save_feature.pyを用いて、features.npzを生成します。
 ```bash
-./convert_chardata.py
+./save_feature.py
 ```
 
 事前学習のckpt1のパラメータを使って作成した文字特徴量charparam.npzは、以下からダウンロード可能です。
