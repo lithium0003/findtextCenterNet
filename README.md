@@ -28,8 +28,8 @@ https://lithium03.info/product/bunkoOCR.html
 事前に学習済みの重みデータ、model.pt, model3.ptをダウンロードして、findtextCenterNet/フォルダ直下に配置します。
 
 ```bash
-wget https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/model.pt
-wget https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/model3.pt
+wget https://huggingface.co/lithium0003/findtextCenterNet/resolve/main/model.pt
+wget https://huggingface.co/lithium0003/findtextCenterNet/resolve/main/model3.pt
 ```
 
 対象ファイルを指定して、test_image3_torch.pyを呼び出します。
