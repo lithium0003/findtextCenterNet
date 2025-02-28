@@ -221,8 +221,8 @@ fine_image/process_image1_torch.py train_data2/target.png
 fine_image/fix_process_image1.py train_data2/target.png
 ```
 
-<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_json1.png" width="300">
-<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_json2.png" width="300">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_json1.png" width="400">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_json2.png" width="400">
 
 文字ボックスをダブルクリックすることで、文字や属性を修正できます。
 
@@ -233,9 +233,24 @@ fine_image/fix_line_image1.py train_data2/target.png
 fine_image/fix_line_image1.py train_data2/target.png seps
 ```
 
-<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_line1.png" width="300">
-<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_line2.png" width="300">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_line1.png" width="400">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_line2.png" width="400">
 
+## Train for step2(finetune detector)
+```bash
+./train1.py --lr=1e-4 --logstep=10 --output=1000 --weight1=0.5 --weight2=1.0 32
+```
+
+step2の学習には、step1で使用したデータに加えて、train_data2/ フォルダ以下に用意したデータを使用して追加学習します。
+学習を始める前に、 result2/model.pt として、step1の結果の重みデータを用意しておきます。
+
+## Test for step2
+step2学習済みパラメータを、model.ptに置いた状態で、
+test_image1_torch.pyを実行すると推論できます。
+
+```bash
+./test_image1_torch.py img/test1.png
+```
 
 # Make train dataset for step2
 step1の文字検出器が学習できたら、後段のTransformerの学習データを作成します。
