@@ -159,7 +159,8 @@ CPLUS_INCLUDE_PATH=$(python3 -c 'import numpy; print(numpy.get_include())') cyth
 make -C textline_detect
 ```
 
-# Make train dataset for step1
+# Training for detector(step1)
+## Make train dataset for step1
 学習用データセットは、https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/ 以下にあります。
 Step1を学習する際には、データセットをWebから直接ロードして学習できるようになっていますが、帯域が必要となるのでダウンロードしてから学習することもできます。
 ダウンロードするに次のようにします。
@@ -182,7 +183,7 @@ mv train_data1 ../
 ```
 この例では、test=64, train=1024ファイルを作成します。
 
-# Train for step1
+## Train for step1
 ```bash
 ./train1.py --lr=1e-3 --logstep=10 --output=1000 --gamma=0.95 32
 ```
@@ -195,8 +196,8 @@ step1の学習時に、高速にaugmentationやデータ変換をする必要が
 
 train1.pyは、 result1/model.pt に学習済み重みを出力します。
 
-# Test for step1
-学習済みパラメータを、model.ptに置いた状態で、
+## Test for step1
+step1学習済みパラメータを、model.ptに置いた状態で、
 test_image1_torch.pyを実行すると推論できます。
 
 ```bash
@@ -205,11 +206,41 @@ test_image1_torch.pyを実行すると推論できます。
 
 # Finetune for detector(step2)
 step1の文字検出器で、実際のデータを処理したときにi上手くいかない例があれば、特にその例で補充の学習を行うことができます。
+## Make train dataset for step2
+step1学習済みパラメータを、model.ptに置いた状態で、推論結果をjsonファイルとして出力します。
+
+```bash
+fine_image/process_image1_torch.py train_data2/target.png
+```
+
+実行すると、(filename).json (filename).lines.png  (filename).seps.png の3ファイルが結果として出力されます。
+
+### 文字の修正
+認識した文字を確認してjsonを修正するには、 fix_process_image1.py を使用することができます。
+```bash
+fine_image/fix_process_image1.py train_data2/target.png
+```
+
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_json1.png" width="300">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_json2.png" width="300">
+
+文字ボックスをダブルクリックすることで、文字や属性を修正できます。
+
+### 文字の連続ラインなどの修正
+認識した文字の連続ラインや、文章の分離ラインを修正するには、 fix_line_image1.py を使用することができます。
+```bash
+fine_image/fix_line_image1.py train_data2/target.png
+fine_image/fix_line_image1.py train_data2/target.png seps
+```
+
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_line1.png" width="300">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_line2.png" width="300">
+
 
 # Make train dataset for step2
 step1の文字検出器が学習できたら、後段のTransformerの学習データを作成します。
 
-## 文字特徴量のサンプリング
+# 文字特徴量のサンプリング
 make_chardata.pyを用いて、文字の画像データから、文字検出器が出力する各文字ごとの特徴量を収集します。
 ```bash
 ./make_chardata.py
