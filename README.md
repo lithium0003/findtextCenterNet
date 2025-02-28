@@ -350,6 +350,11 @@ https://arxiv.org/abs/2104.00298
 https://www.amazon.co.jp/dp/B096WWVFJN
 - B2T Connection: Serving Stability and Performance in Deep Transformers
 https://arxiv.org/abs/2206.00330
-
-
-
+- Schedule-Free Learning
+https://github.com/facebookresearch/schedule_free
+- Differential Transformer
+https://arxiv.org/abs/2410.05258
+- Understanding How Positional Encodings Work in Transformer Model
+https://aclanthology.org/2024.lrec-main.1478/
+- Mask-Predict: Parallel Decoding of Conditional Masked Language Models
+https://arxiv.org/abs/1904.09324
