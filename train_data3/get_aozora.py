@@ -1,0 +1,1 @@
+../make_traindata/render_font/get_aozora.py
