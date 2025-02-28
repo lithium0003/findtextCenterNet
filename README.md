@@ -72,7 +72,7 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
 また、この例ではふりがなと親文字が検出されていますが、圏点文字(code4)と空白の次の文字(code8)についても同様に検出し、マークしておき、後段のTransformerに入れるときに
 追加して入れます。
 
-## transformer(step2)
+## transformer(step3)
 
 step1により、入力画像は、100次元特徴ベクトルの列に変換されます。
 各文字には、縦書きか横書きかのフラグ、空白の次の文字であるかのフラグ、ふりがなであるかどうかのフラグ、ふりがなの親文字であるかのフラグ、圏点が振られているかのフラグ、
@@ -177,26 +177,34 @@ curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/
 
 展開してできる、data フォルダを置いた上で、以下のコマンドにより、train_data1 フォルダに学習用データセットを準備します。
 ```bash
-./make_traindata1.py　5 300
+./make_traindata1.py 64 1024
+mv train_data1 ../
 ```
-この例では、test=5, train=300ファイルを作成します。
+この例では、test=64, train=1024ファイルを作成します。
 
 # Train for step1
 ```bash
-./train1.py
+./train1.py --lr=1e-3 --logstep=10 --output=1000 --gamma=0.95 32
 ```
 
-step1の学習時に、回転や拡大縮小を行う処理を高速化するカスタムpipパッケージを入れると速くなります。
-rotate_opフォルダ以下にソースがあります。dockerフォルダにあるイメージスクリプトで作成したイメージ上で
-コンパイルしてください。
+step1の学習には、 dataset/downloader_src 以下にソースのある downloader を用いて、 WebDataset としてデータセットをWebから直接ロードする方法と、
+ローカルの train_data1/ フォルダに配置した学習データをロードする方法があります。
+dataset/data_detector.py の get_dataset関数の local_disk = False フラグで切り替えることができます。
+
+step1の学習時に、高速にaugmentationやデータ変換をする必要があるので、cythonで dataset/processer.pyx をコンパイルしておく必要があります。
+
+train1.pyは、 result1/model.pt に学習済み重みを出力します。
 
 # Test for step1
-学習済みパラメータを、ckpt1/　に置いた状態で、
-test_image1.pyを実行すると推論できます。
+学習済みパラメータを、model.ptに置いた状態で、
+test_image1_torch.pyを実行すると推論できます。
 
 ```bash
-./test_image1.py img/test1.png
+./test_image1_torch.py img/test1.png
 ```
+
+# Finetune for detector(step2)
+step1の文字検出器で、実際のデータを処理したときにi上手くいかない例があれば、特にその例で補充の学習を行うことができます。
 
 # Make train dataset for step2
 step1の文字検出器が学習できたら、後段のTransformerの学習データを作成します。
