@@ -19,7 +19,7 @@ except ImportError:
 from util_func import calc_predid, width, height, scale, feature_dim, modulo_list, sigmoid
 
 if len(sys.argv) < 2:
-    print(sys.argv[0],'target.png','(twopass)')
+    print(sys.argv[0],'target.png')
     exit(1)
 
 target_files = []
@@ -27,7 +27,14 @@ model_size = 'xl'
 resize = 1.0
 cutoff = 0.4
 for arg in sys.argv[1:]:
-    target_files += glob.glob(arg)
+    if arg.startswith('--cutoff='):
+        cutoff = float(arg.split('=')[1])
+        print('cutoff: ', cutoff)
+    elif arg.startswith('--resize='):
+        resize = float(arg.split('=')[1])
+        print('resize: ', resize)
+    else:
+        target_files += glob.glob(arg)
 
 target_files = sorted(target_files)
 
