@@ -16,12 +16,12 @@ https://lithium03.info/product/bunkoOCR.html
 
 # Example
 ## 手書き文字
-<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test1.png" width="500">
-<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test1_result.png" width="500">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1.png" width="500">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1_result.png" width="500">
 
 ## フォント
-<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test2.png" width="1400">
-<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test2_result.png" width="1400">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test2.png" width="1400">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test2_result.png" width="1400">
 
 
 # とりあえず実行したいんだけど
@@ -50,7 +50,7 @@ wget https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resol
 
 入力画像は 768x768x3
 
-![TextDetector diagram](https://github.com/lithium0003/findtextCenterNet/blob/develop/img/TextDetector.drawio.svg "TextDetector")
+![TextDetector diagram](https://github.com/lithium0003/findtextCenterNet/blob/main/img/TextDetector.drawio.svg "TextDetector")
 
 EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズとなるのブロックからの途中出力を引き出し、UpSampling2Dで、最終的に
 (1/4サイズの)192x192xNの出力を得ます。
@@ -62,7 +62,7 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
 
 文字の特徴ベクトルの事前学習として、文字の特徴ベクトルを1文字ずつ文字コードに変換するモデルを後段に付けて学習を行います。
 
-![CodeDecoder diagram](https://github.com/lithium0003/findtextCenterNet/blob/develop/img/CodeDecoder.drawio.svg "CodeDecoder")
+![CodeDecoder diagram](https://github.com/lithium0003/findtextCenterNet/blob/main/img/CodeDecoder.drawio.svg "CodeDecoder")
 
 文字は、UTF32で1つのコードポイントとして表されるとして、1091,1093,1097での剰余を学習させて、[Chinese remainder theorem](https://ja.wikipedia.org/wiki/%E4%B8%AD%E5%9B%BD%E3%81%AE%E5%89%B0%E4%BD%99%E5%AE%9A%E7%90%86)
 により算出した値のうち、0x3FFFFより小さいものが得られた場合に有効としています。
@@ -76,17 +76,17 @@ EfficientNetV2-XLの出力(入力の1/32サイズ)と、1/4,1/8,1/16サイズと
 | 項目 | image |
 | --- | ------ |
 | 元画像 | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1.png" width="400"> |
-| 中心位置のヒートマップ(keyheatmap) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test1_keymap.png" width="400"> |
-| 文字の連続ライン(textline) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test1_textline.png" width="400"> |
-| 文字ブロックの分離線(separator) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test1_separator.png" width="400"> |
+| 中心位置のヒートマップ(keyheatmap) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1_keymap.png" width="400"> |
+| 文字の連続ライン(textline) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1_textline.png" width="400"> |
+| 文字ブロックの分離線(separator) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test1_separator.png" width="400"> |
 
 | 項目 | image |
 | --- | ------ |
 | 元画像 | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test2.png" width="1400"> |
-| 中心位置のヒートマップ(keyheatmap) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test2_keymap.png" width="1400"> |
-| 文字の連続ライン(textline) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test2_textline.png" width="1400"> |
-| ふりがな(code1) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test2_code1.png" width="1400"> |
-| 親文字(code2) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test2_code2.png" width="1400"> |
+| 中心位置のヒートマップ(keyheatmap) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test2_keymap.png" width="1400"> |
+| 文字の連続ライン(textline) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test2_textline.png" width="1400"> |
+| ふりがな(code1) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test2_code1.png" width="1400"> |
+| 親文字(code2) | <img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/test2_code2.png" width="1400"> |
 
 中心位置のヒートマップ(keyheatmap)のピーク位置から、文字位置を特定します。文字位置のボックスを、文字の連続ライン(textline)に沿って並べて、文字列の並びを得ます。
 このとき、文字ブロックの分離線(separator)で認識したブロック境界を越えないように文章列を分離します。
@@ -105,7 +105,7 @@ Transformerのエンコーダは最大100文字、デコーダーは最大100文
 Encoder、Decoder共に、hidden_dim=512, head_num=16, hopping_num=16とし、PositionalEncodingはsin初期化の学習ありです。
 Decoderの出力は、1091,1093,1097での剰余により符号化します。
 
-![Transformer diagram](https://github.com/lithium0003/findtextCenterNet/blob/develop/img/Transformer.drawio.svg "Transformer")
+![Transformer diagram](https://github.com/lithium0003/findtextCenterNet/blob/main/img/Transformer.drawio.svg "Transformer")
 
 
 Decoderは、SOT=1で開始し、EOT=2で終了するまでの数値をUnicodeコードポイントとして学習させます。
@@ -244,8 +244,8 @@ fine_image/process_image1_torch.py train_data2/target.png
 fine_image/fix_process_image1.py train_data2/target.png
 ```
 
-<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_json1.png" width="400">
-<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_json2.png" width="400">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/fix_image_json1.png" width="400">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/fix_image_json2.png" width="400">
 
 文字ボックスをダブルクリックすることで、文字や属性を修正できます。
 
@@ -256,8 +256,8 @@ fine_image/fix_line_image1.py train_data2/target.png
 fine_image/fix_line_image1.py train_data2/target.png seps
 ```
 
-<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_line1.png" width="400">
-<img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/fix_image_line2.png" width="400">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/fix_image_line1.png" width="400">
+<img src="https://github.com/lithium0003/findtextCenterNet/blob/main/img/fix_image_line2.png" width="400">
 
 ## Train for step2(finetune detector)
 ```bash
