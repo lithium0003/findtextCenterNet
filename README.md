@@ -236,7 +236,7 @@ step1学習済みパラメータを、model.ptに置いた状態で、推論結�
 fine_image/process_image1_torch.py train_data2/target.png
 ```
 
-実行すると、(filename).json (filename).lines.png  (filename).seps.png の3ファイルが結果として出力されます。
+実行すると、(filename).json (filename).lines.png (filename).seps.png の3ファイルが結果として出力されます。
 
 ### 文字の修正
 認識した文字を確認してjsonを修正するには、 fix_process_image1.py を使用することができます。
@@ -283,7 +283,7 @@ step3の学習用データセットは、
 に用意しています。この中に含まれる著作物は、著作権法30条の4の規定により再配布していますので、法の規定に従って使用してください。
 
 ## 自分で用意する場合
-step1,(step2)の学習が終わってdetectorの文字検出器を用いて、後段のTransformerの学習データを作成します。
+step1,(step2)の学習が終わったdetectorの文字検出器を用いて、後段のTransformerの学習データを作成します。
 
 ### 文字特徴量のサンプリング
 make_traindata3.pyを用いて、文字の画像データから、文字検出器が出力する各文字ごとの特徴量を収集します。
