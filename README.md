@@ -257,6 +257,7 @@ test_image1_torch.pyを実行すると推論できます。
 step3の学習用データセットは、
 * https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data3.tar.gz 
 * https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data4.tar.gz 
+
 に用意しています。この中に含まれる著作物は、著作権法30条の4の規定により再配布いていますので、法の規定に従って使用してください。
 
 自分で用意する場合は以下のようにします。
