@@ -1,3 +1,5 @@
+[English](README.en.md)
+
 # findtextCenterNet
 機械学習による日本語OCR
 

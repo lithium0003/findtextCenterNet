@@ -1,3 +1,5 @@
+[Japanese](README.md)
+
 # findtextCenterNet
 Japanese OCR with deeplearning
 
@@ -23,14 +25,14 @@ https://lithium03.info/product/bunkoOCR.html
 
 
 # Anyway, I want to run the model.
-Please download the pre-trained weights, ```model.pt```, ```model3.pt```, and place just below on the folder findtextCenterNet/
+Please download the pre-trained weights, `model.pt`, `model3.pt`, and place just below on the folder findtextCenterNet/
 
 ```bash
 wget https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/model.pt
 wget https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/model3.pt
 ```
 
-Call ```test_image3_torch.py``` with specify the target image.
+Call `test_image3_torch.py` with specify the target image.
 ```bash
 ./test_image3_torch.py img/test1.png
 ```
@@ -135,37 +137,37 @@ pip3 install torch torchvision torchaudio
 pip3 install tensorboard einops webdataset scipy boto3 pyzmq cython pillow-heif
 ```
 
-For compile render_font which used to create train data, need ```libfreetype6-dev```
+For compile render_font which used to create train data, need `libfreetype6-dev`
 ```bash
 sudo apt install libfreetype6-dev
 ```
 
-Before create train data, need to compile ```render_font```
+Before create train data, need to compile `render_font`
 ```bash
 make -C make_traindata/render_font
 ```
 
-Before create train data for Transformer, need to compile ```processer3.pyx```
+Before create train data for Transformer, need to compile `processer3.pyx`
 ```bash
 CPLUS_INCLUDE_PATH=$(python3 -c 'import numpy; print(numpy.get_include())') cythonize -i make_traindata/processer3.pyx
 ```
 
-For compile downloader which used to train step1, need ```libcurl4-openssl-dev```
+For compile downloader which used to train step1, need `libcurl4-openssl-dev`
 ```bash
 sudo apt install libcurl4-openssl-dev
 ```
 
-Before train step1, need to compile ```downloader```
+Before train step1, need to compile `downloader`
 ```bash
 make -C dataset/downloader_src && cp dataset/downloader_src/downloader dataset/
 ```
 
-Before train step1, need to compile ```processer.pyx```
+Before train step1, need to compile `processer.pyx`
 ```bash
 CPLUS_INCLUDE_PATH=$(python3 -c 'import numpy; print(numpy.get_include())') cythonize -i dataset/processer.pyx
 ```
 
-For aline the detected boxes before input to Transformer, using the cpp module ```linedetect```
+For aline the detected boxes before input to Transformer, using the cpp module `linedetect`
 ```bash
 make -C textline_detect
 ```
@@ -185,7 +187,7 @@ curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/
 If you want to make train data your own, need the font files.
 In japanese law, you can use the authors training dataset. Please contact to contact@lithium03.info .
 
-After extract data.tar.gz and place ```data``` folder, prepare the step1 train dataset in ```train_data1``` as follows,
+After extract data.tar.gz and place `data` folder, prepare the step1 train dataset in `train_data1` as follows,
 ```bash
 cd make_taindata
 ./make_traindata1.py 64 1024
@@ -199,17 +201,17 @@ This example makes test=64, train=1024 files.
 ```
 
 In step1 training, two way of data loding, direct web loading or local loading.
-The direct web loading method uses ```downloader``` and ```WebDataset```.
-The local loading method load from the folder ```train_data1/```.
-You can switch the method with the flag ```local_disk = False``` of function ```get_dataset``` in ```dataset/data_detector.py```.
+The direct web loading method uses `downloader` and `WebDataset`.
+The local loading method load from the folder `train_data1/`.
+You can switch the method with the flag `local_disk = False` of function `get_dataset` in `dataset/data_detector.py`.
 
-Before step1 training, compile ```dataset/processer.pyx``` by cython for faster augmentation or data conversion.
+Before step1 training, compile `dataset/processer.pyx` by cython for faster augmentation or data conversion.
 
-After step1, output ```result1/model.pt```
+After step1, output `result1/model.pt`
 
 ## Test for step1
 You can inference the step1 result as follows.
-Place ```model.pt``` on top folder.
+Place `model.pt` on top folder.
 ```bash
 ./test_image1_torch.py img/test1.png
 ```
@@ -217,7 +219,7 @@ Place ```model.pt``` on top folder.
 # Finetune for detector(step2)
 If your own text are not recognized well, you can additional training those samples.
 ## Make train dataset for step2
-Place the step1 output parameter to ```model.pt``` on top folder.
+Place the step1 output parameter to `model.pt` on top folder.
 As follows, output step1 result as json file. 
 ```bash
 fine_image/process_image1_torch.py train_data2/target.png
@@ -225,8 +227,8 @@ fine_image/process_image1_torch.py train_data2/target.png
 
 Get 3 files as result, (filename).json, (filename).lines.png and (filename).seps.png
 
-### 文字の修正
-You can use ```fix_process_image1.py``` for fix text on json.
+### Fix text
+You can use `fix_process_image1.py` for fix text on json.
 ```bash
 fine_image/fix_process_image1.py train_data2/target.png
 ```
@@ -236,8 +238,8 @@ fine_image/fix_process_image1.py train_data2/target.png
 
 To fix the text or attribute, double-click on the box.
 
-### 文字の連続ラインなどの修正
-You can use ```fix_line_image1.py``` for fix text line or separate line.
+### Fix text line or separate line
+You can use `fix_line_image1.py` for fix text line or separate line.
 ```bash
 fine_image/fix_line_image1.py train_data2/target.png
 fine_image/fix_line_image1.py train_data2/target.png seps
@@ -251,12 +253,12 @@ fine_image/fix_line_image1.py train_data2/target.png seps
 ./train1.py --lr=1e-4 --logstep=10 --output=1000 --weight1=0.5 --weight2=1.0 32
 ```
 
-In step2, the trainging uses additionaly ```train_data2/``` folder data and also step1 data.
-Before step2, copy the weight of step1 as ```result2/model.pt```.
+In step2, the trainging uses additionaly `train_data2/` folder data and also step1 data.
+Before step2, copy the weight of step1 as `result2/model.pt`.
 
 ## Test for step2
 You can inference the step2 result as follows.
-Place ```model.pt``` on top folder.
+Place `model.pt` on top folder.
 ```bash
 ./test_image1_torch.py img/test1.png
 ```
@@ -268,7 +270,7 @@ In japanese law, you can use the authors training dataset. Please contact to con
 Using the text detector trained after step1 (and step2), make train data for Transformer.
 
 ### Sampling latent features
-Using ```make_traindata3.py```, sample the latent features vector from the image of text.
+Using `make_traindata3.py`, sample the latent features vector from the image of text.
 
 ```bash
 cd make_traindata
@@ -276,10 +278,10 @@ cd make_traindata
 ```
 This process is infinite loop, breke some point after all charactor code that you need are appeared.
 
-Output files each charactor code in ```code_features/```.
+Output files each charactor code in `code_features/`.
 Next, combine that as follows;
 
-Make ```features.npz``` with ```save_feature.py``` form code_features.
+Make `features.npz` with `save_feature.py` form code_features.
 ```bash
 ./save_feature.py
 mkdir -p ../train_data3
@@ -295,11 +297,11 @@ python3 make_data.py
 
 ### make train_data4 for step3 training dataset, from fine-tuning images
 If you already prepare the train_data2 for fine-tuning, you can also using it.
-Copy ```train_data2``` to ```train_data4``` and convert as follows,
+Copy `train_data2` to `train_data4` and convert as follows,
 ```bash
 fine_image/process_image4_torch.py train_data4/target.png
 ```
-Before this conversion, need to compile ```textline_detect/linedetect```
+Before this conversion, need to compile `textline_detect/linedetect`
 
 ## Train for step3
 ```bash
@@ -308,11 +310,11 @@ Before this conversion, need to compile ```textline_detect/linedetect```
 
 In step3, train the Transformer to output the natural text.
 
-After step3, output ```result3/model.pt```
+After step3, output `result3/model.pt`
 
 ## Test for step3
 You can inference the step3 result as follows.
-Place ```model.pt``` and ```model3.pt``` on top folder.
+Place `model.pt` and `model3.pt` on top folder.
 ```bash
 ./test_image3_torch.py img/test1.png
 ```
