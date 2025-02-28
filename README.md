@@ -23,6 +23,28 @@ https://lithium03.info/product/bunkoOCR.html
 <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test2.png" width="1400">
 <img src="https://github.com/lithium0003/findtextCenterNet/blob/develop/img/test2_result.png" width="1400">
 
+
+# とりあえず実行したいんだけど
+事前に学習済みの重みデータ、model.pt, model3.ptをダウンロードして、findtextCenterNet/フォルダ直下に配置します。
+
+```bash
+wget https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/model.pt
+wget https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/model3.pt
+```
+
+対象ファイルを指定して、test_image3_torch.pyを呼び出します。
+```bash
+./test_image3_torch.py img/test1.png
+```
+
+```
+吾輩は猫である
+名前はまだない
+
+手書き文字認識
+```
+のように認識文章が出力されます。
+
 # Details 
 ## detector(step1)
 
@@ -260,11 +282,10 @@ step3の学習用データセットは、
 
 に用意しています。この中に含まれる著作物は、著作権法30条の4の規定により再配布していますので、法の規定に従って使用してください。
 
-自分で用意する場合は以下のようにします。
-
+## 自分で用意する場合
 step1,(step2)の学習が終わってdetectorの文字検出器を用いて、後段のTransformerの学習データを作成します。
 
-## 文字特徴量のサンプリング
+### 文字特徴量のサンプリング
 make_traindata3.pyを用いて、文字の画像データから、文字検出器が出力する各文字ごとの特徴量を収集します。
 
 ```bash
@@ -273,7 +294,6 @@ cd make_traindata
 ```
 このプロセスは、無限に生成し続けますので適当なところで止めてください。
 おおむね必要な文字コードが全部出てきたくらいで止めるといいでしょう。
-
 
 code_featuresフォルダ以下に、各文字の文字コードごとにファイルができます。
 次に、1つのファイルにまとめます。
@@ -287,34 +307,39 @@ mv features.npz ../train_data3/
 
 事前学習済みのfeatures.npzは、train_data3.tar.gzに含まれています。
 
-## step2の学習データtrain_data2の作成
-最後に、make_traindata2.pyを実行して、ランダムな文字列、日本語および英語の文章(wikipediaおよび青空文庫)から
-Transformer用の学習データをtrain_data2　フォルダに作成します。
+### step3の学習データtrain_data3の作成
+次に、日本語および英語などの文章(wikipediaおよび青空文庫)からTransformer用の学習データをtrain_data3 フォルダに作成します。
 ```bash
-./make_traindata2.py　10 200
-```
-この例では、test=10, train=200ファイルを作成します。
-
-事前学習のckpt1のパラメータを使って作成した学習用データセットは、https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/tree/20230807/train_data2/ 以下にあります。
-ダウンロードするには次のようにします。
-```bash
-mkdir train_data2 && cd train_data2
-curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/20230807/train_data2/test0000000[0-9].tfrecords"
-curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/20230807/train_data2/train00000[000-199].tfrecords"
+cd train_data3
+python3 make_data.py
 ```
 
-# Train for step2
+### Finetune用画像からのstep3の学習データtrain_data4の作成
+補充の学習データとして、手動で修正したtrain_data2があれば、そのデータもTransformerの学習に使用できます。
+train_data2をtrain_data4としてコピーした上で、次にように変換します。
+この変換には、textline_detect/linedetect による文の方向検索のモジュールのコンパイルが事前に必要です。
 ```bash
-./train2.py
+fine_image/process_image4_torch.py train_data4/target.png
 ```
 
-# Test for step2
-学習済みパラメータを、ckpt1/　, ckpt2/に置いた状態で、
-test_image2.pyを実行すると推論できます。
+## Train for step3
+```bash
+./train3.py 1024
+```
+
+step3の学習では、Transformerを、wikipediaや青空文庫などの自然言語文章により正しい文章となるように学習します。
+また、ランダムな文字列により文字コードも特に学習させます。
+
+学習済み重みは、result3/model.pt に保存されます。
+
+## Test for step3
+学習済みパラメータを、model.pt, model3.pt に置いた状態で、
+test_image3_torch.pyを実行すると推論できます。
 
 ```bash
-./test_image2.py img/test1.png
+./test_image3_torch.py img/test1.png
 ```
+
 
 # Reference 
 - Objects as Points
