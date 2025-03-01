@@ -226,7 +226,7 @@ class OCR_Processer(ABC):
                     predstr += chr(p)
                 else:
                     predstr += '\uFFFD'
-            print(keep_back, predstr)
+            # print(keep_back, predstr)
             result_txt += predstr[keep_back:]
             linebuf += [(prev_j, cur_j, predstr[keep_back:])]
 
