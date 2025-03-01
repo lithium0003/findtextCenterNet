@@ -125,8 +125,13 @@ def calc_predid(*args):
     x = x % mk
     return x
 
-def decode_ruby(text):
-    text = re.sub('\uFFF9(.*?)\uFFFA(.*?)\uFFFB',r'<ruby><rb>\1</rb><rp>(</rp><rt>\2</rt><rp>)</rp></ruby>', text)
+def decode_ruby(text, outtype='aozora'):
+    if outtype == 'aozora':
+        text = re.sub('\uFFF9(.*?)\uFFFA(.*?)\uFFFB',r'｜\1《\2》', text)
+    elif outtype == 'html':
+        text = re.sub('\uFFF9(.*?)\uFFFA(.*?)\uFFFB',r'<ruby><rb>\1</rb><rp>(</rp><rt>\2</rt><rp>)</rp></ruby>', text)
+    elif outtype == 'noruby':
+        text = re.sub('\uFFF9(.*?)\uFFFA(.*?)\uFFFB',r'\1', text)
     return text
 
 def encode_rubyhtml(text):

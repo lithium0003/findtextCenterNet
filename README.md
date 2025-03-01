@@ -34,9 +34,9 @@ wget https://huggingface.co/lithium0003/findtextCenterNet/resolve/main/model.pt
 wget https://huggingface.co/lithium0003/findtextCenterNet/resolve/main/model3.pt
 ```
 
-対象ファイルを指定して、test_image3_torch.pyを呼び出します。
+対象ファイルを指定して、run_ocr.pyを呼び出します。
 ```bash
-./test_image3_torch.py img/test1.png
+./run_ocr.py img/test1.png
 ```
 
 ```
