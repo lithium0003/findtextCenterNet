@@ -32,9 +32,9 @@ wget https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resol
 wget https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/model3.pt
 ```
 
-Call `test_image3_torch.py` with specify the target image.
+Call `run_ocr.py` with specify the target image.
 ```bash
-./test_image3_torch.py img/test1.png
+./run_ocr.py img/test1.png
 ```
 
 Detected text shows like this:
