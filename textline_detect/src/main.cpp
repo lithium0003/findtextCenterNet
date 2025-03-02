@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 
 #ifdef _WIN64
 #include <fcntl.h>
@@ -16,7 +17,7 @@ double ruby_cutoff = 0.5;
 double rubybase_cutoff = 0.5;
 double space_cutoff = 0.5;
 double emphasis_cutoff = 0.5;
-float line_valueth = 0.3;
+float line_valueth = 0.4;
 float sep_valueth = 0.1;
 float sep_valueth2 = 0.15;
 const float sep_clusterth = 10.0;
@@ -30,8 +31,52 @@ int run_mode = 0;
 int width = 0;
 int height = 0;
 
-int main(int argn, char **argv) 
+int main(int argc, char **argv) 
 {
+    for(int i = 1; i < argc; i++) {
+        std::string arg(argv[i]);
+        if(arg.find("--ruby_cutoff=") != std::string::npos) {
+            std::string vstr = arg.substr(arg.find('=')+1);
+            std::stringstream(vstr) >> ruby_cutoff;
+            std::cerr << "ruby_cutoff=" << ruby_cutoff << std::endl;
+        }
+        if(arg.find("--rubybase_cutoff=") != std::string::npos) {
+            std::string vstr = arg.substr(arg.find('=')+1);
+            std::stringstream(vstr) >> rubybase_cutoff;
+            std::cerr << "rubybase_cutoff=" << rubybase_cutoff << std::endl;
+        }
+        if(arg.find("--space_cutoff=") != std::string::npos) {
+            std::string vstr = arg.substr(arg.find('=')+1);
+            std::stringstream(vstr) >> space_cutoff;
+            std::cerr << "space_cutoff=" << space_cutoff << std::endl;
+        }
+        if(arg.find("--emphasis_cutoff=") != std::string::npos) {
+            std::string vstr = arg.substr(arg.find('=')+1);
+            std::stringstream(vstr) >> emphasis_cutoff;
+            std::cerr << "emphasis_cutoff=" << emphasis_cutoff << std::endl;
+        }
+        if(arg.find("--line_valueth=") != std::string::npos) {
+            std::string vstr = arg.substr(arg.find('=')+1);
+            std::stringstream(vstr) >> line_valueth;
+            std::cerr << "line_valueth=" << line_valueth << std::endl;
+        }
+        if(arg.find("--sep_valueth=") != std::string::npos) {
+            std::string vstr = arg.substr(arg.find('=')+1);
+            std::stringstream(vstr) >> sep_valueth;
+            std::cerr << "sep_valueth=" << sep_valueth << std::endl;
+        }
+        if(arg.find("--sep_valueth2=") != std::string::npos) {
+            std::string vstr = arg.substr(arg.find('=')+1);
+            std::stringstream(vstr) >> sep_valueth2;
+            std::cerr << "sep_valueth2=" << sep_valueth2 << std::endl;
+        }
+        if(arg.find("--allowwidth_next_block=") != std::string::npos) {
+            std::string vstr = arg.substr(arg.find('=')+1);
+            std::stringstream(vstr) >> allowwidth_next_block;
+            std::cerr << "allowwidth_next_block=" << allowwidth_next_block << std::endl;
+        }
+    }
+
 #ifdef _WIN64
     _setmode(_fileno(stdin), _O_BINARY);
     _setmode(_fileno(stdout), _O_BINARY);
