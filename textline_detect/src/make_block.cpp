@@ -355,9 +355,6 @@ void make_block(
     
     std::vector<int> chainid_map = create_chainid_map(boxes, line_box_chain, lineblocker, 1.5, 1);
 
-    // process_doubleline(id_max, boxes, chain_next, chain_prev, chainid_map, line_box_chain, lineparams, lineblocker);
-    // process_normalline(id_max, boxes, chain_next, chain_prev, chainid_map, line_box_chain, lineparams, lineblocker);
-
     process_line(id_max, boxes, chain_next, chain_prev, chainid_map, line_box_chain, lineparams, lineblocker);
 
     auto block_chain = block_chain_search(id_max, chain_next, chain_prev);
@@ -401,14 +398,14 @@ void make_block(
         blockparams[block].d = ((box.subtype & 1) == 0) ? 0: 1;
         blockparams[block].count++;
         blockparams[block].size = std::max(blockparams[block].size, std::max(box.w, box.h));
-        if(blockparams[block].x_min > box.cx)
-            blockparams[block].x_min = box.cx;
-        if(blockparams[block].y_min > box.cy)
-            blockparams[block].y_min = box.cy;
-        if(blockparams[block].x_max < box.cx)
-            blockparams[block].x_max = box.cx;
-        if(blockparams[block].y_max < box.cy)
-            blockparams[block].y_max = box.cy;
+        if(blockparams[block].x_min > box.cx - box.w/2)
+            blockparams[block].x_min = box.cx - box.w/2;
+        if(blockparams[block].y_min > box.cy - box.h/2)
+            blockparams[block].y_min = box.cy - box.h/2;
+        if(blockparams[block].x_max < box.cx + box.w/2)
+            blockparams[block].x_max = box.cx + box.w/2;
+        if(blockparams[block].y_max < box.cy + box.h/2)
+            blockparams[block].y_max = box.cy + box.h/2;
     }
     for(auto &p: blockparams) {
         if(p.x_min > p.x_max) std::swap(p.x_min, p.x_max);
@@ -416,7 +413,8 @@ void make_block(
     }
 
     std::vector<blockparam> pageparams;
-    std::sort(block_idx.begin(), block_idx.end(), [blockparams](const int a, const int b){
+    std::sort(block_idx.begin(), block_idx.end(), [&](const int a, const int b){
+        if(a == b) return false;
         // 大きいブロックから検索する
         return (blockparams[a].x_max - blockparams[a].x_min) * (blockparams[a].y_max - blockparams[a].y_min) 
                 > (blockparams[b].x_max - blockparams[b].x_min) * (blockparams[b].y_max - blockparams[b].y_min);
@@ -449,7 +447,11 @@ void make_block(
     }
     std::vector<int> page_idx(pageparams.size());
     std::iota(page_idx.begin(), page_idx.end(), 0);
-    std::sort(page_idx.begin(), page_idx.end(), [pageparams](const int a, const int b){
+    std::sort(page_idx.begin(), page_idx.end(), [&](const int a, const int b){
+        if(pageparams[a].d * pageparams[b].d <= 0) {
+            // 横書きの方を優先する
+            return pageparams[a].d > pageparams[b].d;
+        }
         bool direction = pageparams[a].count > pageparams[b].count ? pageparams[a].d > 0 : pageparams[b].d > 0;
         if(direction) {
             // 横書き
@@ -492,49 +494,91 @@ void make_block(
     }
 
     std::iota(block_idx.begin(), block_idx.end(), 0);
-    std::sort(block_idx.begin(), block_idx.end(), [blockparams](const int a, const int b){
-        if(blockparams[a].p != blockparams[b].p) {
-            // ページ順
-            return blockparams[a].p < blockparams[b].p;
-        }
-
-        int d;
-        if(blockparams[a].d == blockparams[b].d) {
-            d = blockparams[a].d;
-        }
-        else {
-            // 片方が短い
-            d = blockparams[a].count > blockparams[b].count ? blockparams[a].d : blockparams[b].d;
-        }
-        if(d != 1) {
-            // 横書き
-            // y座標でみて、ブロック全体が上下どちらかにある
-            if(blockparams[a].y_max < blockparams[b].y_min) return true;
-            if(blockparams[b].y_max < blockparams[a].y_min) return false;
-
-            // x座標でみて、ブロック全体が左右どちらかにある
-            if(blockparams[a].x_max < blockparams[b].x_min) return true;
-            if(blockparams[b].x_max < blockparams[a].x_min) return false;
-
-            // ブロックが重なっているので、上にある方を優先
-            if(blockparams[a].y_min == blockparams[b].y_min) return a < b;
-            return blockparams[a].y_min < blockparams[b].y_min;
-        }
-        else {
-            // 縦書き
-            // y座標でみて、ブロック全体が上下どちらかにある
-            if(blockparams[a].y_max < blockparams[b].y_min) return true;
-            if(blockparams[b].y_max < blockparams[a].y_min) return false;
-
-            // x座標でみて、ブロック全体が左右どちらかにある 縦書きなので右から
-            if(blockparams[a].x_min > blockparams[b].x_max) return true;
-            if(blockparams[b].x_min > blockparams[a].x_max) return false;
-
-            // ブロックが重なっているので、右にある方を優先
-            if(blockparams[a].x_max == blockparams[b].x_max) return a < b;
-            return blockparams[a].x_max > blockparams[b].x_max;
-        }
+    std::sort(block_idx.begin(), block_idx.end(), [&](const int a, const int b){
+        // ページ順
+        return blockparams[a].p < blockparams[b].p;
     });
+    {
+        auto it = block_idx.begin();
+        while(it != block_idx.end()) {
+            auto it2 = it+1;
+            while(it2 != block_idx.end()) {
+                if(blockparams[*it].p == blockparams[*it2].p) {
+                    ++it2;
+                    continue;
+                }
+                break;
+            }
+            // ページ内ソート
+            if(std::distance(it, it2) > 1) {
+                auto p = blockparams[*it].p;
+                if(pageparams[p].d >= 0) {
+                    // 横書きメイン
+                    std::sort(it, it2, [&](const auto a, const auto b){
+                        // 左から順に
+                        return blockparams[a].x_min < blockparams[b].x_min;
+                    });
+
+                    auto it3 = it;
+                    while(it3 != it2) {
+                        auto it4 = it3+1;
+                        auto x_min = blockparams[*it3].x_min;
+                        auto x_max = blockparams[*it3].x_max;
+                        while(it4 != it2) {
+                            // ブロックがx方向に重なっている
+                            if(std::min(x_max, blockparams[*it4].x_max) - std::max(x_min, blockparams[*it4].x_min) > 0) {
+                                x_min = std::min(x_min, blockparams[*it4].x_min);
+                                x_max = std::min(x_max, blockparams[*it4].x_max);
+                                ++it4;
+                                continue;
+                            }
+                            break;
+                        }
+                        if(std::distance(it3, it4) > 1) {
+                            // 上を優先
+                            std::sort(it3, it4, [&](const auto a, const auto b){
+                                return blockparams[a].y_min < blockparams[b].y_min;
+                            });
+                        }
+                        it3 = it4;
+                    }
+                }
+                else {
+                    // 縦書きメイン
+                    std::sort(it, it2, [&](const auto a, const auto b){
+                        // 上から順に
+                        return blockparams[a].y_min < blockparams[b].y_min;
+                    });
+
+                    auto it3 = it;
+                    while(it3 != it2) {
+                        auto it4 = it3+1;
+                        auto y_min = blockparams[*it3].y_min;
+                        auto y_max = blockparams[*it3].y_max;
+                        while(it4 != it2) {
+                            // ブロックがy方向に重なっている
+                            if(std::min(y_max, blockparams[*it4].y_max) - std::max(y_min, blockparams[*it4].y_min) > 0) {
+                                y_min = std::min(y_min, blockparams[*it4].y_min);
+                                y_max = std::min(y_max, blockparams[*it4].y_max);
+                                ++it4;
+                                continue;
+                            }
+                            break;
+                        }
+                        if(std::distance(it3, it4) > 1) {
+                            // 右を優先
+                            std::sort(it3, it4, [&](const auto a, const auto b){
+                                return blockparams[a].x_max > blockparams[b].x_max;
+                            });
+                        }
+                        it3 = it4;
+                    }
+                }
+                // ページ内ソートend
+            }
+            it = it2;
+        }
+    }
 
     float main_block_size = 0;
     int max_block_count = 0;
@@ -587,7 +631,7 @@ void make_block(
             if(box.idx < 0) continue;
             if(box.block < 0) continue;
             auto it = std::find(idx_in_block[box.block].begin(), idx_in_block[box.block].end(), box.idx);
-            box.idx = std::distance(idx_in_block[box.block].begin(), it);
+            box.idx = int(std::distance(idx_in_block[box.block].begin(), it));
         }
     }
 
@@ -653,6 +697,7 @@ void make_block(
             std::iota(sortidx.begin(), sortidx.end(), 0);
             if((boxes[idxlist.front()].subtype & 1) == 0) {
                 std::sort(sortidx.begin(), sortidx.end(), [idxlist, boxes](auto a, auto b){
+                    if(a == b) return false;
                     if (boxes[idxlist[a]].double_line == boxes[idxlist[b]].double_line) {
                         return boxes[idxlist[a]].cx < boxes[idxlist[b]].cx;
                     }
@@ -661,6 +706,7 @@ void make_block(
             }
             else {
                 std::sort(sortidx.begin(), sortidx.end(), [idxlist, boxes](auto a, auto b){
+                    if(a == b) return false;
                     if (boxes[idxlist[a]].double_line == boxes[idxlist[b]].double_line) {
                         return boxes[idxlist[a]].cy < boxes[idxlist[b]].cy;
                     }

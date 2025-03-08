@@ -1,6 +1,7 @@
 #pragma once
 
 #include "line_detect.h"
+#include <vector>
 
 int number_unbind(
     std::vector<charbox> &boxes,

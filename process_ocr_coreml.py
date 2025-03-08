@@ -24,7 +24,7 @@ class OCR_coreml_Processer(OCR_Processer):
         return heatmap, features
 
     def call_transformer(self, encoder_input):
-        key_mask = np.repeat(np.where((encoder_input == 0).all(axis=-1)[:,None,None,:], float("-inf"), 0), max_encoderlen, axis=2).astype(np.float32)
+        key_mask = np.where((encoder_input == 0).all(axis=-1)[:,None,None,:], float("-inf"), 0).astype(np.float32)
         encoder_output = self.mlmodel_transformer_encoder.predict({
             'encoder_input': encoder_input, 
             'key_mask': key_mask,

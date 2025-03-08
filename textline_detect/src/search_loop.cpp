@@ -16,27 +16,51 @@ void sort_chain(
     // chain内をソート
     if(fabs(boxes[chain.front()].direction) < M_PI_4) {
         // 横書き
-        std::sort(chain.begin(), chain.end(), [boxes](auto a, auto b){
-            // x方向に重なっている場合は、yの昇順
-            if((boxes[b].cx - boxes[b].w/2 < boxes[a].cx && boxes[a].cx < boxes[b].cx + boxes[b].w/2)
-                || (boxes[a].cx - boxes[a].w/2 < boxes[b].cx && boxes[b].cx < boxes[a].cx + boxes[a].w/2)) {
-                    return boxes[a].cy < boxes[b].cy;
-            }
-            // それ以外はxの昇順
+        std::sort(chain.begin(), chain.end(), [&](auto a, auto b){
             return boxes[a].cx < boxes[b].cx;
         });
+        auto it = chain.begin();
+        while(it != chain.end()) {
+            auto it2 = it+1;
+            while(it2 != chain.end()) {
+                //x方向に重なっている場合は、y方向にソートする
+                if(boxes[*it].cx + boxes[*it].w/2 > boxes[*it2].cx) {
+                    ++it2;
+                    continue;
+                }
+                break;
+            }
+            if(std::distance(it, it2) > 1) {
+                std::sort(it, it2, [&](auto a, auto b){
+                    return boxes[a].cy < boxes[b].cy;
+                });
+            }
+            it = it2;
+        }
     }
     else {
         // 縦書き
-        std::sort(chain.begin(), chain.end(), [boxes](auto a, auto b){
-            // y方向に重なっている場合は、xの昇順
-            if((boxes[b].cy - boxes[b].h/2 < boxes[a].cy && boxes[a].cy < boxes[b].cy + boxes[b].h/2)
-                || (boxes[a].cy - boxes[a].h/2 < boxes[b].cy && boxes[b].cy < boxes[a].cy + boxes[a].h/2)) {
-                    return boxes[a].cx < boxes[b].cx;
-            }
-            // それ以外はyの昇順
+        std::sort(chain.begin(), chain.end(), [&](auto a, auto b){
             return boxes[a].cy < boxes[b].cy;
         });
+        auto it = chain.begin();
+        while(it != chain.end()) {
+            auto it2 = it+1;
+            while(it2 != chain.end()) {
+                //y方向に重なっている場合は、x方向にソートする
+                if(boxes[*it].cy + boxes[*it].h/2 > boxes[*it2].cy) {
+                    ++it2;
+                    continue;
+                }
+                break;
+            }
+            if(std::distance(it, it2) > 1) {
+                std::sort(it, it2, [&](auto a, auto b){
+                    return boxes[a].cx < boxes[b].cx;
+                });
+            }
+            it = it2;
+        }
     }
 }
 
@@ -335,7 +359,6 @@ void make_track_line(
     }
     else {
         // 縦書き
-        int len = end_cy - start_cy;
         std::vector<float> xi;
         std::vector<float> yi;
         float track_cx = -1;
@@ -510,7 +533,7 @@ void process_merge(
 {
     // chainの連結の処理
     std::vector<int> root_id(line_box_chain.size(), -1);
-    int new_id = line_box_chain.size();
+    int new_id = int(line_box_chain.size());
     for(int i = 0; i < merge_chain.size(); i++) {
         if(merge_chain[i] == -1) continue;
         
@@ -532,7 +555,7 @@ void process_merge(
                 line_box_chain.push_back(std::vector<int>());
                 root_id.push_back(-1);
                 root_id[i] = new_id;
-                new_id = line_box_chain.size();
+                new_id = int(line_box_chain.size());
             }
             else {
                 root_id[i] = k;
@@ -590,7 +613,7 @@ void combine_chains(
             if(fabs(boxes[boxid1].direction) < M_PI_4) {
                 // 横書き
                 double start_cy0 = boxes[line_box_chain[chainid].back()].cy;
-                for(int i = line_box_chain[chainid].size() - 1; i >= 0; i--) {
+                for(int i = int(line_box_chain[chainid].size()) - 1; i >= 0; i--) {
                     int boxid = line_box_chain[chainid][i];
                     start_cy0 = 0.25 * start_cy0 + 0.75 * boxes[boxid].cy;
                 }
@@ -703,7 +726,7 @@ void combine_chains(
                                     [&](int x) { return boxes[x].h; });
 
                                 double start_cy1 = boxes[line_box_chain[other_chainid].front()].cy;
-                                for(int i = line_box_chain[other_chainid].size() - 1; i >= 0; i--) {
+                                for(int i = int(line_box_chain[other_chainid].size()) - 1; i >= 0; i--) {
                                     int boxid = line_box_chain[other_chainid][i];
                                     start_cy1 = 0.25 * start_cy1 + 0.75 * boxes[boxid].cy;
                                 }
@@ -730,7 +753,7 @@ void combine_chains(
             else {
                 // 縦書き
                 double start_cx0 = boxes[line_box_chain[chainid].back()].cx;
-                for(int i = line_box_chain[chainid].size() - 1; i >= 0; i--) {
+                for(int i = int(line_box_chain[chainid].size()) - 1; i >= 0; i--) {
                     int boxid = line_box_chain[chainid][i];
                     start_cx0 = 0.25 * start_cx0 + 0.75 * boxes[boxid].cx;
                 }
@@ -840,7 +863,7 @@ void combine_chains(
                                     [&](int x) { return boxes[x].w; });
 
                                 double start_cx1 = boxes[line_box_chain[other_chainid].front()].cx;
-                                for(int i = line_box_chain[other_chainid].size() - 1; i >= 0; i--) {
+                                for(int i = int(line_box_chain[other_chainid].size()) - 1; i >= 0; i--) {
                                     int boxid = line_box_chain[other_chainid][i];
                                     start_cx1 = 0.25 * start_cx1 + 0.75 * boxes[boxid].cx;
                                 }
@@ -877,7 +900,7 @@ int count_unbind(
     const std::vector<charbox> &boxes,
     const std::vector<std::vector<int>> &line_box_chain)
 {
-    int unbind_count = boxes.size();
+    int unbind_count = int(boxes.size());
     for(const auto &chain: line_box_chain) {
         unbind_count -= chain.size();
     }

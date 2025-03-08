@@ -1,6 +1,7 @@
 #pragma once
 
 #include "line_detect.h"
+#include <vector>
 
 void after_search(
     std::vector<charbox> &boxes,

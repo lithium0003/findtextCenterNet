@@ -1,6 +1,7 @@
 #pragma once
 
 #include "line_detect.h"
+#include <vector>
 
 void prepare_id_image(
     std::vector<int> &idimage,

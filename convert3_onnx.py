@@ -38,7 +38,7 @@ def convert3():
     encoder_dim = feature_dim+encoder_add_dim
     encoder_input = torch.rand(1, max_encoderlen, encoder_dim)
     key_mask = torch.all(encoder_input == 0, dim=-1)
-    key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0).expand(-1,-1,max_encoderlen,-1)
+    key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0)
     torch.onnx.export(encoder,
                       (encoder_input, key_mask),
                       "TransformerEncoder.onnx",
@@ -96,7 +96,7 @@ def test3():
             encoder_input[0,i+1,:feature_dim] = feat
     encoder_input[0,i+2,:] = -SP_token
 
-    key_mask = np.repeat(np.where((encoder_input == 0).all(axis=-1)[:,None,None,:], float("-inf"), 0), max_encoderlen, axis=2).astype(np.float32)
+    key_mask = np.where((encoder_input == 0).all(axis=-1)[:,None,None,:], float("-inf"), 0).astype(np.float32)
     print('encoder')
     encoder_output, = onnx_encoder.run(['encoder_output'], {'encoder_input': encoder_input, 'key_mask': key_mask})
 
@@ -104,7 +104,7 @@ def test3():
     decoder_input = np.zeros(shape=(1, max_decoderlen), dtype=np.int64)
     decoder_input[0,0] = decoder_SOT
     decoder_input[0,1:] = decoder_MSK
-    rep_count = 16
+    rep_count = 8
     for k in range(rep_count):
         output = onnx_decoder.run(['modulo_%d'%m for m in modulo_list], {
             'encoder_output': encoder_output,

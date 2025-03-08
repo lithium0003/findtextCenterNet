@@ -33,7 +33,9 @@ int number_unbind(
         // cyがどこかに固まっている
         std::vector<std::vector<int>> hori_line_boxid;
         std::vector<int> sortedcy_idx = unbind_boxes;
-        std::sort(sortedcy_idx.begin(), sortedcy_idx.end(), [boxes](int a, int b) { return boxes[a].cy < boxes[b].cy; });
+        std::sort(sortedcy_idx.begin(), sortedcy_idx.end(), [boxes](int a, int b) {
+            return boxes[a].cy < boxes[b].cy;
+        });
 
         std::vector<std::vector<int>> agg_idx;
         for(int i = 0; i < sortedcy_idx.size() - 1; i++) {
@@ -66,7 +68,9 @@ int number_unbind(
 
         for(const auto &chain: agg_idx) {
             std::vector<int> sortedcx_idx = chain;
-            std::sort(sortedcx_idx.begin(), sortedcx_idx.end(), [boxes](int a, int b) { return boxes[a].cx < boxes[b].cx; });
+            std::sort(sortedcx_idx.begin(), sortedcx_idx.end(), [boxes](int a, int b) {
+                return boxes[a].cx < boxes[b].cx;
+            });
 
             for(int i = 0; i < sortedcx_idx.size() - 1; i++) {
                 int boxid1 = sortedcx_idx[i];
@@ -139,7 +143,9 @@ int number_unbind(
         // cxがどこかに固まっている
         std::vector<std::vector<int>> vert_line_boxid;
         std::vector<int> sortedcx_idx = unbind_boxes;
-        std::sort(sortedcx_idx.begin(), sortedcx_idx.end(), [boxes](int a, int b) { return boxes[a].cx < boxes[b].cx; });
+        std::sort(sortedcx_idx.begin(), sortedcx_idx.end(), [boxes](int a, int b) {
+            return boxes[a].cx < boxes[b].cx;
+        });
 
         agg_idx.clear();
         for(int i = 0; i < sortedcx_idx.size() - 1; i++) {
@@ -171,7 +177,9 @@ int number_unbind(
 
         for(const auto &chain: agg_idx) {
             std::vector<int> sortedcy_idx = chain;
-            std::sort(sortedcy_idx.begin(), sortedcy_idx.end(), [boxes](int a, int b) { return boxes[a].cy < boxes[b].cy; });
+            std::sort(sortedcy_idx.begin(), sortedcy_idx.end(), [boxes](int a, int b) {
+                return boxes[a].cy < boxes[b].cy;
+            });
 
             for(int i = 0; i < sortedcy_idx.size() - 1; i++) {
                 int boxid1 = sortedcy_idx[i];
@@ -289,7 +297,7 @@ int number_unbind(
         }
 
         // 反映
-        for(const auto chain: hori_line_boxid) {
+        for(const auto &chain: hori_line_boxid) {
             int lineidx = next_id++;
             int subidx = 0;
             for(auto boxid: chain) {
@@ -300,7 +308,7 @@ int number_unbind(
             }
         }
 
-        for(const auto chain: vert_line_boxid) {
+        for(const auto &chain: vert_line_boxid) {
             int idx = next_id++;
             int subidx = 0;
             for(const auto boxid: chain) {

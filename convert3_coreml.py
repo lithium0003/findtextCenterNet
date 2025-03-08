@@ -36,13 +36,13 @@ def convert3():
     encoder_dim = feature_dim+encoder_add_dim
     encoder_input = torch.rand(1, max_encoderlen, encoder_dim)
     key_mask = torch.all(encoder_input == 0, dim=-1)
-    key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0).expand(-1,-1,max_encoderlen,-1)
+    key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0)
     traced_model = torch.jit.trace(encoder, [encoder_input, key_mask])
 
     mlmodel_detector = ct.convert(traced_model,
             inputs=[
                 ct.TensorType(name='encoder_input', shape=(1, max_encoderlen, encoder_dim)),
-                ct.TensorType(name='key_mask', shape=(1, 1, max_encoderlen, max_encoderlen)),
+                ct.TensorType(name='key_mask', shape=(1, 1, 1, max_encoderlen)),
             ],
             outputs=[
                 ct.TensorType(name='encoder_output'),
@@ -68,7 +68,7 @@ def convert3():
                                  inputs=[
                                     ct.TensorType(name='encoder_output', shape=(1, max_encoderlen, config.embed_dim)),
                                     ct.TensorType(name='decoder_input', shape=(1, max_decoderlen), dtype=np.int32),
-                                    ct.TensorType(name='key_mask', shape=(1, 1, max_encoderlen, max_encoderlen)),
+                                    ct.TensorType(name='key_mask', shape=(1, 1, 1, max_encoderlen)),
                                  ],
                                  outputs=[
                                     ct.TensorType(name='modulo_1091'),
@@ -103,7 +103,7 @@ def test3():
             encoder_input[0,i+1,:feature_dim] = feat
     encoder_input[0,i+2,:] = -SP_token
 
-    key_mask = np.repeat(np.where((encoder_input == 0).all(axis=-1)[:,None,None,:], float("-inf"), 0), max_encoderlen, axis=2)
+    key_mask = np.where((encoder_input == 0).all(axis=-1)[:,None,None,:], float("-inf"), 0)
     print('encoder')
     encoder_output = mlmodel_encoder.predict({'encoder_input': encoder_input, 'key_mask': key_mask})['encoder_output']
 
@@ -111,7 +111,7 @@ def test3():
     decoder_input = np.zeros(shape=(1, max_decoderlen), dtype=np.int32)
     decoder_input[0,0] = decoder_SOT
     decoder_input[0,1:] = decoder_MSK
-    rep_count = 16
+    rep_count = 8
     for k in range(rep_count):
         output = mlmodel_decoder.predict({
             'encoder_output': encoder_output,
@@ -219,4 +219,4 @@ def test32():
 if __name__ == '__main__':
     convert3()
     test3()
-    # test32()
+    test32()
