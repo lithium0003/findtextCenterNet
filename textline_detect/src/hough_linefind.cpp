@@ -1,8 +1,7 @@
 #include "hough_linefind.h"
 #include "search_loop.h"
 
-#define _USE_MATH_DEFINES
-#include <math.h>
+#include <cmath>
 #include <algorithm>
 #include <numeric>
 #include <iterator>

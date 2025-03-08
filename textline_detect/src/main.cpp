@@ -24,8 +24,6 @@ float sep_valueth2 = 0.15;
 const float sep_clusterth = 10.0;
 const int linearea_th = 20;
 double allowwidth_next_block = 1.0;
-// double ignore_small_size_block_ratio = 0.7;
-// bool ignore_small_size_block = false;
 int scale = 4;
 
 int run_mode = 0;
