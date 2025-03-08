@@ -7,7 +7,7 @@
 
 #include <stdio.h>
 #include <iostream>
-#include <math.h>
+#include <cmath>
 
 void search_ruby(
     std::vector<charbox> &boxes,
