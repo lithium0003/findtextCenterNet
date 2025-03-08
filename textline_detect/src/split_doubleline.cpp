@@ -22,7 +22,6 @@ void split_doubleline1(
         std::vector<int> splited;
 
         int front_id = chain_it->front();
-        int back_id = chain_it->back();
         float max_h = 0;
         float max_w = 0;
         for(const auto boxid: *chain_it) {
@@ -85,7 +84,6 @@ void split_doubleline2(
         std::vector<int> splited;
 
         int front_id = chain_it->front();
-        int back_id = chain_it->back();
         float max_h = 0;
         float max_w = 0;
         for(const auto boxid: *chain_it) {
@@ -212,7 +210,6 @@ void split_doubleline3(
                     }
                 }
                 float h_s = std::accumulate(h1.begin(), h1.end(), 0.0) / h1.size();
-                float s_s = std::accumulate(s1.begin(), s1.end(), 0.0) / s1.size();
                 float cy1_s = (cy1.size() > 0) ? std::accumulate(cy1.begin(), cy1.end(), 0.0) / cy1.size() : -1;
                 float cy2_s = (cy2.size() > 0) ? std::accumulate(cy2.begin(), cy2.end(), 0.0) / cy2.size() : -1;
                 int splitcount = 0;

@@ -28,7 +28,7 @@ class OCR_onnx_Processer(OCR_Processer):
         return heatmap, features
 
     def call_transformer(self, encoder_input):
-        key_mask = np.repeat(np.where((encoder_input == 0).all(axis=-1)[:,None,None,:], float("-inf"), 0), max_encoderlen, axis=2).astype(np.float32)
+        key_mask = np.where((encoder_input == 0).all(axis=-1)[:,None,None,:], float("-inf"), 0).astype(np.float32)
         encoder_output, = self.onnx_transformer_encoder.run(['encoder_output'], {'encoder_input': encoder_input.astype(np.float32), 'key_mask': key_mask.astype(np.float32)})
 
         decoder_input = np.zeros(shape=(1, max_decoderlen), dtype=np.int64)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "line_detect.h"
+#include <vector>
 
 void search_ruby(
     std::vector<charbox> &boxes,

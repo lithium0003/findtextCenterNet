@@ -72,10 +72,10 @@ int renumber_chain(
     std::sort(chain_remap.begin(), chain_remap.end());
     for(auto &box: boxes) {
         if(box.idx < 0) continue;
-        int id = std::distance(chain_remap.begin(), std::find(chain_remap.begin(), chain_remap.end(), box.idx));
+        int id = (int)std::distance(chain_remap.begin(), std::find(chain_remap.begin(), chain_remap.end(), box.idx));
         box.idx = id;
     }
-    return chain_remap.size();
+    return int(chain_remap.size());
 }
 
 // 行の順番に番号を振り直す
@@ -163,60 +163,95 @@ int renumber_id(
             }
         }
     }
-    
+
     std::sort(chain_remap.begin(), chain_remap.end(), [&](const auto a, const auto b){
         // 横書きを優先する
-        if(lineparams[a].d != lineparams[b].d)
-            return lineparams[a].d < lineparams[b].d;
-
-        if (lineparams[a].doubleline + lineparams[b].doubleline > 0) {
-            float s = std::max(lineparams[a].size, lineparams[b].size);
-            if(lineparams[a].d == 0) {
-                // 横書き
-                // 同じ行なら、左から
-                if (fabs(lineparams[a].cy1 - lineparams[b].cy1) < s) {
-                    // 左にある方が先
-                    return lineparams[a].cx1 < lineparams[b].cx1;
-                }
-            }
-            else {
-                // 縦書き
-                // 同じ行なら、上から
-                if (fabs(lineparams[a].cx1 - lineparams[b].cx1) < s) {
-                    // 上にある方が先
-                    return lineparams[a].cy1 < lineparams[b].cy1;
-                }
-            }
-        }
-
-        float s = std::max(lineparams[a].size, lineparams[b].size) * 0.5;
-        if(lineparams[a].d == 0) {
-            // 横書き
-            // 行が重なっている場合、縦方向にソート
-            if(lineparams[a].cx1 < lineparams[b].cx2 + s || lineparams[b].cx1 < lineparams[a].cx2 + s) {
-                // 上にある行が先
-                return lineparams[a].cy1 < lineparams[b].cy1;
-            }
-            // 左にある方が先
-            return lineparams[a].cx1 < lineparams[b].cx1;
-        }
-        else {
-            // 縦書き
-            // 行が重なっている場合、縦方向にソート
-            if(lineparams[a].cy1 < lineparams[b].cy2 + s || lineparams[b].cy1 < lineparams[a].cy2 + s) {
-                // 右にある行が先
-                return lineparams[a].cx1 > lineparams[b].cx1;
-            }
-            // 上にある方が先
-            return lineparams[a].cy1 < lineparams[b].cy1;
-        }
+        return lineparams[a].d < lineparams[b].d;
     });
+    {
+        auto it = chain_remap.begin();
+        while(it != chain_remap.end()) {
+            auto it2 = it+1;
+            while(it2 != chain_remap.end()) {
+                if(lineparams[*it].d == lineparams[*it2].d) {
+                    ++it2;
+                    continue;
+                }
+                break;
+            }
+            // 横書き縦書きでそれぞれソート
+            if(std::distance(it, it2) > 1) {
+                if(lineparams[*it].d == 0) {
+                    // 横書き
+                    std::sort(it, it2, [&](const auto a, const auto b){
+                        // 上にある行が先
+                        return lineparams[a].cy1 < lineparams[b].cy1;
+                    });
+                    auto it3 = it;
+                    while(it3 != it2) {
+                        auto it4 = it3+1;
+                        auto cy1 = lineparams[*it3].cy1;
+                        auto cy2 = lineparams[*it3].cy2;
+                        while(it4 != it2) {
+                            // 行が重なっているかチェック
+                            if(std::min(cy2, lineparams[*it4].cy2) - std::max(cy1, lineparams[*it4].cy1) > 0) {
+                                cy1 = std::min(cy1,lineparams[*it4].cy1);
+                                cy2 = std::max(cy2,lineparams[*it4].cy2);
+                                ++it4;
+                            }
+                            break;
+                        }
+                        // 重なっている行がある場合
+                        if(std::distance(it3, it4) > 1) {
+                            std::sort(it3, it4, [&](const auto a, const auto b){
+                                // 左にある方が先
+                                return lineparams[a].cx1 < lineparams[b].cx1;
+                            });
+                        }
+                        it3 = it4;
+                    }
+                }
+                else {
+                    // 縦書き
+                    std::sort(it, it2, [&](const auto a, const auto b){
+                        // 右にある行が先
+                        return lineparams[a].cx1 > lineparams[b].cx1;
+                    });
+                    auto it3 = it;
+                    while(it3 != it2) {
+                        auto it4 = it3+1;
+                        auto cx1 = lineparams[*it3].cx1;
+                        auto cx2 = lineparams[*it3].cx2;
+                        while(it4 != it2) {
+                            // 行が重なっているかチェック
+                            if(std::min(cx2, lineparams[*it4].cx2) - std::max(cx1, lineparams[*it4].cx1) > 0) {
+                                cx1 = std::min(cx1,lineparams[*it4].cx1);
+                                cx2 = std::max(cx2,lineparams[*it4].cx2);
+                                ++it4;
+                            }
+                            break;
+                        }
+                        // 重なっている行がある場合
+                        if(std::distance(it3, it4) > 1) {
+                            std::sort(it3, it4, [&](const auto a, const auto b){
+                                // 上にある方が先
+                                return lineparams[a].cy1 < lineparams[b].cy1;
+                            });
+                        }
+                        it3 = it4;
+                    }
+                }
+            }
+            it = it2;
+        }
+    }
+    
     for(auto &box: boxes) {
         if(box.idx < 0) continue;
-        int id = std::distance(chain_remap.begin(), std::find(chain_remap.begin(), chain_remap.end(), box.idx));
+        int id = (int)std::distance(chain_remap.begin(), std::find(chain_remap.begin(), chain_remap.end(), box.idx));
         box.idx = id;
     }
-    return chain_remap.size();
+    return int(chain_remap.size());
 }
 
 // ゴミっぽい外れの小さいboxを外す

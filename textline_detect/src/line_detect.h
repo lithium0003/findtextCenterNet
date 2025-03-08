@@ -1,7 +1,5 @@
 #pragma once
 
-#include <vector>
-
 struct charbox {
     int id;
     int block;
@@ -22,6 +20,7 @@ struct charbox {
 
 extern double ruby_cutoff;
 extern double rubybase_cutoff;
+extern double emphasis_cutoff;
 extern double space_cutoff;
 extern float line_valueth;
 extern float sep_valueth;
@@ -36,12 +35,3 @@ extern int scale;
 extern int run_mode;
 extern int width;
 extern int height;
-
-void process(
-    const std::vector<float> &lineimage, 
-    const std::vector<float> &sepimage,
-    std::vector<charbox> &boxes);
-
-void print_chaininfo(
-    const std::vector<charbox> &boxes,
-    const std::vector<std::vector<int>> &line_box_chain);

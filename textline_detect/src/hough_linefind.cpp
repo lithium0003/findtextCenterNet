@@ -146,7 +146,7 @@ void line_grow(
                 max_width = std::max(max_width, boxes[boxid].w);
             }
         }
-        line_width[i] = max_width * 0.6 / scale;
+        line_width[i] = max_width / scale;
     }
     for(int y = 0; y < height; y++) {
         for(int x = 0; x < width; x++) {

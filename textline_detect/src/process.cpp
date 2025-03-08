@@ -1,4 +1,5 @@
 #include "line_detect.h"
+#include "process.h"
 #include "prepare.h"
 #include "hough_linefind.h"
 #include "search_loop.h"

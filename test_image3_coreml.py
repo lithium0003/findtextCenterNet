@@ -5,7 +5,7 @@ import coremltools as ct
 import numpy as np
 import sys
 import time
-from PIL import Image, ImageFilter, ImageEnhance
+from PIL import Image
 import itertools
 import subprocess
 
@@ -14,8 +14,6 @@ try:
     register_heif_opener()
 except ImportError:
     pass
-
-import matplotlib.pyplot as plt
 
 from util_func import calc_predid, width, height, scale, feature_dim, modulo_list, sigmoid, softmax, decode_ruby
 from const import encoder_add_dim, max_encoderlen, max_decoderlen, decoder_SOT, decoder_EOT, decoder_MSK
@@ -27,7 +25,7 @@ if len(sys.argv) < 2:
 
 cutoff = 0.4
 
-step_ratio = 0.6
+step_ratio = 0.66
 stepx = int(width * step_ratio)
 stepy = int(height * step_ratio)
 
@@ -431,18 +429,17 @@ SP_token[1:feature_dim:2] = -5
 
 start_t = time.time()
 cur_i = 0
+prev_j = 0
 result_txt = ''
 loop_count = 0
+keep_back = 0
 while cur_i < features.shape[0]:
     loop_count += 1
-    r = 3
+    r = 0
     s = 0
-    for k in range(cur_i, min(cur_i + max_encoderlen, features.shape[0])):
+    for k in range(cur_i, min(cur_i + max_encoderlen - 3, features.shape[0])):
         # space
         if features[k,-3] > 0:
-            r += 1
-        # newline
-        if features[k,-1] > 0:
             r += 1
         # rubybase
         if s == 0 and features[k,-5] > 0:
@@ -453,31 +450,39 @@ while cur_i < features.shape[0]:
             s = 2
         elif s == 2 and features[k,-4] == 0:
             s = 0
-    cur_j = min(features.shape[0], cur_i + (max_encoderlen - r))
+    cur_j = min(features.shape[0], cur_i + (max_encoderlen - 3 - r))
+    # horizontal / vertical change point
     for j in range(cur_i+1, cur_j):
-        if features[j-1,-6] != features[cur_i,-6]:
+        if features[j,-6] != features[cur_i,-6]:
             cur_j = j
             break
-    k = cur_j
-    # newline
+    # double newline
+    if cur_j < features.shape[0]-1 and cur_i+1 < cur_j-1:
+        for j in range(cur_i+1, cur_j-1):
+            if features[j,-1] > 0 and features[j+1,-1] > 0:
+                cur_j = j+2
+                break
+    # ruby/rubybase sepatation check
     if cur_j < features.shape[0]:
-        if cur_j > 2:
-            while features[cur_j-1,-1] == 0 or features[cur_j-2,-1] == 0:
-                if cur_j - 2 <= cur_i + 1:
-                    cur_j = k
-                    while features[cur_j-1,-1] == 0:
-                        if cur_j - 1 <= cur_i + 1:
-                            cur_j = k
-                            break
-                        cur_j -= 1
+        # last char is not newline
+        if cur_j > 1 and features[cur_j-1, -1] == 0:
+            for j in reversed(range(cur_i+1, cur_j)):
+                # ruby, ruby base
+                if features[j,-4] == 0 and features[k,-5] == 0:
+                    cur_j = j+1
                     break
-                cur_j -= 1
-    print(cur_i,cur_j,'/',features.shape[0])
+
+    if prev_j == cur_j:
+        keep_back = 0
+        cur_i = cur_j
+        continue
+
+    print(prev_j,cur_i,cur_j,'/',features.shape[0])
     encoder_input = np.zeros(shape=(1, max_encoderlen, encoder_dim), dtype=np.float16)
     encoder_input[0,0,:] = SP_token
     encoder_input[0,1:1+cur_j-cur_i,:] = features[cur_i:cur_j,:]
     encoder_input[0,1+cur_j-cur_i,:] = -SP_token
-    key_mask = np.repeat(np.where((encoder_input == 0).all(axis=-1)[:,None,None,:], float("-inf"), 0), max_encoderlen, axis=2)
+    key_mask = np.where((encoder_input == 0).all(axis=-1)[:,None,None,:], float("-inf"), 0)
     encoder_output = mlmodel_transformer_encoder.predict({
         'encoder_input': encoder_input, 
         'key_mask': key_mask,
@@ -486,7 +491,7 @@ while cur_i < features.shape[0]:
     decoder_input = np.zeros(shape=(1, max_decoderlen), dtype=np.int32)
     decoder_input[0,0] = decoder_SOT
     decoder_input[0,1:] = decoder_MSK
-    rep_count = 16
+    rep_count = 8
     for k in range(rep_count):
         output = mlmodel_transformer_decoder.predict({
             'encoder_output': encoder_output,
@@ -517,10 +522,10 @@ while cur_i < features.shape[0]:
             print(f'[{k} early stop]')
             break
         if k < rep_count-1:
-            decoder_input[:,1:] = np.where(pred_p < 1/rep_count*(k+1), decoder_MSK, decoder_output)[:,:-1]
+            decoder_input[:,1:] = np.where(pred_p < 1-(k+1)/rep_count, decoder_MSK, decoder_output)[:,:-1]
     pred = decoder_output[0]
     predstr = ''
-    # print(pred)
+    print(pred)
     for p in pred:
         if p == 0 or p == decoder_EOT:
             break
@@ -530,8 +535,41 @@ while cur_i < features.shape[0]:
             predstr += chr(p)
         else:
             predstr += '\uFFFD'
-    result_txt += predstr
-    cur_i = cur_j
+    print(keep_back, predstr)
+    result_txt += predstr[keep_back:]
+
+    if cur_j < features.shape[0]:
+        k = cur_j - 1
+        prev_j = cur_j
+        keep_back = 0
+        while cur_i < k:
+            # horizontal / vertical change point
+            if features[k,-6] != features[cur_j,-6]:
+                k += 1
+                break
+            # ruby, ruby base
+            if features[k,-5] > 0 or features[k,-4] > 0:
+                k += 1
+                break
+            # newline
+            if k < cur_j - 1 and features[k,-1] > 0:
+                k += 1
+                break
+            if k > cur_j - 3:
+                # space
+                if features[k,-3] > 0:
+                    keep_back += 1
+                k -= 1
+            else:
+                break
+        if cur_i < k:
+            cur_i = k
+            keep_back += cur_j - k
+        else:
+            keep_back = 0
+            cur_i = cur_j
+    else:
+        break
 
 spent_t = time.time() - start_t
 print(spent_t, 'sec', spent_t / loop_count * 1000, 'ms/loop', spent_t / features.shape[0] * 1000, 'ms/char')

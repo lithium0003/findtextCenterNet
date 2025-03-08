@@ -172,6 +172,7 @@ class OCR_Processer(ABC):
         outdict = {
             'box': [],
             'line': [],
+            'block': [],
         }
 
         cur_i = 0
@@ -180,9 +181,9 @@ class OCR_Processer(ABC):
         keep_back = 0
         linebuf = []
         while cur_i < features.shape[0]:
-            r = 2
+            r = 0
             s = 0
-            for k in range(cur_i, min(cur_i + max_encoderlen, features.shape[0])):
+            for k in range(cur_i, min(cur_i + max_encoderlen - 3, features.shape[0])):
                 # space
                 if features[k,-3] > 0:
                     r += 1
@@ -195,18 +196,28 @@ class OCR_Processer(ABC):
                     s = 2
                 elif s == 2 and features[k,-4] == 0:
                     s = 0
-            cur_j = min(features.shape[0], cur_i + (max_encoderlen - r))
+            cur_j = min(features.shape[0], cur_i + (max_encoderlen - 3 - r))
+            # horizontal / vertical change point
             for j in range(cur_i+1, cur_j):
-                # hori/vert
                 if features[j,-6] != features[cur_i,-6]:
                     cur_j = j
                     break
+            # double newline
+            if cur_j < features.shape[0]-1 and cur_i+1 < cur_j-1:
+                for j in range(cur_i+1, cur_j-1):
+                    if features[j,-1] > 0 and features[j+1,-1] > 0:
+                        cur_j = j+2
+                        break
+            # ruby/rubybase sepatation check
             if cur_j < features.shape[0]:
-                if cur_j > 1 and features[cur_j-1,-1] == 0:
+                # last char is not newline
+                if cur_j > 1 and features[cur_j-1, -1] == 0:
                     for j in reversed(range(cur_i+1, cur_j)):
-                        if features[j,-5] == 0 and features[j,-4] == 0:
+                        # ruby, ruby base
+                        if features[j,-4] == 0 and features[k,-5] == 0:
                             cur_j = j+1
                             break
+
             if prev_j == cur_j:
                 keep_back = 0
                 cur_i = cur_j
@@ -222,7 +233,9 @@ class OCR_Processer(ABC):
             for p in pred:
                 if p == 0 or p == decoder_EOT:
                     break
-                if p < 0x3FFFF:
+                if p >= 0xD800 and p <= 0xDFFF:
+                    predstr += '\uFFFD'
+                elif p < 0x3FFFF:
                     predstr += chr(p)
                 else:
                     predstr += '\uFFFD'
@@ -231,11 +244,11 @@ class OCR_Processer(ABC):
             linebuf += [(prev_j, cur_j, predstr[keep_back:])]
 
             if cur_j < features.shape[0]:
-                prev_j = cur_j
                 k = cur_j - 1
+                prev_j = cur_j
                 keep_back = 0
                 while cur_i < k:
-                    # vert/hori
+                    # horizontal / vertical change point
                     if features[k,-6] != features[cur_j,-6]:
                         k += 1
                         break
@@ -244,10 +257,10 @@ class OCR_Processer(ABC):
                         k += 1
                         break
                     # newline
-                    elif k < cur_j - 1 and features[k,-1] > 0:
+                    if k < cur_j - 1 and features[k,-1] > 0:
                         k += 1
                         break
-                    elif k > cur_j - 5:
+                    if k > cur_j - 3:
                         # space
                         if features[k,-3] > 0:
                             keep_back += 1
@@ -283,6 +296,8 @@ class OCR_Processer(ABC):
                                 'blockidx': blockidx,
                                 'lineidx': lineidx,
                                 'text': line_text,
+                                'aozora': decode_ruby(line_text, outtype='aozora'),
+                                'noruby': decode_ruby(line_text, outtype='noruby'),
                             }
                             outdict['line'].append(lineinfo)
                             line_x1 = -2000
@@ -296,6 +311,7 @@ class OCR_Processer(ABC):
                         if c == '\n':
                             continue
                     if c in ['\uFFF9','\uFFFA','\uFFFB']:
+                        line_text += c
                         continue
                     if c in UNICODE_WHITESPACE_CHARACTERS:
                         line_text += c
@@ -342,7 +358,7 @@ class OCR_Processer(ABC):
                         else:
                             line_y2 = max(line_y2, cy + h/2)
 
-                        line_text += c
+                    line_text += c
 
                     boxinfo = {
                         'cx': float(cx / resize),
@@ -373,8 +389,70 @@ class OCR_Processer(ABC):
                     'blockidx': blockidx,
                     'lineidx': lineidx,
                     'text': line_text,
+                    'aozora': decode_ruby(line_text, outtype='aozora'),
+                    'noruby': decode_ruby(line_text, outtype='noruby'),
                 }
                 outdict['line'].append(lineinfo)
+
+        blockidx = -1
+        block_x1 = -2000
+        block_y1 = -2000
+        block_x2 = -2000
+        block_y2 = -2000
+        block_text = ''
+        for lineinfo in outdict['line']:
+            if blockidx != lineinfo['blockidx']:
+                if block_text:
+                    blockinfo = {
+                        'x1': float(block_x1),
+                        'y1': float(block_y1),
+                        'x2': float(block_x2),
+                        'y2': float(block_y2),
+                        'blockidx': blockidx,
+                        'text': block_text,
+                        'aozora': decode_ruby(block_text, outtype='aozora'),
+                        'noruby': decode_ruby(block_text, outtype='noruby'),
+                    }
+                    outdict['block'].append(blockinfo)
+                block_x1 = -2000
+                block_y1 = -2000
+                block_x2 = -2000
+                block_y2 = -2000
+                block_text = ''
+                blockidx = lineinfo['blockidx']
+            
+            if block_x1 < -1000:
+                block_x1 = lineinfo['x1']
+            else:
+                block_x1 = min(block_x1, lineinfo['x1'])
+            if block_x2 < -1000:
+                block_x2 = lineinfo['x2']
+            else:
+                block_x2 = max(block_x2, lineinfo['x2'])
+
+            if block_y1 < -1000:
+                block_y1 = lineinfo['y1']
+            else:
+                block_y1 = min(block_y1, lineinfo['y1'])
+            if block_y2 < -1000:
+                block_y2 = lineinfo['y2']
+            else:
+                block_y2 = max(block_y2, lineinfo['y2'])
+
+            block_text += lineinfo['text'] + '\n'
+        else:
+            if block_text:
+                blockinfo = {
+                    'x1': float(block_x1),
+                    'y1': float(block_y1),
+                    'x2': float(block_x2),
+                    'y2': float(block_y2),
+                    'blockidx': blockidx,
+                    'text': block_text,
+                    'aozora': decode_ruby(block_text, outtype='aozora'),
+                    'noruby': decode_ruby(block_text, outtype='noruby'),
+                }
+                outdict['block'].append(blockinfo)
 
         outdict['rawtext'] = result_txt
         outdict['aozora'] = decode_ruby(result_txt, outtype='aozora')

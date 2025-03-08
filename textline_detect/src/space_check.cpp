@@ -67,7 +67,7 @@ void append_lostspace(std::vector<charbox> &boxes)
             }            
         }
     }
-    for(int i = head_idx.size() - 1; i > 0; i--) {
+    for(int i = int(head_idx.size()) - 1; i > 0; i--) {
         int boxid1 = head_idx[i];
         if((boxes[boxid1].subtype & 8) != 8) continue;
         int boxid2 = head_idx[i-1];
