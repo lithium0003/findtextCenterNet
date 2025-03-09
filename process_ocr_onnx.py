@@ -13,9 +13,6 @@ class OCR_onnx_Processer(OCR_Processer):
         if os.path.exists("TextDetector.quant.onnx"):
             print('quant')
             onnx_detector = onnxruntime.InferenceSession("TextDetector.quant.onnx")
-        elif os.path.exists("TextDetector.infer.onnx"):
-            print('infer')
-            onnx_detector = onnxruntime.InferenceSession("TextDetector.infer.onnx")
         else:
             onnx_detector = onnxruntime.InferenceSession("TextDetector.onnx")
         self.onnx_detector = onnx_detector

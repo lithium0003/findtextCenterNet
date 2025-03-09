@@ -3,6 +3,7 @@ import onnxruntime.tools
 import onnxruntime.tools.make_dynamic_shape_fixed
 import onnx
 import onnxruntime
+from onnxconverter_common import float16
 import torch
 import numpy as np
 from PIL import Image
@@ -31,9 +32,13 @@ def convert1():
     torch.onnx.export(detector,
                       example_input,
                       "TextDetector.onnx",
-                      verbose=True,
                       input_names=['image'],
-                      output_names=['heatmap','feature'])
+                      output_names=['heatmap','feature'],
+                      dynamo=True,
+                      external_data=False,
+                      optimize=True,
+                      verify=True,
+                      opset_version=20)
     onnx.checker.check_model('TextDetector.onnx')
 
     ############################################################################
@@ -43,9 +48,13 @@ def convert1():
     torch.onnx.export(decoder,
                       example_input,
                       "CodeDecoder.onnx",
-                      verbose=True,
                       input_names=['feature_input'],
-                      output_names=['modulo_1091','modulo_1093','modulo_1097'])
+                      output_names=['modulo_1091','modulo_1093','modulo_1097'],
+                      dynamo=True,
+                      external_data=False,
+                      optimize=True,
+                      verify=True,
+                      opset_version=20)
     onnx.checker.check_model('CodeDecoder.onnx')
 
 def cos_sim(v1, v2):

@@ -202,19 +202,19 @@ class OCR_Processer(ABC):
                 if features[j,-6] != features[cur_i,-6]:
                     cur_j = j
                     break
-            # double newline
+            # double newline (new block)
             if cur_j < features.shape[0]-1 and cur_i+1 < cur_j-1:
                 for j in range(cur_i+1, cur_j-1):
                     if features[j,-1] > 0 and features[j+1,-1] > 0:
                         cur_j = j+2
                         break
-            # ruby/rubybase sepatation check
+            # ruby/rubybase separation check
             if cur_j < features.shape[0]:
                 # last char is not newline
                 if cur_j > 1 and features[cur_j-1, -1] == 0:
                     for j in reversed(range(cur_i+1, cur_j)):
                         # ruby, ruby base
-                        if features[j,-4] == 0 and features[k,-5] == 0:
+                        if features[j,-4] == 0 and features[j,-5] == 0:
                             cur_j = j+1
                             break
 
@@ -260,10 +260,10 @@ class OCR_Processer(ABC):
                     if k < cur_j - 1 and features[k,-1] > 0:
                         k += 1
                         break
+                    # space
+                    if features[k,-3] > 0:
+                        keep_back += 1
                     if k > cur_j - 3:
-                        # space
-                        if features[k,-3] > 0:
-                            keep_back += 1
                         k -= 1
                     else:
                         break
@@ -591,8 +591,8 @@ class OCR_Processer(ABC):
                     w1 = done_area[j,2]
                     h1 = done_area[j,3]
                     p1x = int(max(cx1 - w1/2, cx - w/2) - (cx - w/2))
-                    p2x = int(min(cx1 + w1/2, cx + w/2) - (cx - w/2))
-                    p1y = int(max(cy1 - h1/2, cy - h/2) - (cy - h/2))+1
+                    p2x = int(min(cx1 + w1/2, cx + w/2) - (cx - w/2))+1
+                    p1y = int(max(cy1 - h1/2, cy - h/2) - (cy - h/2))
                     p2y = int(min(cy1 + h1/2, cy + h/2) - (cy - h/2))+1
                     fill_map[p1x:p2x,p1y:p2y] = True
                 if np.mean(fill_map) > 0.5:
