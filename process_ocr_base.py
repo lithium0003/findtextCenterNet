@@ -454,7 +454,7 @@ class OCR_Processer(ABC):
                 }
                 outdict['block'].append(blockinfo)
 
-        outdict['rawtext'] = result_txt
+        outdict['text'] = result_txt
         outdict['aozora'] = decode_ruby(result_txt, outtype='aozora')
         outdict['noruby'] = decode_ruby(result_txt, outtype='noruby')
 
