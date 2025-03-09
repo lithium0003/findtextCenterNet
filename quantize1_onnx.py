@@ -31,44 +31,49 @@ class QuntizationDataReader(CalibrationDataReader):
         self.enum_data = iter(self.torch_dl)
 
 
-def optimize1(nodes_to_quantize=None):
+def optimize1(nodes_to_exclude=None):
     qdr = QuntizationDataReader()
 
     config = StaticQuantConfig(qdr, 
                                quant_format=QuantFormat.QOperator, 
                                activation_type=QuantType.QUInt8, 
-                               nodes_to_quantize=nodes_to_quantize,
+                               nodes_to_exclude=nodes_to_exclude,
                                extra_options={
                                    'CalibMovingAverage': True,
                                })
-    quantize('TextDetector.infer.onnx',
+    quantize('TextDetector.onnx',
              'TextDetector.quant.onnx',
              config)
 
 if __name__ == "__main__":
-    from onnxruntime.quantization.shape_inference import quant_pre_process
+    from onnx import shape_inference
     import onnx
     import os
 
-    if os.path.exists('TextDetector.infer.onnx'):
-        os.remove('TextDetector.infer.onnx')
     if os.path.exists('TextDetector.quant.onnx'):
         os.remove('TextDetector.quant.onnx')
     
-    quant_pre_process(
-        'TextDetector.onnx',
-        'TextDetector.infer.onnx',
-    )
+    model = onnx.load('TextDetector.onnx')
+    model = shape_inference.infer_shapes(model)
+    outputs = [o.name for o in model.graph.output]
+    nodes_to_exclude = []
+    for node in model.graph.node:
+        if 'feature' in node.output:
+            nodes_to_exclude.append(node.name)
 
-    model = onnx.load('TextDetector.infer.onnx')
-    nodes = model.graph.node
-    nodes_to_quantize = []
-    for node in nodes:
-        if '/detector/backbone/' in node.name:
-            nodes_to_quantize.append(node.name)
-        if '/detector/' in node.name and 'upsamplers' in node.name:
-            nodes_to_quantize.append(node.name)
-    print(nodes_to_quantize)
+    outputs = ['heatmap']
+    while outputs:
+        next_intput = []
+        for output in outputs:
+            for node in model.graph.node:
+                if output in node.output:
+                    nodes_to_exclude.append(node.name)
+                    if node.op_type != 'Conv':
+                        next_intput += node.input
+        outputs = list(set(next_intput))
 
-    optimize1(nodes_to_quantize)
+    nodes_to_exclude = list(set(nodes_to_exclude))
+    print(nodes_to_exclude)
+
+    optimize1(nodes_to_exclude)
 

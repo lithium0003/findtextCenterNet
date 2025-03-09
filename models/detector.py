@@ -281,15 +281,12 @@ class TextDetectorModel(nn.Module):
         return mask
 
 class CenterNetDetector(nn.Module):
-    def __init__(self, detector, scale=False, *args, **kwargs) -> None:
+    def __init__(self, detector, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.detector = detector
-        self.scale = scale
         self.minval = torch.tensor(float("-inf"))
         
     def forward(self, x):
-        if self.scale:
-            x = x / 255.
         heatmap, features = self.detector(x)
         keymap = heatmap[:,0:1,:,:]
         # keep local maxima of 3x3, other to -inf

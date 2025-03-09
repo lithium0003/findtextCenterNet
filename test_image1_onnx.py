@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import torch
+import onnxruntime
 
 import numpy as np
 import sys
@@ -8,70 +8,32 @@ import os
 from PIL import Image, ImageFilter
 import itertools
 
-try:
-    from pillow_heif import register_heif_opener
-    register_heif_opener()
-except ImportError:
-    pass
-
 from matplotlib.font_manager import FontProperties
 import matplotlib.pyplot as plt
 
-from util_func import calc_predid, width, height, scale, feature_dim, sigmoid
-from models.detector import TextDetectorModel, CenterNetDetector, CodeDecoder
+from util_func import calc_predid, width, height, scale, feature_dim, modulo_list, sigmoid
 
 if len(sys.argv) < 2:
-    print(sys.argv[0],'target.png')
+    print(sys.argv[0],'target.png','(twopass)')
     exit(1)
 
 fprop = FontProperties(fname='data/jpfont/NotoSerifJP-Regular.otf')
 
 target_file = sys.argv[1]
 twopass = False
-model_size = 'xl'
-resize = 1.0
 if len(sys.argv) > 2:
-    for arg in sys.argv[2:]:
-        if arg == 'twopass':
-            twopass = True
-            print('twopass')
-        elif arg == 'kr':
-            fprop = FontProperties(fname='data/krfont/NotoSerifKR-Regular.otf')
-            print('kr font')
-        elif arg == 's':
-            model_size = 's'
-            print('model s')
-        elif arg == 'm':
-            model_size = 'm'
-            print('model m')
-        elif arg == 'l':
-            model_size = 'l'
-            print('model l')
-        elif arg == 'xl':
-            model_size = 'xl'
-            print('model xl')
-        elif arg.startswith('x'):
-            resize = float(arg[1:])
-            print('resize: ', resize)
+    if sys.argv[2] == 'twopass':
+        twopass = True
+    if sys.argv[2] == 'kr':
+        fprop = FontProperties(fname='data/krfont/NotoSerifKR-Regular.otf')
 
-model = TextDetectorModel(model_size=model_size)
-data = torch.load('model.pt', map_location="cpu", weights_only=True)
-model.load_state_dict(data['model_state_dict'])
-
-detector = CenterNetDetector(model.detector)
-decoder = CodeDecoder(model.decoder)
-if torch.cuda.is_available():
-    device = 'cuda'
-elif torch.backends.mps.is_available():
-    device = 'mps'
+if os.path.exists("TextDetector.quant.onnx"):
+    print('quant')
+    onnx_detector = onnxruntime.InferenceSession("TextDetector.quant.onnx")
 else:
-    device = 'cpu'
-device = torch.device(device)
-detector.to(device=device)
-decoder.to(device=device)
-detector.eval()
-decoder.eval()
-
+    onnx_detector = onnxruntime.InferenceSession("TextDetector.onnx")
+onnx_decoder = onnxruntime.InferenceSession("CodeDecoder.onnx")
+    
 def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
     print(org_img.shape)
     print("test")
@@ -94,17 +56,14 @@ def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
         x_s = width // scale
         y_s = height // scale
 
-        images = torch.from_numpy(inputs['input'] / 255.).permute(0,3,1,2).to(device=device)
-        with torch.no_grad():
-            heatmap, features = detector(images)
-            heatmap = heatmap.cpu().numpy()
-            features = features.cpu().numpy()
+        images = (inputs['input'] / 255.).transpose(0,3,1,2)
+        heatmap, feature = onnx_detector.run(['heatmap','feature'], {'image': images})
 
         mask = np.zeros([y_s, x_s], dtype=bool)
-        x_min = int(x_s * 1 / 8) if x_i > 0 else 0
-        x_max = int(x_s * 7 / 8) + 1 if x_i + width < org_img.shape[1] else x_s
-        y_min = int(y_s * 1 / 8) if y_i > 0 else 0
-        y_max = int(y_s * 7 / 8) + 1 if y_i + height < org_img.shape[0] else y_s
+        x_min = int(x_s * 1 / 9) if x_i > 0 else 0
+        x_max = int(x_s * 8 / 9) if x_i + width < org_img.shape[1] else x_s
+        y_min = int(y_s * 1 / 9) if y_i > 0 else 0
+        y_max = int(y_s * 8 / 9) if y_i + height < org_img.shape[0] else y_s
         mask[y_min:y_max, x_min:x_max] = True
 
         keymap_p = sigmoid(heatmap[0,0,:,:])
@@ -140,7 +99,7 @@ def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
                 codes.append(code_p[k][y,x])
 
             locations.append(np.array([peak[y,x], ix, iy, w, h, *codes]))
-            glyphfeatures.append(features[0,:,y,x])
+            glyphfeatures.append(feature[0,:,y,x])
 
     locations = np.array(locations)
     if locations0 is not None:
@@ -161,7 +120,6 @@ def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
         w = locations[i,3]
         h = locations[i,4]
         area0_vol = w * h
-        fill_map = np.zeros([int(w), int(h)], dtype=bool)
         if done_area.size > 0:
             area1_vol = done_area[:,2] * done_area[:,3]
             inter_xmin = np.maximum(cx - w / 2, done_area[:,0] - done_area[:,2] / 2)
@@ -173,27 +131,14 @@ def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
             inter_vol = inter_w * inter_h
             union_vol = area0_vol + area1_vol - inter_vol
             iou = np.where(union_vol > 0., inter_vol / union_vol, 0.)
-            if iou.max() > 0.5:
+            if iou.max() > 0.75:
                 continue
             if inter_vol.max() > area0_vol * 0.75:
                 continue
-            # dx = done_area[:,0] - cx
-            # dy = done_area[:,1] - cy
-            # d = np.sqrt(dx * dx + dy * dy)
-            # if d.min() < max(8, min(w,h)/2):
-            #     continue
-            idx_overlap = np.where(iou > 0)[0]
-            for j in idx_overlap:
-                cx1 = done_area[j,0]
-                cy1 = done_area[j,1]
-                w1 = done_area[j,2]
-                h1 = done_area[j,3]
-                p1x = int(max(cx1 - w1/2, cx - w/2) - (cx - w/2))
-                p2x = int(min(cx1 + w1/2, cx + w/2) - (cx - w/2))
-                p1y = int(max(cy1 - h1/2, cy - h/2) - (cy - h/2))+1
-                p2y = int(min(cy1 + h1/2, cy + h/2) - (cy - h/2))+1
-                fill_map[p1x:p2x,p1y:p2y] = True
-            if np.mean(fill_map) > 0.5:
+            dx = done_area[:,0] - cx
+            dy = done_area[:,1] - cy
+            d = np.sqrt(dx * dx + dy * dy)
+            if d.min() < max(8, min(w,h)/2):
                 continue
 
         done_area = np.vstack([done_area, np.array([cx, cy, w, h])])
@@ -204,10 +149,20 @@ def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
     for i in idx:
         cx = locations[i,1]
         cy = locations[i,2]
+        w = locations[i,3]
+        h = locations[i,4]
         x = int(cx / scale)
         y = int(cy / scale)
+        x_min = int((cx - w / 2) / scale)
+        x_max = int((cx + w / 2) / scale) + 1
+        y_min = int((cy - h / 2) / scale)
+        y_max = int((cy + h / 2) / scale) + 1
         if x >= 0 and x < org_img.shape[1] // scale and y >= 0 and y < org_img.shape[0] // scale:
-            if seps_all[y,x] > 0.5:
+            x_min = max(0, x_min)
+            y_min = max(0, y_min)
+            x_max = min(org_img.shape[1] // scale, x_max)
+            y_max = min(org_img.shape[0] // scale, y_max)
+            if np.max(seps_all[y_min:y_max,x_min:x_max]) > 0.5:
                 continue
         selected_idx.append(i)
 
@@ -225,12 +180,12 @@ def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
         cy = locations[i,2]
         w = locations[i,3]
         h = locations[i,4]
-        x = int(cx / scale)
-        y = int(cy / scale)
         x_min = int(cx / scale - 1)
         y_min = int(cy / scale - 1)
         x_max = int(cx / scale + 1) + 1
         y_max = int(cy / scale + 1) + 1
+        x = int(cx / scale)
+        y = int(cy / scale)
         if x >= 0 and x < org_img.shape[1] // scale and y >= 0 and y < org_img.shape[0] // scale:
             x_min = max(0, x_min)
             y_min = max(0, y_min)
@@ -268,13 +223,13 @@ def decode(glyphfeatures):
     print("decode")
     glyphids = []
     glyphprobs = []
+    outnames = ['modulo_%d'%m for m in modulo_list]
     for data in glyphfeatures:
-        with torch.no_grad():
-            decode_outputs = decoder(torch.from_numpy(data).to(device=device).unsqueeze(0))
+        decode_outputs = onnx_decoder.run(outnames, {'feature_input': np.expand_dims(data,0)})
         p = []
         id = []
         for k,prob in enumerate(decode_outputs):
-            prob = prob[0].cpu().numpy()
+            prob = prob[0]
             idx = np.where(prob > 0.01)[0]
             if len(idx) == 0:
                 idx = [np.argmax(prob)]
@@ -292,8 +247,8 @@ def decode(glyphfeatures):
         glyphids.append(idx)
         glyphprobs.append(prob)
 
-    glyphids = np.atleast_1d(glyphids)
-    glyphprobs = np.atleast_1d(glyphprobs)
+    glyphids = np.stack(glyphids)
+    glyphprobs = np.stack(glyphprobs)
     
     return  glyphids, glyphprobs
 
@@ -301,8 +256,6 @@ stepx = width * 3 // 4
 stepy = height * 3 // 4
 
 im0 = Image.open(target_file).convert('RGB')
-if resize != 1.0:
-    im0 = im0.resize((int(im0.width * resize), int(im0.height * resize)), resample=Image.Resampling.BILINEAR)
 #im0 = im0.filter(ImageFilter.SHARPEN)
 im0 = np.asarray(im0)
 

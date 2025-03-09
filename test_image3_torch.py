@@ -465,7 +465,7 @@ while cur_i < features.shape[0]:
         if cur_j > 1 and features[cur_j-1, -1] == 0:
             for j in reversed(range(cur_i+1, cur_j)):
                 # ruby, ruby base
-                if features[j,-4] == 0 and features[k,-5] == 0:
+                if features[j,-4] == 0 and features[j,-5] == 0:
                     cur_j = j+1
                     break
 
@@ -510,10 +510,10 @@ while cur_i < features.shape[0]:
             if k < cur_j - 1 and features[k,-1] > 0:
                 k += 1
                 break
+            # space
+            if features[k,-3] > 0:
+                keep_back += 1
             if k > cur_j - 3:
-                # space
-                if features[k,-3] > 0:
-                    keep_back += 1
                 k -= 1
             else:
                 break
