@@ -7,7 +7,7 @@
 
 #include <stdio.h>
 #include <iostream>
-#include <cmath>
+#include <math.h>
 
 void sort_chain(
     std::vector<int> &chain,
@@ -509,10 +509,10 @@ std::vector<int> create_chainid_map(
             auto box = boxes[boxid];
             if ((box.subtype & (2+4)) == 2+4) continue;
             //fprintf(stderr, "chain %d box %d cx %f cy %f w %f h %f th %f\n", chainid, box.id, box.cx, box.cy, box.w, box.h, box.direction / M_PI * 180);
-            int left = (box.cx - box.w / 3) / scale;
-            int right = (box.cx + box.w / 3) / scale;
-            int top = (box.cy - box.h / 3) / scale;
-            int bottom = (box.cy + box.h / 3) / scale;
+            int left = (box.cx - box.w / 2) / scale;
+            int right = (box.cx + box.w / 2) / scale;
+            int top = (box.cy - box.h / 2) / scale;
+            int bottom = (box.cy + box.h / 2) / scale;
             for(int y = top; y < bottom; y++) {
                 for(int x = left; x < right; x++) {
                     if(x < 0 || x >= width || y < 0 || y >= height) continue;

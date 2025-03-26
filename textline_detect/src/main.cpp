@@ -24,6 +24,8 @@ float sep_valueth2 = 0.15;
 const float sep_clusterth = 10.0;
 const int linearea_th = 20;
 double allowwidth_next_block = 1.0;
+double allow_sizediff = 0.5;
+int page_divide = 0;
 int scale = 4;
 
 int run_mode = 0;
@@ -73,6 +75,16 @@ int main(int argc, char **argv)
             std::string vstr = arg.substr(arg.find('=')+1);
             std::stringstream(vstr) >> allowwidth_next_block;
             std::cerr << "allowwidth_next_block=" << allowwidth_next_block << std::endl;
+        }
+        if(arg.find("--allow_sizediff=") != std::string::npos) {
+            std::string vstr = arg.substr(arg.find('=')+1);
+            std::stringstream(vstr) >> allow_sizediff;
+            std::cerr << "allow_sizediff=" << allow_sizediff << std::endl;
+        }
+        if(arg.find("--page_divide=") != std::string::npos) {
+            std::string vstr = arg.substr(arg.find('=')+1);
+            std::stringstream(vstr) >> page_divide;
+            std::cerr << "page_divide=" << page_divide << std::endl;
         }
     }
 

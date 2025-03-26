@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <cmath>
 #include <iostream>
+#include <cassert>
 
 struct lineparam {
     int d;
@@ -15,9 +16,6 @@ struct lineparam {
     int count;
     float size;
 };
-
-static const double allow_sizediff = 0.5;
-static const double scanwidth_next_block = 1.0 + allowwidth_next_block;
 
 // 行を処理する
 void process_line(
@@ -30,98 +28,169 @@ void process_line(
     const std::vector<lineparam> &lineparams,
     const std::vector<bool> &lineblocker)
 {
+    const double scanwidth_next_block = 0.5 + allowwidth_next_block;
+
     for(int chainid = 0; chainid < id_max; chainid++) {
         //std::cerr << "chain " << chainid << std::endl;
-        if(line_box_chain[chainid].size() < 2) continue;
 
-        if(chain_next[chainid].size() > 0) continue;
-
-        std::vector<int> x;
-        std::vector<int> y;
-        float direction;
-        double w, h;
-        make_track_line(x,y, direction, w, h, boxes, line_box_chain, lineblocker, chainid, 1);
-        if(x.size() == 0 || y.size() == 0) continue;
-        double s_s = std::max(w, h);
-
-        if(lineparams[chainid].d == 2) {
+        if(lineparams[chainid].d == 2 || (lineparams[chainid].d == 0 && run_mode == 1)) {
             // 横書き
-            for(int i = 0; i < x.size(); i++) {
-                int xi = x[i] / scale;
-                int yi = y[i] / scale;
-                if(xi < 0 || yi < 0 || xi >= width || yi >= height) continue;
-                if(lineblocker[yi * width + xi]) continue;
+            float s_s = 0;
+            for(int i = 0; i < line_box_chain[chainid].size(); i++) {
+                s_s = std::max(s_s, std::max(boxes[line_box_chain[chainid][i]].w, boxes[line_box_chain[chainid][i]].h));
+            }
 
+            float cx1 = -1;
+            float cy1 = -1;
+            float cx2 = -1;
+            float cy2 = -1;
+
+            for(int i = 0; i < line_box_chain[chainid].size(); i++) {
+                float s = std::max(boxes[line_box_chain[chainid][i]].w, boxes[line_box_chain[chainid][i]].h);
+
+                if(fabs(s - s_s)/std::min(s, s_s) > 0.5) continue;
+                if((boxes[line_box_chain[chainid][i]].subtype & (2+4)) == 2+4) continue;
+                if(boxes[line_box_chain[chainid][i]].double_line > 0) continue;
+
+                if(cx1 < 0 && cy1 < 0) {
+                    cx1 = boxes[line_box_chain[chainid][i]].cx - boxes[line_box_chain[chainid][i]].w / 2;
+                    cy1 = boxes[line_box_chain[chainid][i]].cy;
+                }
+                cx2 = boxes[line_box_chain[chainid][i]].cx + boxes[line_box_chain[chainid][i]].w / 2;
+                cy2 = boxes[line_box_chain[chainid][i]].cy;
+            }
+            
+            if(cx2 - cx1 < scale) continue;
+            
+            float a = (cy2 - cy1)/(cx2 - cx1);
+            
+            for(int x = (cx1 + cx2)/2; x < cx2 + s_s; x++) {
+                int y = a * (x - cx1) + cy1;
+                int xi = x / scale;
+                int yi = y / scale;
+                if(xi < 0 || yi < 0 || xi >= width || yi >= height) continue;
+                if(lineblocker[yi * width + xi]) break;
+                
                 for(int yp = yi; yp < yi + s_s / scale * scanwidth_next_block; yp++) {
                     if(yp < 0 || yp >= height) continue;
-                    //fprintf(stderr, "hori %d x %d y %d\n", chainid, xi * scale, yp * scale);
+
                     if(lineblocker[yp * width + xi]) break;
                     int other_chain = chainid_map[yp * width + xi];
                     if(other_chain < 0) continue;
                     if(other_chain == chainid) continue;
                     if(lineparams[other_chain].d == 1) break;
-                    if(fabs(lineparams[other_chain].size - lineparams[chainid].size) / (0.5 * (lineparams[chainid].size + lineparams[other_chain].size)) > allow_sizediff) continue;
+                    if(fabs(lineparams[other_chain].size - lineparams[chainid].size) / std::min(lineparams[chainid].size, lineparams[other_chain].size) > allow_sizediff) continue;
 
                     if(std::find(chain_next[chainid].begin(), chain_next[chainid].end(), other_chain) == chain_next[chainid].end()) {
-                        //fprintf(stderr, "hori %d -> %d\n", chainid, other_chain);
+                        chain_next[chainid].push_back(other_chain);
+                        chain_prev[other_chain].push_back(chainid);
+                        break;
+                    }
+                }
+            }
+            for(int x = (cx1 + cx2)/2; x > cx1 - s_s; x--) {
+                int y = a * (x - cx1) + cy1;
+                int xi = x / scale;
+                int yi = y / scale;
+                if(xi < 0 || yi < 0 || xi >= width || yi >= height) continue;
+                if(lineblocker[yi * width + xi]) break;
+                
+                for(int yp = yi; yp < yi + s_s / scale * scanwidth_next_block; yp++) {
+                    if(yp < 0 || yp >= height) continue;
 
-                        float direction2;
-                        double w2,h2;
-                        float start_cx2, start_cy2, end_cx2, end_cy2;
-                        search_chain(line_box_chain[other_chain], boxes, direction2, w2, h2, start_cx2, start_cy2, end_cx2, end_cy2);
-                        float direction1;
-                        double w1,h1;
-                        float start_cx1, start_cy1, end_cx1, end_cy1;
-                        search_chain(line_box_chain[chainid], boxes, direction1, w1, h1, start_cx1, start_cy1, end_cx1, end_cy1);
+                    if(lineblocker[yp * width + xi]) break;
+                    int other_chain = chainid_map[yp * width + xi];
+                    if(other_chain < 0) continue;
+                    if(other_chain == chainid) continue;
+                    if(lineparams[other_chain].d == 1) break;
+                    if(fabs(lineparams[other_chain].size - lineparams[chainid].size) / std::min(lineparams[chainid].size, lineparams[other_chain].size) > allow_sizediff) continue;
 
-                        if((start_cy2 - std::max(h1,h2) - start_cy1) < std::max(h1,h2) * allowwidth_next_block) {
-                            chain_next[chainid].push_back(other_chain);
-                            chain_prev[other_chain].push_back(chainid);
-                        }
-                        else {
-                            break;
-                        }
+                    if(std::find(chain_next[chainid].begin(), chain_next[chainid].end(), other_chain) == chain_next[chainid].end()) {
+                        chain_next[chainid].push_back(other_chain);
+                        chain_prev[other_chain].push_back(chainid);
+                        break;
                     }
                 }
             }
         }
-        else if (lineparams[chainid].d == 1){
+        else if (lineparams[chainid].d == 1 || (lineparams[chainid].d == 0 && run_mode == 2)){
             // 縦書き
-            for(int i = 0; i < x.size(); i++) {
-                int xi = x[i] / scale;
-                int yi = y[i] / scale;
-                if(xi < 0 || yi < 0 || xi >= width || yi >= height) continue;
-                if(lineblocker[yi * width + xi]) continue;
+            float s_s = 0;
+            for(int i = 0; i < line_box_chain[chainid].size(); i++) {
+                s_s = std::max(s_s, std::max(boxes[line_box_chain[chainid][i]].w, boxes[line_box_chain[chainid][i]].h));
+            }
 
+            float cx1 = -1;
+            float cy1 = -1;
+            float cx2 = -1;
+            float cy2 = -1;
+
+            for(int i = 0; i < line_box_chain[chainid].size(); i++) {
+                float s = std::max(boxes[line_box_chain[chainid][i]].w, boxes[line_box_chain[chainid][i]].h);
+
+                if(fabs(s - s_s)/std::min(s, s_s) > 0.5) continue;
+                if((boxes[line_box_chain[chainid][i]].subtype & (2+4)) == 2+4) continue;
+                if(boxes[line_box_chain[chainid][i]].double_line > 0) continue;
+
+                if(cx1 < 0 && cy1 < 0) {
+                    cx1 = boxes[line_box_chain[chainid][i]].cx;
+                    cy1 = boxes[line_box_chain[chainid][i]].cy - boxes[line_box_chain[chainid][i]].h / 2;
+                }
+                cx2 = boxes[line_box_chain[chainid][i]].cx;
+                cy2 = boxes[line_box_chain[chainid][i]].cy + boxes[line_box_chain[chainid][i]].h / 2;
+            }
+            
+            if(cy2 - cy1 < scale) continue;
+            
+            float a = (cx2 - cx1)/(cy2 - cy1);
+            
+            for(int y = (cy1 + cy2)/2; y < cy2 + s_s; y++) {
+                int x = a * (y - cy1) + cx1;
+                int xi = x / scale;
+                int yi = y / scale;
+                if(xi < 0 || yi < 0 || xi >= width || yi >= height) continue;
+                if(lineblocker[yi * width + xi]) break;
+                
                 for(int xp = xi; xp > xi - s_s / scale * scanwidth_next_block; xp--) {
                     if(xp < 0 || xp >= width) continue;
+
                     if(lineblocker[yi * width + xp]) break;
                     int other_chain = chainid_map[yi * width + xp];
                     if(other_chain < 0) continue;
                     if(other_chain == chainid) continue;
                     if(lineparams[other_chain].d == 2) break;
 
-                    if(fabs(lineparams[other_chain].size - lineparams[chainid].size) / (0.5 * (lineparams[chainid].size + lineparams[other_chain].size)) > allow_sizediff) continue;
-                    
+                    if(fabs(lineparams[other_chain].size - lineparams[chainid].size) / std::min(lineparams[chainid].size, lineparams[other_chain].size) > allow_sizediff) continue;
+
                     if(std::find(chain_next[chainid].begin(), chain_next[chainid].end(), other_chain) == chain_next[chainid].end()) {
-                        //fprintf(stderr, "vert %d -> %d\n", chainid, other_chain);
+                        chain_next[chainid].push_back(other_chain);
+                        chain_prev[other_chain].push_back(chainid);
+                        break;
+                    }
+                }
+            }
+            for(int y = (cy1 + cy2)/2; y > cy1 - s_s; y--) {
+                int x = a * (y - cy1) + cx1;
+                int xi = x / scale;
+                int yi = y / scale;
+                if(xi < 0 || yi < 0 || xi >= width || yi >= height) continue;
+                if(lineblocker[yi * width + xi]) break;
+                
+                for(int xp = xi; xp > xi - s_s / scale * scanwidth_next_block; xp--) {
+                    if(xp < 0 || xp >= width) continue;
 
-                        float direction2;
-                        double w2,h2;
-                        float start_cx2, start_cy2, end_cx2, end_cy2;
-                        search_chain(line_box_chain[other_chain], boxes, direction2, w2, h2, start_cx2, start_cy2, end_cx2, end_cy2);
-                        float direction1;
-                        double w1,h1;
-                        float start_cx1, start_cy1, end_cx1, end_cy1;
-                        search_chain(line_box_chain[chainid], boxes, direction1, w1, h1, start_cx1, start_cy1, end_cx1, end_cy1);
+                    if(lineblocker[yi * width + xp]) break;
+                    int other_chain = chainid_map[yi * width + xp];
+                    if(other_chain < 0) continue;
+                    if(other_chain == chainid) continue;
+                    if(lineparams[other_chain].d == 2) break;
 
-                        if(((start_cx1 - std::max(w1,w2)/2) - (start_cx2 + std::max(w1,w2)/2)) < std::max(w1,w2) * allowwidth_next_block) {
-                            chain_next[chainid].push_back(other_chain);
-                            chain_prev[other_chain].push_back(chainid);
-                        }
-                        else {
-                            break;
-                        }
+                    if(fabs(lineparams[other_chain].size - lineparams[chainid].size) / std::min(lineparams[chainid].size, lineparams[other_chain].size) > allow_sizediff) continue;
+
+                    if(std::find(chain_next[chainid].begin(), chain_next[chainid].end(), other_chain) == chain_next[chainid].end()) {
+                        chain_next[chainid].push_back(other_chain);
+                        chain_prev[other_chain].push_back(chainid);
+                        break;
                     }
                 }
             }
@@ -148,33 +217,6 @@ std::vector<std::vector<int>> block_chain_search(
             }
             continue;
         }
-        std::vector<int> stack;
-        for(const auto id: chain_prev[cur_id]) {
-            stack.push_back(id);
-        }
-        std::vector<int> tmp_ids;
-        while(stack.size() > 0) {
-            auto j = stack.back();
-            stack.pop_back();
-
-            if(chain_prev[j].empty()) {
-                    goto next_loop;
-            }
-            if(std::find(chain_root.begin(), chain_root.end(), j) != chain_root.end()) {
-                goto next_loop;
-            }
-
-            if(std::find(tmp_ids.begin(), tmp_ids.end(), j) != tmp_ids.end()) continue;
-            tmp_ids.push_back(j);
-            for(const auto id: chain_prev[j]) {
-                if(std::find(stack.begin(), stack.end(), id) == stack.end()) {
-                    stack.push_back(id);
-                }
-            }
-        }
-        chain_root.push_back(cur_id);
-    next_loop:
-        ;
     }
 
 
@@ -208,164 +250,973 @@ std::vector<std::vector<int>> block_chain_search(
     return block_chain;
 }
 
-// 離れすぎている行をブロックから分離する
-std::vector<std::vector<int>> split_block(
-    int id_max,
-    const std::vector<std::vector<int>> &block_chain,
-    const std::vector<charbox> &boxes,
-    const std::vector<std::vector<int>> &line_box_chain)
+bool rechain_search(
+    std::vector<std::vector<int>> &line_box_chain,
+    std::vector<charbox> &boxes,
+    const std::vector<std::vector<int>> &chain_next,
+    const std::vector<std::vector<int>> &chain_prev)
 {
-    std::vector<float> head_p(id_max);
-    for(int chainid = 0; chainid < id_max; chainid++) {
-        //std::cerr << "chain " << chainid << std::endl;
-        if(line_box_chain[chainid].size() < 2) continue;
-
-        int head_idx = line_box_chain[chainid].front();
-        if ((boxes[head_idx].subtype & 1) == 0) {
-            float cy = 0;
-            int count = 0;
-            for(auto idx: line_box_chain[chainid]) {
-                if((boxes[idx].subtype & (2+4)) == 2+4) continue;
-                cy += boxes[idx].cy;
-                count++;
+    if(std::count_if(chain_next.begin(), chain_next.end(), [](const auto x){ return x.size() > 1; }) > 0) {
+        for(int i = 0; i < chain_next.size(); i++) {
+            if(chain_next[i].size() <= 1) {
+                continue;
             }
-            cy /= std::max(1,count);
-            head_p[chainid] = cy;
-        }
-        else {
-            float cx = 0;
-            int count = 0;
-            for(auto idx: line_box_chain[chainid]) {
-                if((boxes[idx].subtype & (2+4)) == 2+4) continue;
-                cx += boxes[idx].cx;
-                count++;
+            
+            std::vector<int> agg_idx;
+            agg_idx.push_back(i);
+            std::vector<int> tmp;
+            std::copy(chain_next[i].begin(), chain_next[i].end(), std::back_inserter(tmp));
+            while(!tmp.empty()) {
+                int j = tmp.back();
+                tmp.pop_back();
+                if(std::find(agg_idx.begin(), agg_idx.end(), j) == agg_idx.end()) {
+                    agg_idx.push_back(j);
+                    std::copy(chain_next[j].begin(), chain_next[j].end(), std::back_inserter(tmp));
+                }
             }
-            cx /= std::max(1,count);
-            head_p[chainid] = cx;
+            
+            std::sort(agg_idx.begin(), agg_idx.end());
+            agg_idx.erase(std::unique(agg_idx.begin(), agg_idx.end()), agg_idx.end());
+            for(int j = 0; j < agg_idx.size(); j++) {
+                for(int k = 0; k < agg_idx.size(); k++) {
+                    if (j == k) continue;
+                    int n = agg_idx[j];
+                    int m = agg_idx[k];
+                    int n_i = line_box_chain[n].front();
+                    int m_i = line_box_chain[m].front();
+                    float size = 0.0f;
+                    size = std::transform_reduce(
+                        line_box_chain[n].begin(),
+                        line_box_chain[n].end(),
+                        size,
+                        [&](float acc, float i) { return std::max(acc, i); },
+                        [&](int x) { return std::max(boxes[x].w,boxes[x].h); });
+                    size = std::transform_reduce(
+                        line_box_chain[m].begin(),
+                        line_box_chain[m].end(),
+                        size,
+                        [&](float acc, float i) { return std::max(acc, i); },
+                        [&](int x) { return std::max(boxes[x].w,boxes[x].h); });
+                    if((boxes[n_i].subtype & 1) == (boxes[m_i].subtype & 1)) {
+                        if((boxes[n_i].subtype & 1) == 0) {
+                            // 横書き
+                            if(boxes[line_box_chain[n].back()].cx < boxes[line_box_chain[m].front()].cx && fabs(boxes[line_box_chain[n].back()].cy - boxes[line_box_chain[m].front()].cy) < size) {
+                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
+                                line_box_chain[m].clear();
+                                return false;
+                            }
+                            if(boxes[line_box_chain[m].back()].cx < boxes[line_box_chain[n].front()].cx && fabs(boxes[line_box_chain[m].back()].cy - boxes[line_box_chain[n].front()].cy) < size) {
+                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
+                                line_box_chain[n].clear();
+                                return false;
+                            }
+                        }
+                        else {
+                            // 縦書き
+                            if(boxes[line_box_chain[n].back()].cy < boxes[line_box_chain[m].front()].cy && fabs(boxes[line_box_chain[n].back()].cx - boxes[line_box_chain[m].front()].cx) < size) {
+                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
+                                line_box_chain[m].clear();
+                                return false;
+                            }
+                            if(boxes[line_box_chain[m].back()].cy < boxes[line_box_chain[n].front()].cy && fabs(boxes[line_box_chain[m].back()].cx - boxes[line_box_chain[n].front()].cx) < size) {
+                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
+                                line_box_chain[n].clear();
+                                return false;
+                            }
+                        }
+                    }
+                    else if (line_box_chain[n].size() < 2) {
+                        if((boxes[m_i].subtype & 1) == 0) {
+                            // 横書き
+                            if(boxes[line_box_chain[n].back()].cx < boxes[line_box_chain[m].front()].cx && fabs(boxes[line_box_chain[n].back()].cy - boxes[line_box_chain[m].front()].cy) < size) {
+                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
+                                line_box_chain[m].clear();
+                                return false;
+                            }
+                            if(boxes[line_box_chain[m].back()].cx < boxes[line_box_chain[n].front()].cx && fabs(boxes[line_box_chain[m].back()].cy - boxes[line_box_chain[n].front()].cy) < size) {
+                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
+                                line_box_chain[n].clear();
+                                return false;
+                            }
+                        }
+                        else {
+                            // 縦書き
+                            if(boxes[line_box_chain[n].back()].cy < boxes[line_box_chain[m].front()].cy && fabs(boxes[line_box_chain[n].back()].cx - boxes[line_box_chain[m].front()].cx) < size) {
+                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
+                                line_box_chain[m].clear();
+                                return false;
+                            }
+                            if(boxes[line_box_chain[m].back()].cy < boxes[line_box_chain[n].front()].cy && fabs(boxes[line_box_chain[m].back()].cx - boxes[line_box_chain[n].front()].cx) < size) {
+                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
+                                line_box_chain[n].clear();
+                                return false;
+                            }
+                        }
+                    }
+                    else if (line_box_chain[m].size() < 2) {
+                        if((boxes[n_i].subtype & 1) == 0) {
+                            // 横書き
+                            if(boxes[line_box_chain[n].back()].cx < boxes[line_box_chain[m].front()].cx && fabs(boxes[line_box_chain[n].back()].cy - boxes[line_box_chain[m].front()].cy) < size) {
+                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
+                                line_box_chain[m].clear();
+                                return false;
+                            }
+                            if(boxes[line_box_chain[m].back()].cx < boxes[line_box_chain[n].front()].cx && fabs(boxes[line_box_chain[m].back()].cy - boxes[line_box_chain[n].front()].cy) < size) {
+                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
+                                line_box_chain[n].clear();
+                                return false;
+                            }
+                        }
+                        else {
+                            // 縦書き
+                            if(boxes[line_box_chain[n].back()].cy < boxes[line_box_chain[m].front()].cy && fabs(boxes[line_box_chain[n].back()].cx - boxes[line_box_chain[m].front()].cx) < size) {
+                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
+                                line_box_chain[m].clear();
+                                return false;
+                            }
+                            if(boxes[line_box_chain[m].back()].cy < boxes[line_box_chain[n].front()].cy && fabs(boxes[line_box_chain[m].back()].cx - boxes[line_box_chain[n].front()].cx) < size) {
+                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
+                                line_box_chain[n].clear();
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
-
-    std::vector<std::vector<int>> block_chain_result;
-    for(auto block: block_chain) {
-        if (block.size() < 4) {
-            block_chain_result.push_back(block);
-            continue;
-        }
-        // std::cerr << block_chain_result.size() << std::endl;
-
-        std::vector<float> block_head;
-        for(auto i: block) {
-            block_head.push_back(head_p[i]);
-        }
-
-        std::vector<float> head_diff;
-        for(int i = 0; i < block_head.size() - 1; i++) {
-            head_diff.push_back(fabs(block_head[i+1] - block_head[i]));
-        }
-
-        float mean_diff = std::reduce(head_diff.begin(), head_diff.end()) / head_diff.size();
-        std::vector<int> break_point;
-        for(int i = 1; i < block.size(); i++) {
-            // std::cerr << head_diff[i-1] << "," << mean_diff * 2.5 << "," << block_head[i-1] << std::endl;
-            if(head_diff[i-1] > mean_diff * 2.5) {
-                // std::cerr << "break" << std::endl;
-                break_point.push_back(i);
+    
+    if(std::count_if(chain_prev.begin(), chain_prev.end(), [](const auto x){ return x.size() > 1; }) > 0) {
+        for(int i = 0; i < chain_prev.size(); i++) {
+            if(chain_prev[i].size() <= 1) {
+                continue;
+            }
+            
+            std::vector<int> agg_idx;
+            agg_idx.push_back(i);
+            std::vector<int> tmp;
+            std::copy(chain_prev[i].begin(), chain_prev[i].end(), std::back_inserter(tmp));
+            while(!tmp.empty()) {
+                int j = tmp.back();
+                tmp.pop_back();
+                if(std::find(agg_idx.begin(), agg_idx.end(), j) == agg_idx.end()) {
+                    agg_idx.push_back(j);
+                    std::copy(chain_prev[j].begin(), chain_prev[j].end(), std::back_inserter(tmp));
+                }
+            }
+            
+            std::sort(agg_idx.begin(), agg_idx.end());
+            agg_idx.erase(std::unique(agg_idx.begin(), agg_idx.end()), agg_idx.end());
+            for(int j = 0; j < agg_idx.size(); j++) {
+                for(int k = 0; k < agg_idx.size(); k++) {
+                    if (j == k) continue;
+                    int n = agg_idx[j];
+                    int m = agg_idx[k];
+                    int n_i = line_box_chain[n].front();
+                    int m_i = line_box_chain[m].front();
+                    float size = 0.0f;
+                    size = std::transform_reduce(
+                        line_box_chain[n].begin(),
+                        line_box_chain[n].end(),
+                        size,
+                        [&](float acc, float i) { return std::max(acc, i); },
+                        [&](int x) { return std::max(boxes[x].w,boxes[x].h); });
+                    size = std::transform_reduce(
+                        line_box_chain[m].begin(),
+                        line_box_chain[m].end(),
+                        size,
+                        [&](float acc, float i) { return std::max(acc, i); },
+                        [&](int x) { return std::max(boxes[x].w,boxes[x].h); });
+                    if((boxes[n_i].subtype & 1) == (boxes[m_i].subtype & 1)) {
+                        if((boxes[n_i].subtype & 1) == 0) {
+                            // 横書き
+                            if(boxes[line_box_chain[n].back()].cx < boxes[line_box_chain[m].front()].cx && fabs(boxes[line_box_chain[n].back()].cy - boxes[line_box_chain[m].front()].cy) < size) {
+                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
+                                line_box_chain[m].clear();
+                                return false;
+                            }
+                            if(boxes[line_box_chain[m].back()].cx < boxes[line_box_chain[n].front()].cx && fabs(boxes[line_box_chain[m].back()].cy - boxes[line_box_chain[n].front()].cy) < size) {
+                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
+                                line_box_chain[n].clear();
+                                return false;
+                            }
+                        }
+                        else {
+                            // 縦書き
+                            if(boxes[line_box_chain[n].back()].cy < boxes[line_box_chain[m].front()].cy && fabs(boxes[line_box_chain[n].back()].cx - boxes[line_box_chain[m].front()].cx) < size) {
+                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
+                                line_box_chain[m].clear();
+                                return false;
+                            }
+                            if(boxes[line_box_chain[m].back()].cy < boxes[line_box_chain[n].front()].cy && fabs(boxes[line_box_chain[m].back()].cx - boxes[line_box_chain[n].front()].cx) < size) {
+                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
+                                line_box_chain[n].clear();
+                                return false;
+                            }
+                        }
+                    }
+                    else if (line_box_chain[n].size() < 2) {
+                        if((boxes[m_i].subtype & 1) == 0) {
+                            // 横書き
+                            if(boxes[line_box_chain[n].back()].cx < boxes[line_box_chain[m].front()].cx && fabs(boxes[line_box_chain[n].back()].cy - boxes[line_box_chain[m].front()].cy) < size) {
+                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
+                                line_box_chain[m].clear();
+                                return false;
+                            }
+                            if(boxes[line_box_chain[m].back()].cx < boxes[line_box_chain[n].front()].cx && fabs(boxes[line_box_chain[m].back()].cy - boxes[line_box_chain[n].front()].cy) < size) {
+                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
+                                line_box_chain[n].clear();
+                                return false;
+                            }
+                        }
+                        else {
+                            // 縦書き
+                            if(boxes[line_box_chain[n].back()].cy < boxes[line_box_chain[m].front()].cy && fabs(boxes[line_box_chain[n].back()].cx - boxes[line_box_chain[m].front()].cx) < size) {
+                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
+                                line_box_chain[m].clear();
+                                return false;
+                            }
+                            if(boxes[line_box_chain[m].back()].cy < boxes[line_box_chain[n].front()].cy && fabs(boxes[line_box_chain[m].back()].cx - boxes[line_box_chain[n].front()].cx) < size) {
+                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
+                                line_box_chain[n].clear();
+                                return false;
+                            }
+                        }
+                    }
+                    else if (line_box_chain[m].size() < 2) {
+                        if((boxes[n_i].subtype & 1) == 0) {
+                            // 横書き
+                            if(boxes[line_box_chain[n].back()].cx < boxes[line_box_chain[m].front()].cx && fabs(boxes[line_box_chain[n].back()].cy - boxes[line_box_chain[m].front()].cy) < size) {
+                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
+                                line_box_chain[m].clear();
+                                return false;
+                            }
+                            if(boxes[line_box_chain[m].back()].cx < boxes[line_box_chain[n].front()].cx && fabs(boxes[line_box_chain[m].back()].cy - boxes[line_box_chain[n].front()].cy) < size) {
+                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
+                                line_box_chain[n].clear();
+                                return false;
+                            }
+                        }
+                        else {
+                            // 縦書き
+                            if(boxes[line_box_chain[n].back()].cy < boxes[line_box_chain[m].front()].cy && fabs(boxes[line_box_chain[n].back()].cx - boxes[line_box_chain[m].front()].cx) < size) {
+                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
+                                line_box_chain[m].clear();
+                                return false;
+                            }
+                            if(boxes[line_box_chain[m].back()].cy < boxes[line_box_chain[n].front()].cy && fabs(boxes[line_box_chain[m].back()].cx - boxes[line_box_chain[n].front()].cx) < size) {
+                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
+                                line_box_chain[n].clear();
+                                return false;
+                            }
+                        }
+                    }
+                }
             }
         }
-        int start = 0;
-        for(int i = 0; i < break_point.size(); i++) {
-            std::vector<int> half(block.begin() + start, block.begin() + break_point[i]);
-            start = break_point[i];
-            block_chain_result.push_back(half);
-        }
-        std::vector<int> remain(block.begin() + start, block.end());
-        block_chain_result.push_back(remain);
     }
-
-    return block_chain_result;
+    
+    return true;
 }
 
-// ブロックの形成
-void make_block(
+// 行の順番に番号を振り直す
+int renumber_id(
     int id_max,
-    std::vector<charbox> &boxes,
-    const std::vector<bool> &lineblocker)
+    std::vector<charbox> &boxes)
 {
-    std::vector<std::vector<int>> chain_next(id_max, std::vector<int>());
-    std::vector<std::vector<int>> chain_prev(id_max, std::vector<int>());
+    struct lineparam {
+        int d;
+        float cx1;
+        float cy1;
+        float cx2;
+        float cy2;
+        int count;
+        float size;
+        int section;
+        int secidx;
+        int doubleline1;
+        int doubleline2;
+        int doubleline;
+    };
 
-    std::vector<std::vector<int>> line_box_chain(id_max, std::vector<int>());
-
-    std::vector<lineparam> lineparams(id_max);
-    for(const auto &box: boxes) {
+    std::cerr << "renumber id" << std::endl;
+    std::vector<lineparam> lineparams;
+    std::vector<int> chain_remap;
+    lineparams.resize(id_max);
+    int major_direction = 0;
+    for(auto &box: boxes) {
         if(box.idx < 0) continue;
+        if(std::find(chain_remap.begin(), chain_remap.end(), box.idx) == chain_remap.end()) {
+            chain_remap.push_back(box.idx);
+        }
+
         if((box.subtype & (2+4)) == 2+4) continue;
         if((box.subtype & 32) == 32) continue;
-
-        line_box_chain[box.idx].push_back(box.id);
-        lineparams[box.idx].size = std::max(lineparams[box.idx].size, std::max(box.w, box.h));
         if((box.subtype & 1) == 0) {
             // 横書き
-            if(line_box_chain[box.idx].size() > 1) {
-                lineparams[box.idx].d = 2;
+            lineparams[box.idx].d = 0;
+            major_direction++;
+            if(lineparams[box.idx].count == 0 || box.cx - box.w/2 < lineparams[box.idx].cx1) {
+                lineparams[box.idx].cx1 = box.cx - box.w/2;
             }
-            else {
-                lineparams[box.idx].d = 0;
+            if(lineparams[box.idx].count == 0 || box.cy - box.h/2 < lineparams[box.idx].cy1) {
+                lineparams[box.idx].cy1 = box.cy - box.h/2;
             }
+            if(lineparams[box.idx].count == 0 || box.cx + box.w/2 > lineparams[box.idx].cx2) {
+                lineparams[box.idx].cx2 = box.cx + box.w/2;
+            }
+            if(lineparams[box.idx].count == 0 || box.cy + box.h/2 > lineparams[box.idx].cy2) {
+                lineparams[box.idx].cy2 = box.cy + box.h/2;
+            }
+            if (box.double_line == 1) {
+                lineparams[box.idx].doubleline1++;
+            }
+            else if (box.double_line == 2) {
+                lineparams[box.idx].doubleline2++;
+            }
+            lineparams[box.idx].size = std::max(lineparams[box.idx].size, std::max(box.w, box.h));
         }
         else {
             // 縦書き
-            if(line_box_chain[box.idx].size() > 1) {
-                lineparams[box.idx].d = 1;
+            lineparams[box.idx].d = 1;
+            major_direction--;
+            if(lineparams[box.idx].count == 0 || box.cx - box.w/2 < lineparams[box.idx].cx1) {
+                lineparams[box.idx].cx1 = box.cx - box.w/2;
             }
-            else {
-                lineparams[box.idx].d = 0;
+            if(lineparams[box.idx].count == 0 || box.cy - box.h/2 < lineparams[box.idx].cy1) {
+                lineparams[box.idx].cy1 = box.cy - box.h/2;
             }
+            if(lineparams[box.idx].count == 0 || box.cx + box.w/2 > lineparams[box.idx].cx2) {
+                lineparams[box.idx].cx2 = box.cx + box.w/2;
+            }
+            if(lineparams[box.idx].count == 0 || box.cy + box.h/2 > lineparams[box.idx].cy2) {
+                lineparams[box.idx].cy2 = box.cy + box.h/2;
+            }
+            if (box.double_line == 1) {
+                lineparams[box.idx].doubleline1++;
+            }
+            else if (box.double_line == 2) {
+                lineparams[box.idx].doubleline2++;
+            }
+            lineparams[box.idx].size = std::max(lineparams[box.idx].size, std::max(box.w, box.h));
         }
+        lineparams[box.idx].count++;
     }
-
-    for(auto &chain: line_box_chain) {
-        int count = 0;
-        int count1 = 0;
-        int count2 = 0;
-        int chainid = -1;
-        if (chain.size() == 0) continue;
-        for(auto boxid: chain) {
-            chainid = boxes[boxid].idx;
-            if(chainid < 0) continue;
-            if(boxes[boxid].double_line == 0) {
-                if(count1 > 1 || count2 > 1) {
-                    count++;
-                }
-                count1 = count2 = 0;
-            }
-            if(boxes[boxid].double_line == 1) {
-                count1++;
-            }
-            if(boxes[boxid].double_line == 2) {
-                count2++;
+    for(auto &p: lineparams) {
+        if(p.doubleline1 > p.doubleline2) {
+            if(p.doubleline1 > p.count / 2) {
+                p.doubleline = 1;
             }
         }
-        if(count1 > 1 || count2 > 1) {
-            count++;
+        else {
+            if(p.doubleline2 > p.count / 2) {
+                p.doubleline = 2;
+            }
         }
-        lineparams[chainid].doubleline = count;
-        sort_chain(chain, boxes);
+        if(p.count == 1) {
+            p.d = (major_direction >= 0)? 0: 1;
+        }
     }
     
-    std::vector<int> chainid_map = create_chainid_map(boxes, line_box_chain, lineblocker, 1.5, 1);
+    {
+        std::sort(chain_remap.begin(), chain_remap.end());
+        // 横書きを優先する
+        auto it3 = std::partition(chain_remap.begin(), chain_remap.end(), [&](const auto x){
+            return lineparams[x].d == 0;
+        });
+        // 横書き
+        int section = 0;
+        auto it1 = chain_remap.begin();
+        auto it2 = it3;
+        while(it1 != it2) {
+            std::sort(it1, it2, [&](const auto a, const auto b){
+                // 上を先に
+                return lineparams[a].cy1 < lineparams[b].cy1;
+            });
+            // x方向にほぼ完全に重なっているブロックを探索する
+            float cx1 = lineparams[*it1].cx1;
+            float cx2 = lineparams[*it1].cx2;
+            auto it4 = std::partition(it1, it2, [&](const auto x){
+                return std::min(cx2, lineparams[x].cx2) - std::max(cx1, lineparams[x].cx1) > (cx2 - cx1) * 0.75;
+            });
+            // xで重なっているブロックはいない
+            if(it4 == it1) {
+                ++it1;
+                continue;
+            }
+            // これらのブロックのyの範囲を探索
+            float cy1 = lineparams[*it1].cy1;
+            float cy2 = lineparams[*it1].cy2;
+            for(auto it5 = it1; it5 != it4; ++it5) {
+                cy1 = std::min(cy1, lineparams[*it5].cy1 - lineparams[*it5].size * float(allowwidth_next_block));
+                cy2 = std::max(cy2, lineparams[*it5].cy2 + lineparams[*it5].size * float(allowwidth_next_block));
+            }
+            // このブロックにy座標が含まれるブロックを検索
+            auto it5 = std::partition(it1, it2, [&](const auto x){
+                return lineparams[x].cy1 <= cy2 && lineparams[x].cy2 >= cy1;
+            });
+            auto it52 = it5;
+            do {
+                it52 = it5;
+                // これらのブロックのyの範囲を探索
+                for(auto it53 = it1; it53 != it5; ++it53) {
+                    cy1 = std::min(cy1, lineparams[*it53].cy1 - lineparams[*it53].size * float(allowwidth_next_block));
+                    cy2 = std::max(cy2, lineparams[*it53].cy2 + lineparams[*it53].size * float(allowwidth_next_block));
+                }
+                // このブロックにy座標が含まれるブロックを検索
+                it5 = std::partition(it1, it2, [&](const auto x){
+                    return lineparams[x].cy1 < cy2 && lineparams[x].cy2 > cy1;
+                });
+            } while(it52 != it5);
+            if(it5 == it1) {
+                ++it1;
+                continue;
+            }
+            // 含まれているブロック内で検索
+            std::vector<std::pair<float,float>> section_param;
+            auto it6 = it1;
+            while(it6 != it5) {
+                std::sort(it6, it5, [&](const auto a, const auto b){
+                    // 上を先に
+                    return lineparams[a].cy1 < lineparams[b].cy1;
+                });
+                cy1 = lineparams[*it6].cy1;
+                cy2 = lineparams[*it6].cy2;
+                // y方向に重なっている行を探索
+                auto it7 = std::partition(it6, it5, [&](const auto x){
+                    return std::min(cy2, lineparams[x].cy2) - std::max(cy1, lineparams[x].cy1) > 0;
+                });
+                if(it7 == it6) {
+                    lineparams[*it6].section = section;
+                    ++it6;
+                    continue;
+                }
+                else if(std::distance(it6, it7) > 1) {
+                    // yで重なっている行を左からソート
+                    std::sort(it6, it7, [&](const auto a, const auto b){
+                        // 左を先に
+                        return lineparams[a].cx1 < lineparams[b].cx1;
+                    });
+                    if(section_param.empty()) {
+                        // 段を追加
+                        section_param.emplace_back(lineparams[*it6].cx1, lineparams[*it6].cx2);
+                    }
+                    for(auto it8 = it6; it8 != it7; ++it8) {
+                        bool found = false;
+                        for(int s = 0; s < section_param.size(); s++) {
+                            // 横に重なっている
+                            if (std::min(section_param[s].second, lineparams[*it8].cx2) - std::max(section_param[s].first, lineparams[*it8].cx1) > 0) {
+                                lineparams[*it8].section = section + s;
+                                section_param[s].first = std::min(section_param[s].first, lineparams[*it8].cx1);
+                                section_param[s].second = std::max(section_param[s].second, lineparams[*it8].cx2);
+                                found = true;
+                                break;
+                            }
+                        }
+                        if(!found) {
+                            // 段を追加
+                            int s = (int)section_param.size();
+                            lineparams[*it8].section = section + s;
+                            section_param.emplace_back(lineparams[*it8].cx1, lineparams[*it8].cx2);
+                        }
+                    }
+                }
+                else {
+                    if(section_param.empty()) {
+                        // 段を追加
+                        section_param.emplace_back(lineparams[*it6].cx1, lineparams[*it6].cx2);
+                        section++;
+                        lineparams[*it6].section = section;
+                    }
+                    else {
+                        bool found = false;
+                        for(int s = 0; s < section_param.size(); s++) {
+                            // 横に重なっている
+                            if (std::min(section_param[s].second, lineparams[*it6].cx2) - std::max(section_param[s].first, lineparams[*it6].cx1) > 0) {
+                                lineparams[*it6].section = section + s;
+                                section_param[s].first = std::min(section_param[s].first, lineparams[*it6].cx1);
+                                section_param[s].second = std::max(section_param[s].second, lineparams[*it6].cx2);
+                                found = true;
+                                break;
+                            }
+                        }
+                        if(!found) {
+                            // 段を消す
+                            section += (int)section_param.size();
+                            section_param.clear();
+                            lineparams[*it6].section = section;
+                        }
+                    }
+                }
+                it6 = it7;
+            }
+            // 表か段組かを判定する
+            // 段組なら、縦書きなので右端が一致しているはず
+            std::vector<float> sec_bottom(section+1+section_param.size());
+            for(auto cit = it1; cit != it5; ++cit) {
+                int s = lineparams[*cit].section;
+                sec_bottom[s] = std::max(sec_bottom[s], lineparams[*cit].cy2);
+            }
+            std::vector<float> valid_sec_bottom;
+            std::copy_if(sec_bottom.begin(), sec_bottom.end(), std::back_inserter(valid_sec_bottom), [](auto x) { return x > 0; });
+            if(valid_sec_bottom.size() > 1) {
+                float s = lineparams[*it1].size * 2;
+                float b = std::reduce(valid_sec_bottom.begin(), valid_sec_bottom.end(), 0.0f, [](auto acc, auto x){ return std::max(acc, x); });
+                int c = (int)std::count_if(valid_sec_bottom.begin(), valid_sec_bottom.end(), [b,s](auto x){ return fabs(b-x)<s*2; });
+                
+                if(c > 1) {
+                    // 多分段組
+                    std::sort(it1, it5, [&](const auto a, const auto b){
+                        // 上を先に
+                        return lineparams[a].cy1 < lineparams[b].cy1;
+                    });
+                    std::stable_sort(it1, it5, [&](const auto a, const auto b){
+                        // 段の順にソートする
+                        return lineparams[a].section < lineparams[b].section;
+                    });
+                    for(auto ait = it1; ait != it5; ++ait) {
+                        lineparams[*ait].secidx = lineparams[*ait].section;
+                    }
+                }
+                else {
+                    // 多分表が混ざっている
+                    std::sort(it1, it5, [&](const auto a, const auto b){
+                        // 段の順にソートする
+                        return lineparams[a].section < lineparams[b].section;
+                    });
+                    int secidx = lineparams[*it1].section;
+                    auto it8 = it1;
+                    while(it8 != it5) {
+                        // 最初の段でまずソート
+                        auto it7 = std::partition(it8, it5, [&](const auto x){
+                            return lineparams[*it8].section == lineparams[x].section;
+                        });
+                        std::sort(it8, it7, [&](const auto a, const auto b){
+                            // 上を先に
+                            return lineparams[a].cy1 < lineparams[b].cy1;
+                        });
+                        if(lineparams[*it8].section > secidx) {
+                            for(; it8 != it7; ++it8) {
+                                // yに重なっている、いっこ上の段があるはず
+                                auto it9 = std::find_if(it1, it8, [&](const auto x) {
+                                    return lineparams[*it8].section == lineparams[x].section + 1 && std::min(lineparams[*it8].cy2, lineparams[x].cy2) - std::max(lineparams[*it8].cy1, lineparams[x].cy1) > 0;
+                                });
+                                if (it9 == it8) {
+                                    // ないので末尾に足す
+                                }
+                                else {
+                                    // その後ろに追加する
+                                    auto tmp = *it8;
+                                    std::copy_backward(it9+1, it8, it8+1);
+                                    *(it9+1) = tmp;
+                                }
+                            }
+                        }
+                        else {
+                            it8 = it7;
+                        }
+                    }
+                    for(auto ait = it1; ait != it5; ++ait) {
+                        lineparams[*ait].secidx = secidx;
+                    }
+                }
+            }
+            else {
+                // 普通に上からソート
+                std::sort(it1, it5, [&](const auto a, const auto b){
+                    // 上を先に
+                    return lineparams[a].cy1 < lineparams[b].cy1;
+                });
+                for(auto ait = it1; ait != it5; ++ait) {
+                    lineparams[*ait].secidx = lineparams[*ait].section;
+                }
+            }
+            
+            section += section_param.size();
+            section_param.clear();
+            it1 = it5;
+        }
+        it1 = it3;
+        it2 = chain_remap.end();
+        // 縦書き
+        while(it1 != it2) {
+            std::sort(it1, it2, [&](const auto a, const auto b){
+                // 右を先に
+                return lineparams[a].cx2 > lineparams[b].cx2;
+            });
+            // y方向にほぼ完全に重なっているブロックを探索する
+            float cy1 = lineparams[*it1].cy1;
+            float cy2 = lineparams[*it1].cy2;
+            auto it4 = std::partition(it1, it2, [&](const auto x){
+                return std::min(cy2, lineparams[x].cy2) - std::max(cy1, lineparams[x].cy1) > (cy2 - cy1) * 0.75;
+            });
+            // yで重なっているブロックはいない
+            if(it4 == it1) {
+                ++it1;
+                continue;
+            }
+            // これらのブロックのxの範囲を探索
+            float cx1 = lineparams[*it1].cx1;
+            float cx2 = lineparams[*it1].cx2;
+            for(auto it5 = it1; it5 != it4; ++it5) {
+                cx1 = std::min(cx1, lineparams[*it5].cx1 - lineparams[*it5].size * float(allowwidth_next_block));
+                cx2 = std::max(cx2, lineparams[*it5].cx2 + lineparams[*it5].size * float(allowwidth_next_block));
+            }
+            // このブロックにx座標が含まれるブロックを検索
+            auto it5 = std::partition(it1, it2, [&](const auto x){
+                return lineparams[x].cx1 <= cx2 && lineparams[x].cx2 >= cx1;
+            });
+            auto it52 = it5;
+            do {
+                it52 = it5;
+                // これらのブロックのxの範囲を探索
+                for(auto it53 = it1; it53 != it5; ++it53) {
+                    cx1 = std::min(cx1, lineparams[*it53].cx1 - lineparams[*it53].size * float(allowwidth_next_block));
+                    cx2 = std::max(cx2, lineparams[*it53].cx2 + lineparams[*it53].size * float(allowwidth_next_block));
+                }
+                // このブロックにx座標が含まれるブロックを検索
+                it5 = std::partition(it1, it2, [&](const auto x){
+                    return lineparams[x].cx1 < cx2 && lineparams[x].cx2 > cx1;
+                });
+            } while(it52 != it5);
+            if(it5 == it1) {
+                ++it1;
+                continue;
+            }
+            // 含まれているブロック内で検索
+            std::vector<std::pair<float,float>> section_param;
+            auto it6 = it1;
+            while(it6 != it5) {
+                std::sort(it6, it5, [&](const auto a, const auto b){
+                    // 右を先に
+                    return lineparams[a].cx2 > lineparams[b].cx2;
+                });
+                cx1 = lineparams[*it6].cx1;
+                cx2 = lineparams[*it6].cx2;
+                // x方向に重なっている行を探索
+                auto it7 = std::partition(it6, it5, [&](const auto x){
+                    return std::min(cx2, lineparams[x].cx2) - std::max(cx1, lineparams[x].cx1) > 0;
+                });
+                if(it7 == it6) {
+                    ++it6;
+                    lineparams[*it6].section = section;
+                    continue;
+                }
+                if(std::distance(it6, it7) > 1) {
+                    // xで重なっている行を上からソート
+                    std::sort(it6, it7, [&](const auto a, const auto b){
+                        // 上を先に
+                        return lineparams[a].cy1 < lineparams[b].cy1;
+                    });
+                    if(section_param.empty()) {
+                        // 段を追加
+                        section_param.emplace_back(lineparams[*it6].cy1, lineparams[*it6].cy2);
+                        section++;
+                    }
+                    for(auto it8 = it6; it8 != it7; ++it8) {
+                        bool found = false;
+                        for(int s = 0; s < section_param.size(); s++) {
+                            // 縦に重なっている
+                            if (std::min(section_param[s].second, lineparams[*it8].cy2) - std::max(section_param[s].first, lineparams[*it8].cy1) > 0) {
+                                lineparams[*it8].section = section + s;
+                                section_param[s].first = std::min(section_param[s].first, lineparams[*it8].cy1);
+                                section_param[s].second = std::max(section_param[s].second, lineparams[*it8].cy2);
+                                found = true;
+                                break;
+                            }
+                        }
+                        if(!found) {
+                            // 段を追加
+                            int s = (int)section_param.size();
+                            lineparams[*it8].section = section + s;
+                            section_param.emplace_back(lineparams[*it8].cy1, lineparams[*it8].cy2);
+                        }
+                    }
+                }
+                else {
+                    if(section_param.empty()) {
+                        // 段を追加
+                        section_param.emplace_back(lineparams[*it6].cy1, lineparams[*it6].cy2);
+                        section++;
+                        lineparams[*it6].section = section;
+                    }
+                    else {
+                        bool found = false;
+                        for(int s = 0; s < section_param.size(); s++) {
+                            if (std::min(section_param[s].second, lineparams[*it6].cy2) - std::max(section_param[s].first, lineparams[*it6].cy1) > 0) {
+                                lineparams[*it6].section = section + s;
+                                section_param[s].first = std::min(section_param[s].first, lineparams[*it6].cy1);
+                                section_param[s].second = std::max(section_param[s].second, lineparams[*it6].cy2);
+                                found = true;
+                                break;
+                            }
+                        }
+                        if(!found) {
+                            // 段を消す
+                            section += (int)section_param.size();
+                            section_param.clear();
+                            lineparams[*it6].section = section;
+                        }
+                    }
+                }
+                it6 = it7;
+            }
+            
+            // 表か段組かを判定する
+            // 段組なら、縦書きなので右端が一致しているはず
+            std::vector<float> sec_right(section+1+section_param.size());
+            for(auto cit = it1; cit != it5; ++cit) {
+                int s = lineparams[*cit].section;
+                sec_right[s] = std::max(sec_right[s], lineparams[*cit].cx2);
+            }
+            std::vector<float> valid_sec_right;
+            std::copy_if(sec_right.begin(), sec_right.end(), std::back_inserter(valid_sec_right), [](auto x) { return x > 0; });
+            if(valid_sec_right.size() > 1) {
+                float s = lineparams[*it1].size * 2;
+                float r = std::reduce(valid_sec_right.begin(), valid_sec_right.end(), 0.0f, [](auto acc, auto x){ return std::max(acc, x); });
+                int c = (int)std::count_if(valid_sec_right.begin(), valid_sec_right.end(), [r,s](auto x){ return fabs(r-x)<s*2; });
+                
+                if(c > 1) {
+                    // 多分段組
+                    std::sort(it1, it5, [&](const auto a, const auto b){
+                        // 右を先に
+                        return lineparams[a].cx2 > lineparams[b].cx2;
+                    });
+                    std::stable_sort(it1, it5, [&](const auto a, const auto b){
+                        // 段の順にソートする
+                        return lineparams[a].section < lineparams[b].section;
+                    });
+                    for(auto ait = it1; ait != it5; ++ait) {
+                        lineparams[*ait].secidx = lineparams[*ait].section;
+                    }
+                }
+                else {
+                    // 多分表が混ざっている
+                    std::sort(it1, it5, [&](const auto a, const auto b){
+                        // 段の順にソートする
+                        return lineparams[a].section < lineparams[b].section;
+                    });
+                    int secidx = lineparams[*it1].section;
+                    auto it8 = it1;
+                    while(it8 != it5) {
+                        // 最初の段でまずソート
+                        auto it7 = std::partition(it8, it5, [&](const auto x){
+                            return lineparams[*it8].section == lineparams[x].section;
+                        });
+                        std::sort(it8, it7, [&](const auto a, const auto b){
+                            // 右を先に
+                            return lineparams[a].cx2 > lineparams[b].cx2;
+                        });
+                        if(lineparams[*it8].section > secidx) {
+                            for(; it8 != it7; ++it8) {
+                                // xに重なっている、いっこ上の段があるはず
+                                auto it9 = std::find_if(it1, it8, [&](const auto x) {
+                                    return lineparams[*it8].section == lineparams[x].section + 1 && std::min(lineparams[*it8].cx2, lineparams[x].cx2) - std::max(lineparams[*it8].cx1, lineparams[x].cx1) > 0;
+                                });
+                                if (it9 == it8) {
+                                    // ないので末尾に足す
+                                }
+                                else {
+                                    // その後ろに追加する
+                                    auto tmp = *it8;
+                                    std::copy_backward(it9+1, it8, it8+1);
+                                    *(it9+1) = tmp;
+                                }
+                            }
+                        }
+                        else {
+                            it8 = it7;
+                        }
+                    }
+                    for(auto ait = it1; ait != it5; ++ait) {
+                        lineparams[*ait].secidx = secidx;
+                    }
+                }
+            }
+            else {
+                // 普通に右からソート
+                std::sort(it1, it5, [&](const auto a, const auto b){
+                    // 右を先に
+                    return lineparams[a].cx2 > lineparams[b].cx2;
+                });
+                for(auto ait = it1; ait != it5; ++ait) {
+                    lineparams[*ait].secidx = lineparams[*ait].section;
+                }
+            }
+            
+            section += section_param.size();
+            section_param.clear();
+            it1 = it5;
+        }
+    }
+    
+    for(auto &box: boxes) {
+        if(box.idx < 0) continue;
+        auto it = std::find(chain_remap.begin(), chain_remap.end(), box.idx);
+        assert(it != chain_remap.end());
+        int id = (int)std::distance(chain_remap.begin(), it);
+        box.idx = id;
+        box.section = lineparams[*it].secidx;
+    }
+    return int(chain_remap.size());
+}
 
-    process_line(id_max, boxes, chain_next, chain_prev, chainid_map, line_box_chain, lineparams, lineblocker);
+int renumber_chain(std::vector<charbox> &boxes);
 
+// ブロックの形成
+void make_block(
+    std::vector<charbox> &boxes,
+    const std::vector<bool> &lineblocker)
+{
+    int id_max;
+    std::vector<std::vector<int>> chain_next;
+    std::vector<std::vector<int>> chain_prev;
+    std::vector<std::vector<int>> line_box_chain;
+    while(true) {
+        id_max = renumber_chain(boxes);
+        id_max = renumber_id(id_max, boxes);
+
+        chain_next.clear();
+        chain_prev.clear();
+        chain_next.resize(id_max);
+        chain_prev.resize(id_max);
+        line_box_chain.clear();
+        line_box_chain.resize(id_max);
+
+        std::vector<lineparam> lineparams(id_max);
+        for(const auto &box: boxes) {
+            if(box.idx < 0) continue;
+            if((box.subtype & (2+4)) == 2+4) continue;
+            if((box.subtype & 32) == 32) continue;
+
+            line_box_chain[box.idx].push_back(box.id);
+            lineparams[box.idx].size = std::max(lineparams[box.idx].size, std::max(box.w, box.h));
+            lineparams[box.idx].count++;
+            if((box.subtype & 1) == 0) {
+                // 横書き
+                if(line_box_chain[box.idx].size() > 1) {
+                    lineparams[box.idx].d = 2;
+                }
+                else {
+                    lineparams[box.idx].d = 0;
+                }
+            }
+            else {
+                // 縦書き
+                if(line_box_chain[box.idx].size() > 1) {
+                    lineparams[box.idx].d = 1;
+                }
+                else {
+                    lineparams[box.idx].d = 0;
+                }
+            }
+        }
+        for(auto &chain: line_box_chain) {
+            std::sort(chain.begin(), chain.end(), [&](const auto a, const auto b){
+                return boxes[a].subidx < boxes[b].subidx;
+            });
+        }
+
+        for(auto &chain: line_box_chain) {
+            int count = 0;
+            int count1 = 0;
+            int count2 = 0;
+            int chainid = -1;
+            if (chain.size() == 0) continue;
+            for(auto boxid: chain) {
+                chainid = boxes[boxid].idx;
+                if(chainid < 0) continue;
+                if(boxes[boxid].double_line == 0) {
+                    if(count1 > 1 || count2 > 1) {
+                        count++;
+                    }
+                    count1 = count2 = 0;
+                }
+                if(boxes[boxid].double_line == 1) {
+                    count1++;
+                }
+                if(boxes[boxid].double_line == 2) {
+                    count2++;
+                }
+            }
+            if(count1 > 1 || count2 > 1) {
+                count++;
+            }
+            lineparams[chainid].doubleline = count;
+        }
+        
+        std::vector<int> chainid_map = create_chainid_map(boxes, line_box_chain, lineblocker, 1.0, 0);
+        process_line(id_max, boxes, chain_next, chain_prev, chainid_map, line_box_chain, lineparams, lineblocker);
+
+        line_box_chain.clear();
+        line_box_chain.resize(id_max);
+        for(const auto &box: boxes) {
+            if(box.idx < 0) continue;
+
+            line_box_chain[box.idx].push_back(box.id);
+        }
+        for(auto &chain: line_box_chain) {
+            std::sort(chain.begin(), chain.end(), [&](const auto a, const auto b){
+                return boxes[a].subidx < boxes[b].subidx;
+            });
+        }
+        
+        if(rechain_search(line_box_chain, boxes, chain_next, chain_prev)) {
+            break;
+        }
+        
+        // ないchainを消す
+        for (auto it = line_box_chain.begin(); it != line_box_chain.end();) {
+            if (it->empty()) {
+                it = line_box_chain.erase(it);
+            }
+            else {
+                ++it;
+            }
+        }
+
+        // chain idを振り直す
+        for(int chainid = 0; chainid < line_box_chain.size(); chainid++) {
+            for(int bidx = 0; bidx < line_box_chain[chainid].size(); bidx++) {
+                int boxid = line_box_chain[chainid][bidx];
+                boxes[boxid].idx = chainid;
+                boxes[boxid].subidx = bidx;
+            }
+        }
+    }
+    
     auto block_chain = block_chain_search(id_max, chain_next, chain_prev);
-
-    block_chain = split_block(id_max, block_chain, boxes, line_box_chain);
 
     std::vector<int> block_idx(block_chain.size());
     std::iota(block_idx.begin(), block_idx.end(), 0);
     struct blockparam {
         int d;
         int p;
+        int sec;
         int count;
         float size;
         float x_min;
@@ -375,9 +1226,10 @@ void make_block(
     };
     std::vector<blockparam> blockparams(block_chain.size());
     for(auto &p: blockparams) {
-        p.p = -1;
+        p.p = 0;
         p.count = 0;
         p.size = 0;
+        p.sec = 0;
         p.x_min = width * scale;
         p.y_min = height * scale;
         p.x_max = 0;
@@ -398,6 +1250,7 @@ void make_block(
         blockparams[block].d = ((box.subtype & 1) == 0) ? 0: 1;
         blockparams[block].count++;
         blockparams[block].size = std::max(blockparams[block].size, std::max(box.w, box.h));
+        blockparams[block].sec = box.section;
         if(blockparams[block].x_min > box.cx - box.w/2)
             blockparams[block].x_min = box.cx - box.w/2;
         if(blockparams[block].y_min > box.cy - box.h/2)
@@ -412,204 +1265,165 @@ void make_block(
         if(p.y_min > p.y_max) std::swap(p.y_min, p.y_max);
     }
 
-    std::vector<blockparam> pageparams;
-    std::sort(block_idx.begin(), block_idx.end(), [&](const int a, const int b){
-        if(a == b) return false;
-        // 大きいブロックから検索する
-        return (blockparams[a].x_max - blockparams[a].x_min) * (blockparams[a].y_max - blockparams[a].y_min) 
-                > (blockparams[b].x_max - blockparams[b].x_min) * (blockparams[b].y_max - blockparams[b].y_min);
-    });
+    // 縦書きか横書きか決める
+    float orientation_score = 0;
     for(auto blockid: block_idx) {
-        int pageidx = -1;
-        for(int i = 0; i < pageparams.size(); i++) {
-            if(blockparams[blockid].x_max > pageparams[i].x_min && pageparams[i].x_max > blockparams[blockid].x_min) {
-                pageidx = i;
-                break;
-            }
-        }
-        if(pageidx < 0) {
-            pageparams.push_back({ 
-                .d = blockparams[blockid].d == 0 ? blockparams[blockid].count: -blockparams[blockid].count,
-                .count = blockparams[blockid].count,
-                .x_min = blockparams[blockid].x_min,
-                .x_max = blockparams[blockid].x_max,
-                .y_min = blockparams[blockid].y_min,
-                .y_max = blockparams[blockid].y_max});
+        if(blockparams[blockid].d == 0) {
+            // 横書きに投票
+            orientation_score += (blockparams[blockid].x_max - blockparams[blockid].x_min) * (blockparams[blockid].y_max - blockparams[blockid].y_min);
         }
         else {
-            pageparams[pageidx].d += blockparams[blockid].d == 0 ? blockparams[blockid].count: -blockparams[blockid].count;
-            pageparams[pageidx].count += blockparams[blockid].count;
-            pageparams[pageidx].x_min = std::min(pageparams[pageidx].x_min, blockparams[blockid].x_min);
-            pageparams[pageidx].x_max = std::max(pageparams[pageidx].x_max, blockparams[blockid].x_max);
-            pageparams[pageidx].y_min = std::min(pageparams[pageidx].y_min, blockparams[blockid].y_min);
-            pageparams[pageidx].y_max = std::max(pageparams[pageidx].y_max, blockparams[blockid].y_max);
+            // 縦書きに投票
+            orientation_score -= (blockparams[blockid].x_max - blockparams[blockid].x_min) * (blockparams[blockid].y_max - blockparams[blockid].y_min);
         }
     }
-    std::vector<int> page_idx(pageparams.size());
-    std::iota(page_idx.begin(), page_idx.end(), 0);
-    std::sort(page_idx.begin(), page_idx.end(), [&](const int a, const int b){
-        if(pageparams[a].d * pageparams[b].d <= 0) {
-            // 横書きの方を優先する
-            return pageparams[a].d > pageparams[b].d;
-        }
-        bool direction = pageparams[a].count > pageparams[b].count ? pageparams[a].d > 0 : pageparams[b].d > 0;
-        if(direction) {
+    // 縦に分割できる見開きかどうか
+    if (page_divide) {
+        // 大きい順に
+        std::sort(block_idx.begin(), block_idx.end(), [&](const int a, const int b){
+            return blockparams[a].x_min < blockparams[b].x_min;
+        });
+        if (orientation_score >= 0) {
+            float page_div_x = width * scale * 2 / 5;
             // 横書き
-            // x座標でみて、ブロック全体が左右どちらかにある
-            if(pageparams[a].x_max < pageparams[b].x_min) return true;
-            if(pageparams[b].x_max < pageparams[a].x_min) return false;
-
-            // y座標でみて、ブロック全体が上下どちらかにある
-            if(pageparams[a].y_max < pageparams[b].y_min) return true;
-            if(pageparams[b].y_max < pageparams[a].y_min) return false;
-
-            // ブロックが重なっているので、上にある方を優先
-            if(pageparams[a].y_min == pageparams[b].y_min) return a < b;
-            return pageparams[a].y_min < pageparams[b].y_min;
-        }
-        else {
-            // 縦書き
-            // x座標でみて、ブロック全体が左右どちらかにある 縦書きなので右から
-            if(pageparams[a].x_min > pageparams[b].x_max) return true;
-            if(pageparams[b].x_min > pageparams[a].x_max) return false;
-
-            // y座標でみて、ブロック全体が上下どちらかにある
-            if(pageparams[a].y_max < pageparams[b].y_min) return true;
-            if(pageparams[b].y_max < pageparams[a].y_min) return false;
-
-            // ブロックが重なっているので、右にある方を優先
-            if(pageparams[a].x_max == pageparams[b].x_max) return a < b;
-            return pageparams[a].x_max > pageparams[b].x_max;
-        }
-    });
-
-    for(auto &block: blockparams) {
-        for(int i = 0; i < page_idx.size(); i++) {
-            if(pageparams[page_idx[i]].x_min <= block.x_min && pageparams[page_idx[i]].x_max >= block.x_max 
-                && pageparams[page_idx[i]].y_min <= block.y_min && pageparams[page_idx[i]].y_max >= block.y_max) {
-                    block.p = i;
-                    break;
-            }
-        }
-    }
-
-    std::iota(block_idx.begin(), block_idx.end(), 0);
-    std::sort(block_idx.begin(), block_idx.end(), [&](const int a, const int b){
-        // ページ順
-        return blockparams[a].p < blockparams[b].p;
-    });
-    {
-        auto it = block_idx.begin();
-        while(it != block_idx.end()) {
-            auto it2 = it+1;
-            while(it2 != block_idx.end()) {
-                if(blockparams[*it].p == blockparams[*it2].p) {
-                    ++it2;
-                    continue;
-                }
-                break;
-            }
-            // ページ内ソート
-            if(std::distance(it, it2) > 1) {
-                auto p = blockparams[*it].p;
-                if(pageparams[p].d >= 0) {
-                    // 横書きメイン
-                    std::sort(it, it2, [&](const auto a, const auto b){
-                        // 左から順に
-                        return blockparams[a].x_min < blockparams[b].x_min;
-                    });
-
-                    auto it3 = it;
-                    while(it3 != it2) {
-                        auto it4 = it3+1;
-                        auto x_min = blockparams[*it3].x_min;
-                        auto x_max = blockparams[*it3].x_max;
-                        while(it4 != it2) {
-                            // ブロックがx方向に重なっている
-                            if(std::min(x_max, blockparams[*it4].x_max) - std::max(x_min, blockparams[*it4].x_min) > 0) {
-                                x_min = std::min(x_min, blockparams[*it4].x_min);
-                                x_max = std::min(x_max, blockparams[*it4].x_max);
-                                ++it4;
-                                continue;
-                            }
-                            break;
-                        }
-                        if(std::distance(it3, it4) > 1) {
-                            // 上を優先
-                            std::sort(it3, it4, [&](const auto a, const auto b){
-                                return blockparams[a].y_min < blockparams[b].y_min;
-                            });
-                        }
-                        it3 = it4;
+            // 真ん中の場所を探る
+            float prev_page_div_x;
+            do {
+                prev_page_div_x = page_div_x;
+                for(auto blockid: block_idx) {
+                    if(blockparams[blockid].x_min < page_div_x) {
+                        // 左ページ
+                        page_div_x = std::max(page_div_x, blockparams[blockid].x_max + blockparams[blockid].size * float(1 + allowwidth_next_block));
                     }
                 }
+            } while(prev_page_div_x != page_div_x);
+
+            if(fabs(page_div_x - width * scale / 2) > width * scale / 10) {
+                page_div_x = width * scale;
+            }
+            
+            // 横書きなので、左から
+            for(auto blockid: block_idx) {
+                if(blockparams[blockid].x_max <= page_div_x) {
+                    blockparams[blockid].p = 0;
+                }
                 else {
-                    // 縦書きメイン
-                    std::sort(it, it2, [&](const auto a, const auto b){
-                        // 上から順に
+                    blockparams[blockid].p = 1;
+                }
+            }
+        }
+        else {
+            float page_div_x = width * scale * 3 / 5;
+            // 縦書き
+            // 真ん中の場所を探る
+            float prev_page_div_x;
+            do {
+                prev_page_div_x = page_div_x;
+                for(auto blockid: block_idx) {
+                    if(blockparams[blockid].x_min > page_div_x) {
+                        // 右ページ
+                        page_div_x = std::min(page_div_x, blockparams[blockid].x_min - blockparams[blockid].size * float(1 + allowwidth_next_block));
+                    }
+                }
+            } while(prev_page_div_x != page_div_x);
+
+            if(fabs(page_div_x - width * scale / 2) > width * scale / 10) {
+                page_div_x = width * scale;
+            }
+
+            // 縦書きなので、右から
+            for(auto blockid: block_idx) {
+                if(blockparams[blockid].x_max >= page_div_x) {
+                    blockparams[blockid].p = 0;
+                }
+                else {
+                    blockparams[blockid].p = 1;
+                }
+            }
+        }
+    }
+
+    // 段順にソートしておく
+    std::sort(block_idx.begin(), block_idx.end(), [&](const int a, const int b){
+        return blockparams[a].sec < blockparams[b].sec;
+    });
+    // ページ順にソートしておく
+    std::stable_sort(block_idx.begin(), block_idx.end(), [&](const int a, const int b){
+        return blockparams[a].p < blockparams[b].p;
+    });
+
+    {
+        auto st = block_idx.begin();
+        while(st != block_idx.end()) {
+            auto ed = std::partition(st, block_idx.end(), [&](const auto x){
+                return blockparams[x].p == blockparams[*st].p && blockparams[x].sec == blockparams[*st].sec;
+            });
+            if (orientation_score < 0) {
+                // 縦書き
+                std::sort(st, ed, [&](const int a, const int b){
+                    // 右から
+                    return blockparams[a].x_max > blockparams[b].x_max;
+                });
+
+                auto it1 = st;
+                while(it1 != ed) {
+                    float x_min = blockparams[*it1].x_min;
+                    float x_max = blockparams[*it1].x_max;
+                    auto it2 = std::partition(it1, ed, [&](const auto x){
+                        return std::min(x_max, blockparams[x].x_max) - std::max(x_min, blockparams[x].x_min) > 0;
+                    });
+                    std::sort(it1, it2, [&](const int a, const int b){
+                        // 上から
                         return blockparams[a].y_min < blockparams[b].y_min;
                     });
 
-                    auto it3 = it;
-                    while(it3 != it2) {
-                        auto it4 = it3+1;
-                        auto y_min = blockparams[*it3].y_min;
-                        auto y_max = blockparams[*it3].y_max;
-                        while(it4 != it2) {
-                            // ブロックがy方向に重なっている
-                            if(std::min(y_max, blockparams[*it4].y_max) - std::max(y_min, blockparams[*it4].y_min) > 0) {
-                                y_min = std::min(y_min, blockparams[*it4].y_min);
-                                y_max = std::min(y_max, blockparams[*it4].y_max);
-                                ++it4;
-                                continue;
-                            }
-                            break;
-                        }
-                        if(std::distance(it3, it4) > 1) {
-                            // 右を優先
-                            std::sort(it3, it4, [&](const auto a, const auto b){
-                                return blockparams[a].x_max > blockparams[b].x_max;
-                            });
-                        }
-                        it3 = it4;
-                    }
+                    it1 = it2;
                 }
-                // ページ内ソートend
             }
-            it = it2;
+            else {
+                // 横書き
+                std::sort(st, ed, [&](const int a, const int b){
+                    // 上から
+                    return blockparams[a].y_min < blockparams[b].y_min;
+                });
+
+                auto it1 = st;
+                while(it1 != ed) {
+                    float y_min = blockparams[*it1].y_min;
+                    float y_max = blockparams[*it1].y_max;
+                    auto it2 = std::partition(it1, ed, [&](const auto x){
+                        return std::min(y_max, blockparams[x].y_max) - std::max(y_min, blockparams[x].y_min) > 0;
+                    });
+                    std::sort(it1, it2, [&](const int a, const int b){
+                        // 左から
+                        return blockparams[a].x_min < blockparams[b].x_min;
+                    });
+
+                    it1 = it2;
+                }
+            }
+            st = ed;
         }
     }
-
-    float main_block_size = 0;
-    int max_block_count = 0;
-    for(auto p: blockparams) {
-        if(p.count > max_block_count) {
-            main_block_size = p.size;
-            max_block_count = p.count;
-        }
-    }
-    std::cerr << "block size " << main_block_size << std::endl;
-
+    
     // idを振る
     {
         std::cerr << "id renumber " << block_idx.size() << std::endl;
         std::vector<int> chain_remap(id_max);
         std::fill(chain_remap.begin(), chain_remap.end(), -1);
+        std::vector<int> chain_remap_page(id_max);
         int renum = 0;
         for(int i = 0; i < block_idx.size(); i++) {
-            // if(ignore_small_size_block) {
-            //     if(blockparams[block_idx[i]].size < main_block_size * ignore_small_size_block_ratio) {
-            //         continue;
-            //     }
-            // }
             for(const auto chainid: block_chain[block_idx[i]]) {
                 chain_remap[chainid] = renum;
+                chain_remap_page[chainid] = blockparams[block_idx[i]].p;
             }
             renum++;
         }
         for(auto &box: boxes) {
             if(box.idx < 0) continue;
             box.block = chain_remap[box.idx];
+            box.page = chain_remap_page[box.idx];
         }
     }
 

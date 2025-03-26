@@ -1,7 +1,8 @@
 #include "hough_linefind.h"
 #include "search_loop.h"
 
-#include <cmath>
+#define _USE_MATH_DEFINES
+#include <math.h>
 #include <algorithm>
 #include <numeric>
 #include <iterator>
@@ -211,6 +212,7 @@ int detect_line(
     for(auto i: idx) {
         if(lineimage[i] < line_valueth) break;
         if(lineid_map[i] >= 0) continue;
+        if(lineblocker[i]) continue;
 
         std::vector<int> stack;
         stack.push_back(i);
@@ -225,59 +227,104 @@ int detect_line(
             int x0 = i2 % width;
             int y0 = i2 / width;
 
-            for(int y = y0-1; y <= y0+1; y++) {
-                for(int x = x0-1; x <= x0+1; x++) {
+            std::vector<int> tmp;
+            for(int y = y0-2; y <= y0+2; y++) {
+                for(int x = x0-2; x <= x0+2; x++) {
                     if(x < 0 || x >= width || y < 0 || y >= height) continue;
                     int i3 = y * width + x;
                     if(lineid_map[i3] >= 0) continue;
-                    if(lineblocker[i3]) continue;
+                    if(lineblocker[i3]) goto next_loop;
                     if(lineimage[i3] < line_valueth) continue;
-                    stack.push_back(i3);
+                    tmp.push_back(i3);
                 }
             }
+            std::copy(tmp.begin(), tmp.end(), std::back_inserter(stack));
+            
+            next_loop:
+            ;
         }
         lineid_count++;
     }
     return lineid_count;
 }
 
-void set_angle(
+int set_angle(
     int lineid_count,
     std::vector<double> &angle_map,
-    const std::vector<int> &lineid_map)
+    std::vector<int> &lineid_map)
 {
-    std::vector<std::vector<int>> lineid_list(lineid_count);
-    std::vector<double> angle_list(lineid_count);
+    std::vector<std::vector<int>> lineid_lists(lineid_count);
+    std::vector<double> angle_list;
+    std::vector<std::vector<int>> valid_lineid_lists;
     for(int i = 0; i < lineid_map.size(); i++) {
         int id = lineid_map[i];
         if(id < 0) continue;
-        lineid_list[id].push_back(i);
+        lineid_lists[id].push_back(i);
     }
-    for (int line_id = 0; line_id < lineid_count; line_id++) {
+    for (const auto& lineid_list: lineid_lists) {
         int max_x = 0;
         int min_x = width;
         int max_y = 0;
         int min_y = height;
-        for(auto idx: lineid_list[line_id]) {
-            int x = idx % width;
-            int y = idx / width;
+        for(auto i: lineid_list) {
+            int x = i % width;
+            int y = i / width;
             max_x = std::max(x, max_x);
             min_x = std::min(x, min_x);
             max_y = std::max(y, max_y);
             min_y = std::min(y, min_y);
         }
         if(max_x - min_x < max_y - min_y) {
-            angle_list[line_id] = M_PI_2;    
+            if(run_mode == 0 || run_mode == 2) {
+                std::pair<int,int> p1(width, height);
+                std::pair<int,int> p2(0,0);
+                for(auto i: lineid_list) {
+                    int x = i % width;
+                    int y = i / width;
+                    if(p1.second > y) {
+                        p1.first = x;
+                        p1.second = y;
+                    }
+                    if(p2.second < y) {
+                        p2.first = x;
+                        p2.second = y;
+                    }
+                }
+                float angle = atan2(p2.second - p1.second, p2.first - p1.first);
+                angle_list.push_back(angle);
+                valid_lineid_lists.push_back(lineid_list);
+            }
         }
         else {
-            angle_list[line_id] = 0;
+            if(run_mode == 0 || run_mode == 1) {
+                std::pair<int,int> p1(width, height);
+                std::pair<int,int> p2(0,0);
+                for(auto i: lineid_list) {
+                    int x = i % width;
+                    int y = i / width;
+                    if(p1.first > x) {
+                        p1.first = x;
+                        p1.second = y;
+                    }
+                    if(p2.first < x) {
+                        p2.first = x;
+                        p2.second = y;
+                    }
+                }
+                float angle = atan2(p2.second - p1.second, p2.first - p1.first);
+                angle_list.push_back(angle);
+                valid_lineid_lists.push_back(lineid_list);
+            }
         }
     }
-    for(int i = 0; i < angle_map.size(); i++) {
-        int id = lineid_map[i];
-        if(id < 0) continue;
-        angle_map[i] = angle_list[id];
+    std::fill(lineid_map.begin(), lineid_map.end(), -1);
+    for (int line_id = 0; line_id < valid_lineid_lists.size(); line_id++) {
+        for(const auto i: valid_lineid_lists[line_id]) {
+            angle_map[i] = angle_list[line_id];
+            lineid_map[i] = line_id;
+        }
     }
+    return (int)valid_lineid_lists.size();
 }
 
 std::vector<std::vector<int>> linefind(
