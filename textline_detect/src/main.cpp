@@ -23,7 +23,9 @@ float sep_valueth = 0.1;
 float sep_valueth2 = 0.15;
 const float sep_clusterth = 10.0;
 const int linearea_th = 20;
-double allowwidth_next_block = 1.0;
+double allowwidth_next_block = 1.5;
+double allow_sizediff = 0.5;
+int page_divide = 0;
 int scale = 4;
 
 int run_mode = 0;
@@ -73,6 +75,16 @@ int main(int argc, char **argv)
             std::string vstr = arg.substr(arg.find('=')+1);
             std::stringstream(vstr) >> allowwidth_next_block;
             std::cerr << "allowwidth_next_block=" << allowwidth_next_block << std::endl;
+        }
+        if(arg.find("--allow_sizediff=") != std::string::npos) {
+            std::string vstr = arg.substr(arg.find('=')+1);
+            std::stringstream(vstr) >> allow_sizediff;
+            std::cerr << "allow_sizediff=" << allow_sizediff << std::endl;
+        }
+        if(arg.find("--page_divide=") != std::string::npos) {
+            std::string vstr = arg.substr(arg.find('=')+1);
+            std::stringstream(vstr) >> page_divide;
+            std::cerr << "page_divide=" << page_divide << std::endl;
         }
     }
 
@@ -151,17 +163,19 @@ int main(int argc, char **argv)
     fwrite(&count, sizeof(int32_t), 1, stdout);
 
     for(int i = 0; i < boxes.size(); i++) {
-        fprintf(stderr, "box %d cx %f cy %f w %f h %f block %d idx %d sidx %d stype %d c1 %f c2 %f c4 %f c8 %f d %d\n", 
-            boxes[i].id, boxes[i].cx, boxes[i].cy, boxes[i].w, boxes[i].h, 
-            boxes[i].block, boxes[i].idx, boxes[i].subidx, boxes[i].subtype,
-            boxes[i].code1, boxes[i].code2, boxes[i].code4, boxes[i].code8,
-            boxes[i].double_line);
+        // fprintf(stderr, "box %d cx %f cy %f w %f h %f block %d idx %d sidx %d stype %d c1 %f c2 %f c4 %f c8 %f d %d\n", 
+        //     boxes[i].id, boxes[i].cx, boxes[i].cy, boxes[i].w, boxes[i].h, 
+        //     boxes[i].block, boxes[i].idx, boxes[i].subidx, boxes[i].subtype,
+        //     boxes[i].code1, boxes[i].code2, boxes[i].code4, boxes[i].code8,
+        //     boxes[i].double_line);
         
         fwrite(&boxes[i].id, sizeof(int32_t), 1, stdout);
         fwrite(&boxes[i].block, sizeof(int32_t), 1, stdout);
         fwrite(&boxes[i].idx, sizeof(int32_t), 1, stdout);
         fwrite(&boxes[i].subidx, sizeof(int32_t), 1, stdout);
         fwrite(&boxes[i].subtype, sizeof(int32_t), 1, stdout);
+        fwrite(&boxes[i].page, sizeof(int32_t), 1, stdout);
+        fwrite(&boxes[i].section, sizeof(int32_t), 1, stdout);
     }
 
     return 0;

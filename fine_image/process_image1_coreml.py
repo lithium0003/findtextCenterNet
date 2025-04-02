@@ -370,13 +370,17 @@ for target_file in target_files:
         p += 4
         subtype = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
         p += 4
-        detected_boxes.append((id,block,idx,subidx,subtype))
+        pageidx = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        p += 4
+        sectionidx = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        p += 4
+        detected_boxes.append((id,block,idx,subidx,subtype,pageidx,sectionidx))
 
     print(detected_boxes)
 
     out_dict = {}
     out_dict['textbox'] = []
-    for id, block, idx, subidx, subtype in detected_boxes:
+    for id, block, idx, subidx, subtype, pageidx, sectionidx in detected_boxes:
         if id < 0:
             continue
         p_loc = locations[id, 0]

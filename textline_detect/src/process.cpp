@@ -56,10 +56,10 @@ void process(
     make_lineblocker(lineblocker, sepimage);
 
     auto line_box_chain = linefind(boxes, lineimage, lineblocker);
-    // print_chaininfo(boxes, line_box_chain);
+//    print_chaininfo(boxes, line_box_chain);
 
     search_loop(boxes, line_box_chain, lineblocker, idimage_main, sepimage);
-    // //print_chaininfo(boxes, line_box_chain);
+//    print_chaininfo(boxes, line_box_chain);
 
     after_search(boxes, line_box_chain, lineblocker, idimage);
 

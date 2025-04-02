@@ -7,7 +7,7 @@
 
 #include <stdio.h>
 #include <iostream>
-#include <cmath>
+#include <math.h>
 
 void search_ruby(
     std::vector<charbox> &boxes,
@@ -132,6 +132,19 @@ void search_ruby(
                 boxes[boxid].subidx = subidx++;
             }
             continue;
+        }
+
+        if(fabs(boxes[line_box_chain[chainid].front()].direction) < M_PI_4) {
+            // 横書き
+            std::sort(rubyid.begin(), rubyid.end(), [&](const auto a, const auto b){
+                return boxes[a].cx < boxes[b].cx;
+            });
+        }
+        else {
+            // 縦書き
+            std::sort(rubyid.begin(), rubyid.end(), [&](const auto a, const auto b){
+                return boxes[a].cy < boxes[b].cy;
+            });
         }
 
         // ルビの親文字を探す

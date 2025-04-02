@@ -523,7 +523,11 @@ else:
         p += 4
         subtype = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
         p += 4
-        detected_boxes.append((id,block,idx,subidx,subtype))
+        pageidx = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        p += 4
+        sectionidx = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        p += 4
+        detected_boxes.append((id,block,idx,subidx,subtype,pageidx,sectionidx))
 
     print(detected_boxes)
 
@@ -532,7 +536,7 @@ else:
     fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
 
     cmap = plt.get_cmap('rainbow', max_block+1)
-    for id, block, idx, subidx, subtype in detected_boxes:
+    for id, block, idx, subidx, subtype, pageidx, sectionidx in detected_boxes:
         if id < 0:
             continue
         cx = locations[id, 1]
