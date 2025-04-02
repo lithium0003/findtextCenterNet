@@ -160,7 +160,8 @@ void process_line(
                     if(other_chain == chainid) continue;
                     if(lineparams[other_chain].d == 2) break;
 
-                    if(fabs(lineparams[other_chain].size - lineparams[chainid].size) / std::min(lineparams[chainid].size, lineparams[other_chain].size) > allow_sizediff) continue;
+                    if(fabs(lineparams[other_chain].size - lineparams[chainid].size) / std::max(lineparams[chainid].size, lineparams[other_chain].size) > allow_sizediff)
+                        continue;
 
                     if(std::find(chain_next[chainid].begin(), chain_next[chainid].end(), other_chain) == chain_next[chainid].end()) {
                         chain_next[chainid].push_back(other_chain);
@@ -185,7 +186,8 @@ void process_line(
                     if(other_chain == chainid) continue;
                     if(lineparams[other_chain].d == 2) break;
 
-                    if(fabs(lineparams[other_chain].size - lineparams[chainid].size) / std::min(lineparams[chainid].size, lineparams[other_chain].size) > allow_sizediff) continue;
+                    if(fabs(lineparams[other_chain].size - lineparams[chainid].size) / std::max(lineparams[chainid].size, lineparams[other_chain].size) > allow_sizediff)
+                        continue;
 
                     if(std::find(chain_next[chainid].begin(), chain_next[chainid].end(), other_chain) == chain_next[chainid].end()) {
                         chain_next[chainid].push_back(other_chain);
@@ -563,6 +565,13 @@ int renumber_id(
         int doubleline;
     };
 
+    struct rect {
+        float cx1;
+        float cx2;
+        float cy1;
+        float cy2;
+    };
+    
     std::cerr << "renumber id" << std::endl;
     std::vector<lineparam> lineparams;
     std::vector<int> chain_remap;
@@ -643,13 +652,16 @@ int renumber_id(
     }
     
     {
+        std::vector<rect> section_param;
+        int section = 0;
+        section_param.emplace_back(width*scale,0,height*scale,0);
+
         std::sort(chain_remap.begin(), chain_remap.end());
         // 横書きを優先する
         auto it3 = std::partition(chain_remap.begin(), chain_remap.end(), [&](const auto x){
             return lineparams[x].d == 0;
         });
         // 横書き
-        int section = 0;
         auto it1 = chain_remap.begin();
         auto it2 = it3;
         while(it1 != it2) {
@@ -657,47 +669,63 @@ int renumber_id(
                 // 上を先に
                 return lineparams[a].cy1 < lineparams[b].cy1;
             });
-            // x方向にほぼ完全に重なっているブロックを探索する
-            float cx1 = lineparams[*it1].cx1;
-            float cx2 = lineparams[*it1].cx2;
+            // y方向にほぼ完全に重なっているブロックを探索する
+            float cy1 = lineparams[*it1].cy1 - lineparams[*it1].size * float(allowwidth_next_block);
+            float cy2 = lineparams[*it1].cy2 + lineparams[*it1].size * float(allowwidth_next_block);
             auto it4 = std::partition(it1, it2, [&](const auto x){
-                return std::min(cx2, lineparams[x].cx2) - std::max(cx1, lineparams[x].cx1) > (cx2 - cx1) * 0.75;
+                return std::min(cy2, lineparams[x].cy2) - std::max(cy1, lineparams[x].cy1) > 0;
             });
-            // xで重なっているブロックはいない
+            // yで重なっているブロックはいない
             if(it4 == it1) {
+                int s = section;
+                lineparams[*it1].section = s;
+                section_param[s].cx1 = std::min(section_param[s].cx1, lineparams[*it1].cx1);
+                section_param[s].cx2 = std::max(section_param[s].cx2, lineparams[*it1].cx2);
+                section_param[s].cy1 = std::min(section_param[s].cy1, lineparams[*it1].cy1);
+                section_param[s].cy2 = std::max(section_param[s].cy2, lineparams[*it1].cy2);
                 ++it1;
                 continue;
             }
-            // これらのブロックのyの範囲を探索
-            float cy1 = lineparams[*it1].cy1;
-            float cy2 = lineparams[*it1].cy2;
+            // これらのブロックのxの範囲を探索
+            float cx1 = lineparams[*it1].cx1;
+            float cx2 = lineparams[*it1].cx2;
             for(auto it5 = it1; it5 != it4; ++it5) {
-                cy1 = std::min(cy1, lineparams[*it5].cy1 - lineparams[*it5].size * float(allowwidth_next_block));
-                cy2 = std::max(cy2, lineparams[*it5].cy2 + lineparams[*it5].size * float(allowwidth_next_block));
+                cx1 = std::min(cx1, lineparams[*it5].cx1);
+                cx2 = std::max(cx2, lineparams[*it5].cx2);
             }
-            // このブロックにy座標が含まれるブロックを検索
+            std::sort(it1, it2, [&](const auto a, const auto b){
+                // 左を先に
+                return lineparams[a].cx1 < lineparams[b].cx1;
+            });
+            // このブロックにx座標が含まれるブロックを検索
             auto it5 = std::partition(it1, it2, [&](const auto x){
-                return lineparams[x].cy1 <= cy2 && lineparams[x].cy2 >= cy1;
+                return lineparams[x].cx1 <= cx2 && lineparams[x].cx2 >= cx1;
             });
             auto it52 = it5;
             do {
                 it52 = it5;
-                // これらのブロックのyの範囲を探索
+                // これらのブロックのxの範囲を探索
                 for(auto it53 = it1; it53 != it5; ++it53) {
-                    cy1 = std::min(cy1, lineparams[*it53].cy1 - lineparams[*it53].size * float(allowwidth_next_block));
-                    cy2 = std::max(cy2, lineparams[*it53].cy2 + lineparams[*it53].size * float(allowwidth_next_block));
+                    cx1 = std::min(cx1, lineparams[*it53].cx1);
+                    cx2 = std::max(cx2, lineparams[*it53].cx2);
                 }
-                // このブロックにy座標が含まれるブロックを検索
+                // このブロックにx座標が含まれるブロックを検索
                 it5 = std::partition(it1, it2, [&](const auto x){
-                    return lineparams[x].cy1 < cy2 && lineparams[x].cy2 > cy1;
+                    return lineparams[x].cx1 < cx2 && lineparams[x].cx2 > cx1;
                 });
             } while(it52 != it5);
             if(it5 == it1) {
+                int s = section;
+                lineparams[*it1].section = s;
+                section_param[s].cx1 = std::min(section_param[s].cx1, lineparams[*it1].cx1);
+                section_param[s].cx2 = std::max(section_param[s].cx2, lineparams[*it1].cx2);
+                section_param[s].cy1 = std::min(section_param[s].cy1, lineparams[*it1].cy1);
+                section_param[s].cy2 = std::max(section_param[s].cy2, lineparams[*it1].cy2);
                 ++it1;
                 continue;
             }
             // 含まれているブロック内で検索
-            std::vector<std::pair<float,float>> section_param;
+            int block_section = section;
             auto it6 = it1;
             while(it6 != it5) {
                 std::sort(it6, it5, [&](const auto a, const auto b){
@@ -711,7 +739,12 @@ int renumber_id(
                     return std::min(cy2, lineparams[x].cy2) - std::max(cy1, lineparams[x].cy1) > 0;
                 });
                 if(it7 == it6) {
-                    lineparams[*it6].section = section;
+                    int s = block_section;
+                    lineparams[*it6].section = s;
+                    section_param[s].cx1 = std::min(section_param[s].cx1, lineparams[*it6].cx1);
+                    section_param[s].cx2 = std::max(section_param[s].cx2, lineparams[*it6].cx2);
+                    section_param[s].cy1 = std::min(section_param[s].cy1, lineparams[*it6].cy1);
+                    section_param[s].cy2 = std::max(section_param[s].cy2, lineparams[*it6].cy2);
                     ++it6;
                     continue;
                 }
@@ -721,62 +754,127 @@ int renumber_id(
                         // 左を先に
                         return lineparams[a].cx1 < lineparams[b].cx1;
                     });
-                    if(section_param.empty()) {
+                    if(section_param.size()-1 == section) {
                         // 段を追加
-                        section_param.emplace_back(lineparams[*it6].cx1, lineparams[*it6].cx2);
+                        block_section = (int)section_param.size();
+                        section_param.emplace_back(lineparams[*it6].cx1, lineparams[*it6].cx2, lineparams[*it6].cy1, lineparams[*it6].cy2);
                     }
                     for(auto it8 = it6; it8 != it7; ++it8) {
                         bool found = false;
-                        for(int s = 0; s < section_param.size(); s++) {
+                        for(int s = block_section; s < section_param.size(); s++) {
                             // 横に重なっている
-                            if (std::min(section_param[s].second, lineparams[*it8].cx2) - std::max(section_param[s].first, lineparams[*it8].cx1) > 0) {
-                                lineparams[*it8].section = section + s;
-                                section_param[s].first = std::min(section_param[s].first, lineparams[*it8].cx1);
-                                section_param[s].second = std::max(section_param[s].second, lineparams[*it8].cx2);
+                            if (std::min(section_param[s].cx2, lineparams[*it8].cx2) - std::max(section_param[s].cx1, lineparams[*it8].cx1) > 0) {
+                                lineparams[*it8].section = s;
+                                section_param[s].cx1 = std::min(section_param[s].cx1, lineparams[*it8].cx1);
+                                section_param[s].cx2 = std::max(section_param[s].cx2, lineparams[*it8].cx2);
+                                section_param[s].cy1 = std::min(section_param[s].cy1, lineparams[*it8].cy1);
+                                section_param[s].cy2 = std::max(section_param[s].cy2, lineparams[*it8].cy2);
                                 found = true;
                                 break;
                             }
                         }
                         if(!found) {
                             // 段を追加
-                            int s = (int)section_param.size();
-                            lineparams[*it8].section = section + s;
-                            section_param.emplace_back(lineparams[*it8].cx1, lineparams[*it8].cx2);
+                            lineparams[*it8].section = (int)section_param.size();
+                            section_param.emplace_back(lineparams[*it8].cx1, lineparams[*it8].cx2, lineparams[*it8].cy1, lineparams[*it8].cy2);
                         }
                     }
                 }
                 else {
-                    if(section_param.empty()) {
+                    if(section_param.size()-1 == section) {
                         // 段を追加
-                        section_param.emplace_back(lineparams[*it6].cx1, lineparams[*it6].cx2);
-                        section++;
-                        lineparams[*it6].section = section;
+                        block_section = (int)section_param.size();
+                        lineparams[*it6].section = block_section;
+                        section_param.emplace_back(lineparams[*it6].cx1, lineparams[*it6].cx2, lineparams[*it6].cy1, lineparams[*it6].cy2);
                     }
                     else {
                         bool found = false;
-                        for(int s = 0; s < section_param.size(); s++) {
+                        for(int s = block_section; s < section_param.size(); s++) {
                             // 横に重なっている
-                            if (std::min(section_param[s].second, lineparams[*it6].cx2) - std::max(section_param[s].first, lineparams[*it6].cx1) > 0) {
-                                lineparams[*it6].section = section + s;
-                                section_param[s].first = std::min(section_param[s].first, lineparams[*it6].cx1);
-                                section_param[s].second = std::max(section_param[s].second, lineparams[*it6].cx2);
+                            if (std::min(section_param[s].cx2, lineparams[*it6].cx2) - std::max(section_param[s].cx1, lineparams[*it6].cx1) > 0) {
+                                lineparams[*it6].section = s;
+                                section_param[s].cx1 = std::min(section_param[s].cx1, lineparams[*it6].cx1);
+                                section_param[s].cx2 = std::max(section_param[s].cx2, lineparams[*it6].cx2);
+                                section_param[s].cy1 = std::min(section_param[s].cy1, lineparams[*it6].cy1);
+                                section_param[s].cy2 = std::max(section_param[s].cy2, lineparams[*it6].cy2);
                                 found = true;
                                 break;
                             }
                         }
                         if(!found) {
                             // 段を消す
-                            section += (int)section_param.size();
-                            section_param.clear();
-                            lineparams[*it6].section = section;
+                            block_section = (int)section_param.size();
+                            lineparams[*it6].section = block_section;
+                            section_param.emplace_back(lineparams[*it6].cx1, lineparams[*it6].cx2, lineparams[*it6].cy1, lineparams[*it6].cy2);
                         }
                     }
                 }
                 it6 = it7;
             }
+            section = block_section;
+
+            // 段をソートしておく
+            std::vector<int> section_renum(section_param.size());
+            std::iota(section_renum.begin(), section_renum.end(), 0);
+            std::sort(section_renum.begin(), section_renum.end(), [&](const auto a, const auto b){
+                // 左を先に
+                return section_param[a].cx1 < section_param[b].cx1;
+            });
+            auto sit1 = section_renum.begin();
+            while(sit1 != section_renum.end()) {
+                float sx1 = section_param[*sit1].cx1;
+                float sx2 = section_param[*sit1].cx2;
+                // x方向に重なっている行を探索
+                auto sit2 = std::partition(sit1, section_renum.end(), [&](const auto x){
+                    return std::min(sx2, section_param[x].cx2) - std::max(sx1, section_param[x].cx1) > 0;
+                });
+                if (sit2 == sit1) {
+                    ++sit1;
+                    continue;
+                }
+                if(std::distance(sit1, sit2) > 1) {
+                    std::sort(sit1, sit2, [&](const auto a, const auto b){
+                        // 上を先に
+                        return section_param[a].cy1 < section_param[b].cy1;
+                    });
+                }
+                sit1 = sit2;
+            }
+            std::sort(section_param.begin(), section_param.end(), [](const auto a, const auto b){
+                // 左を先に
+                return a.cx1 < b.cx1;
+            });
+            auto pit1 = section_param.begin();
+            while(pit1 != section_param.end()) {
+                float sx1 = pit1->cx1;
+                float sx2 = pit1->cx2;
+                // x方向に重なっている行を探索
+                auto pit2 = std::partition(pit1, section_param.end(), [&](const auto x){
+                    return std::min(sx2, x.cx2) - std::max(sx1, x.cx1) > 0;
+                });
+                if (pit2 == pit1) {
+                    ++pit1;
+                    continue;
+                }
+                if(std::distance(pit1, pit2) > 1) {
+                    std::sort(pit1, pit2, [](const auto a, const auto b){
+                        // 上を先に
+                        return a.cy1 < b.cy1;
+                    });
+                }
+                pit1 = pit2;
+            }
+
+            // 番号を振り直す
+            for(auto &lp: lineparams) {
+                auto sit = std::find(section_renum.begin(), section_renum.end(), lp.section);
+                assert(sit != section_renum.end());
+                lp.section = (int)std::distance(section_renum.begin(), sit);
+            }
+
             // 表か段組かを判定する
             // 段組なら、縦書きなので右端が一致しているはず
-            std::vector<float> sec_bottom(section+1+section_param.size());
+            std::vector<float> sec_bottom(section_param.size());
             for(auto cit = it1; cit != it5; ++cit) {
                 int s = lineparams[*cit].section;
                 sec_bottom[s] = std::max(sec_bottom[s], lineparams[*cit].cy2);
@@ -812,6 +910,10 @@ int renumber_id(
                     auto it8 = it1;
                     while(it8 != it5) {
                         // 最初の段でまずソート
+                        std::sort(it8, it5, [&](const auto a, const auto b){
+                            // 段の順にソートする
+                            return lineparams[a].section < lineparams[b].section;
+                        });
                         auto it7 = std::partition(it8, it5, [&](const auto x){
                             return lineparams[*it8].section == lineparams[x].section;
                         });
@@ -856,59 +958,76 @@ int renumber_id(
                 }
             }
             
-            section += section_param.size();
-            section_param.clear();
+            section = (int)section_param.size();
+            section_param.emplace_back(width*scale,0,height*scale,0);
             it1 = it5;
         }
         it1 = it3;
         it2 = chain_remap.end();
+        int section2 = section;
         // 縦書き
         while(it1 != it2) {
             std::sort(it1, it2, [&](const auto a, const auto b){
                 // 右を先に
                 return lineparams[a].cx2 > lineparams[b].cx2;
             });
-            // y方向にほぼ完全に重なっているブロックを探索する
-            float cy1 = lineparams[*it1].cy1;
-            float cy2 = lineparams[*it1].cy2;
+            // x方向に重なっているブロックを探索する
+            float cx1 = lineparams[*it1].cx1 - lineparams[*it1].size * float(allowwidth_next_block);
+            float cx2 = lineparams[*it1].cx2 + lineparams[*it1].size * float(allowwidth_next_block);
             auto it4 = std::partition(it1, it2, [&](const auto x){
-                return std::min(cy2, lineparams[x].cy2) - std::max(cy1, lineparams[x].cy1) > (cy2 - cy1) * 0.75;
+                return std::min(cx2, lineparams[x].cx2) - std::max(cx1, lineparams[x].cx1) > 0;
             });
-            // yで重なっているブロックはいない
+            // xで重なっているブロックはいない
             if(it4 == it1) {
+                int s = section;
+                lineparams[*it1].section = s;
+                section_param[s].cx1 = std::min(section_param[s].cx1, lineparams[*it1].cx1);
+                section_param[s].cx2 = std::max(section_param[s].cx2, lineparams[*it1].cx2);
+                section_param[s].cy1 = std::min(section_param[s].cy1, lineparams[*it1].cy1);
+                section_param[s].cy2 = std::max(section_param[s].cy2, lineparams[*it1].cy2);
                 ++it1;
                 continue;
             }
-            // これらのブロックのxの範囲を探索
-            float cx1 = lineparams[*it1].cx1;
-            float cx2 = lineparams[*it1].cx2;
+            // これらのブロックのyの範囲を探索
+            float cy1 = lineparams[*it1].cy1;
+            float cy2 = lineparams[*it1].cy2;
             for(auto it5 = it1; it5 != it4; ++it5) {
-                cx1 = std::min(cx1, lineparams[*it5].cx1 - lineparams[*it5].size * float(allowwidth_next_block));
-                cx2 = std::max(cx2, lineparams[*it5].cx2 + lineparams[*it5].size * float(allowwidth_next_block));
+                cy1 = std::min(cy1, lineparams[*it5].cy1);
+                cy2 = std::max(cy2, lineparams[*it5].cy2);
             }
-            // このブロックにx座標が含まれるブロックを検索
+            std::sort(it1, it2, [&](const auto a, const auto b){
+                // 上を先に
+                return lineparams[a].cy1 < lineparams[b].cy1;
+            });
+            // このブロックにy座標が含まれるブロックを検索
             auto it5 = std::partition(it1, it2, [&](const auto x){
-                return lineparams[x].cx1 <= cx2 && lineparams[x].cx2 >= cx1;
+                return lineparams[x].cy1 <= cy2 && lineparams[x].cy2 >= cy1;
             });
             auto it52 = it5;
             do {
                 it52 = it5;
-                // これらのブロックのxの範囲を探索
+                // これらのブロックのyの範囲を探索
                 for(auto it53 = it1; it53 != it5; ++it53) {
-                    cx1 = std::min(cx1, lineparams[*it53].cx1 - lineparams[*it53].size * float(allowwidth_next_block));
-                    cx2 = std::max(cx2, lineparams[*it53].cx2 + lineparams[*it53].size * float(allowwidth_next_block));
+                    cy1 = std::min(cy1, lineparams[*it53].cy1);
+                    cy2 = std::max(cy2, lineparams[*it53].cy2);
                 }
-                // このブロックにx座標が含まれるブロックを検索
+                // このブロックにy座標が含まれるブロックを検索
                 it5 = std::partition(it1, it2, [&](const auto x){
-                    return lineparams[x].cx1 < cx2 && lineparams[x].cx2 > cx1;
+                    return lineparams[x].cy1 <= cy2 && lineparams[x].cy2 >= cy1;
                 });
             } while(it52 != it5);
             if(it5 == it1) {
+                int s = section;
+                lineparams[*it1].section = s;
+                section_param[s].cx1 = std::min(section_param[s].cx1, lineparams[*it1].cx1);
+                section_param[s].cx2 = std::max(section_param[s].cx2, lineparams[*it1].cx2);
+                section_param[s].cy1 = std::min(section_param[s].cy1, lineparams[*it1].cy1);
+                section_param[s].cy2 = std::max(section_param[s].cy2, lineparams[*it1].cy2);
                 ++it1;
                 continue;
             }
             // 含まれているブロック内で検索
-            std::vector<std::pair<float,float>> section_param;
+            int block_section = section;
             auto it6 = it1;
             while(it6 != it5) {
                 std::sort(it6, it5, [&](const auto a, const auto b){
@@ -922,8 +1041,13 @@ int renumber_id(
                     return std::min(cx2, lineparams[x].cx2) - std::max(cx1, lineparams[x].cx1) > 0;
                 });
                 if(it7 == it6) {
+                    int s = block_section;
+                    lineparams[*it6].section = s;
+                    section_param[s].cx1 = std::min(section_param[s].cx1, lineparams[*it6].cx1);
+                    section_param[s].cx2 = std::max(section_param[s].cx2, lineparams[*it6].cx2);
+                    section_param[s].cy1 = std::min(section_param[s].cy1, lineparams[*it6].cy1);
+                    section_param[s].cy2 = std::max(section_param[s].cy2, lineparams[*it6].cy2);
                     ++it6;
-                    lineparams[*it6].section = section;
                     continue;
                 }
                 if(std::distance(it6, it7) > 1) {
@@ -932,63 +1056,126 @@ int renumber_id(
                         // 上を先に
                         return lineparams[a].cy1 < lineparams[b].cy1;
                     });
-                    if(section_param.empty()) {
+                    if(section_param.size()-1 == section) {
                         // 段を追加
-                        section_param.emplace_back(lineparams[*it6].cy1, lineparams[*it6].cy2);
-                        section++;
+                        block_section = (int)section_param.size();
+                        section_param.emplace_back(lineparams[*it6].cx1, lineparams[*it6].cx2, lineparams[*it6].cy1, lineparams[*it6].cy2);
                     }
                     for(auto it8 = it6; it8 != it7; ++it8) {
                         bool found = false;
-                        for(int s = 0; s < section_param.size(); s++) {
+                        for(int s = block_section; s < section_param.size(); s++) {
                             // 縦に重なっている
-                            if (std::min(section_param[s].second, lineparams[*it8].cy2) - std::max(section_param[s].first, lineparams[*it8].cy1) > 0) {
-                                lineparams[*it8].section = section + s;
-                                section_param[s].first = std::min(section_param[s].first, lineparams[*it8].cy1);
-                                section_param[s].second = std::max(section_param[s].second, lineparams[*it8].cy2);
+                            if (std::min(section_param[s].cy2, lineparams[*it8].cy2) - std::max(section_param[s].cy1, lineparams[*it8].cy1) > 0) {
+                                lineparams[*it8].section = s;
+                                section_param[s].cx1 = std::min(section_param[s].cx1, lineparams[*it8].cx1);
+                                section_param[s].cx2 = std::max(section_param[s].cx2, lineparams[*it8].cx2);
+                                section_param[s].cy1 = std::min(section_param[s].cy1, lineparams[*it8].cy1);
+                                section_param[s].cy2 = std::max(section_param[s].cy2, lineparams[*it8].cy2);
                                 found = true;
                                 break;
                             }
                         }
                         if(!found) {
                             // 段を追加
-                            int s = (int)section_param.size();
-                            lineparams[*it8].section = section + s;
-                            section_param.emplace_back(lineparams[*it8].cy1, lineparams[*it8].cy2);
+                            lineparams[*it8].section = (int)section_param.size();
+                            section_param.emplace_back(lineparams[*it8].cx1, lineparams[*it8].cx2, lineparams[*it8].cy1, lineparams[*it8].cy2);
                         }
                     }
                 }
                 else {
-                    if(section_param.empty()) {
+                    if(section_param.size()-1 == section) {
                         // 段を追加
-                        section_param.emplace_back(lineparams[*it6].cy1, lineparams[*it6].cy2);
-                        section++;
-                        lineparams[*it6].section = section;
+                        block_section = (int)section_param.size();
+                        lineparams[*it6].section = block_section;
+                        section_param.emplace_back(lineparams[*it6].cx1, lineparams[*it6].cx2, lineparams[*it6].cy1, lineparams[*it6].cy2);
                     }
                     else {
                         bool found = false;
-                        for(int s = 0; s < section_param.size(); s++) {
-                            if (std::min(section_param[s].second, lineparams[*it6].cy2) - std::max(section_param[s].first, lineparams[*it6].cy1) > 0) {
-                                lineparams[*it6].section = section + s;
-                                section_param[s].first = std::min(section_param[s].first, lineparams[*it6].cy1);
-                                section_param[s].second = std::max(section_param[s].second, lineparams[*it6].cy2);
+                        for(int s = block_section; s < section_param.size(); s++) {
+                            if (std::min(section_param[s].cy2, lineparams[*it6].cy2) - std::max(section_param[s].cy1, lineparams[*it6].cy1) > 0) {
+                                lineparams[*it6].section = s;
+                                section_param[s].cx1 = std::min(section_param[s].cx1, lineparams[*it6].cx1);
+                                section_param[s].cx2 = std::max(section_param[s].cx2, lineparams[*it6].cx2);
+                                section_param[s].cy1 = std::min(section_param[s].cy1, lineparams[*it6].cy1);
+                                section_param[s].cy2 = std::max(section_param[s].cy2, lineparams[*it6].cy2);
                                 found = true;
                                 break;
                             }
                         }
                         if(!found) {
                             // 段を消す
-                            section += (int)section_param.size();
-                            section_param.clear();
-                            lineparams[*it6].section = section;
+                            block_section = (int)section_param.size();
+                            lineparams[*it6].section = block_section;
+                            section_param.emplace_back(lineparams[*it6].cx1, lineparams[*it6].cx2, lineparams[*it6].cy1, lineparams[*it6].cy2);
                         }
                     }
                 }
                 it6 = it7;
             }
-            
+            section = block_section;
+
+            // 段をソートしておく
+            std::vector<int> section_renum(section_param.size());
+            std::iota(section_renum.begin(), section_renum.end(), 0);
+            std::sort(section_renum.begin()+section2, section_renum.end(), [&](const auto a, const auto b){
+                // 上を先に
+                return section_param[a].cy1 < section_param[b].cy1;
+            });
+            auto sit1 = section_renum.begin()+section2;
+            while(sit1 != section_renum.end()) {
+                float sy1 = section_param[*sit1].cy1;
+                float sy2 = section_param[*sit1].cy2;
+                // y方向に重なっている行を探索
+                auto sit2 = std::partition(sit1, section_renum.end(), [&](const auto x){
+                    return std::min(sy2, section_param[x].cy2) - std::max(sy1, section_param[x].cy1) > 0;
+                });
+                if (sit2 == sit1) {
+                    ++sit1;
+                    continue;
+                }
+                if(std::distance(sit1, sit2) > 1) {
+                    std::sort(sit1, sit2, [&](const auto a, const auto b){
+                        // 右を先に
+                        return section_param[a].cx2 > section_param[b].cx2;
+                    });
+                }
+                sit1 = sit2;
+            }
+            std::sort(section_param.begin()+section2, section_param.end(), [](const auto a, const auto b){
+                // 上を先に
+                return a.cy1 < b.cy1;
+            });
+            auto pit1 = section_param.begin()+section2;
+            while(pit1 != section_param.end()) {
+                float sy1 = pit1->cy1;
+                float sy2 = pit1->cy2;
+                // y方向に重なっている行を探索
+                auto pit2 = std::partition(pit1, section_param.end(), [&](const auto x){
+                    return std::min(sy2, x.cy2) - std::max(sy1, x.cy1) > 0;
+                });
+                if (pit2 == pit1) {
+                    ++pit1;
+                    continue;
+                }
+                if(std::distance(pit1, pit2) > 1) {
+                    std::sort(pit1, pit2, [](const auto a, const auto b){
+                        // 右を先に
+                        return a.cx2 > b.cx2;
+                    });
+                }
+                pit1 = pit2;
+            }
+
+            // 番号を振り直す
+            for(auto &lp: lineparams) {
+                auto sit = std::find(section_renum.begin(), section_renum.end(), lp.section);
+                assert(sit != section_renum.end());
+                lp.section = (int)std::distance(section_renum.begin(), sit);
+            }
+
             // 表か段組かを判定する
             // 段組なら、縦書きなので右端が一致しているはず
-            std::vector<float> sec_right(section+1+section_param.size());
+            std::vector<float> sec_right(1+section_param.size());
             for(auto cit = it1; cit != it5; ++cit) {
                 int s = lineparams[*cit].section;
                 sec_right[s] = std::max(sec_right[s], lineparams[*cit].cx2);
@@ -1024,6 +1211,10 @@ int renumber_id(
                     auto it8 = it1;
                     while(it8 != it5) {
                         // 最初の段でまずソート
+                        std::sort(it8, it5, [&](const auto a, const auto b){
+                            // 段の順にソートする
+                            return lineparams[a].section < lineparams[b].section;
+                        });
                         auto it7 = std::partition(it8, it5, [&](const auto x){
                             return lineparams[*it8].section == lineparams[x].section;
                         });
@@ -1068,8 +1259,8 @@ int renumber_id(
                 }
             }
             
-            section += section_param.size();
-            section_param.clear();
+            section = (int)section_param.size();
+            section_param.emplace_back(width*scale,0,height*scale,0);
             it1 = it5;
         }
     }
@@ -1279,61 +1470,74 @@ void make_block(
     }
     // 縦に分割できる見開きかどうか
     if (page_divide) {
-        // 大きい順に
-        std::sort(block_idx.begin(), block_idx.end(), [&](const int a, const int b){
+        // 縦書きか横書きか、メインの方向のブロックのみを使用する
+        std::vector<int> target_block_idx;
+        std::copy_if(block_idx.begin(), block_idx.end(), std::back_inserter(target_block_idx), [&](const auto x){
+            return (orientation_score >= 0) ? blockparams[x].d == 0 : blockparams[x].d == 1;
+        });
+        std::sort(target_block_idx.begin(), target_block_idx.end(), [&](const int a, const int b){
             return blockparams[a].x_min < blockparams[b].x_min;
         });
-        if (orientation_score >= 0) {
-            float page_div_x = width * scale * 2 / 5;
-            // 横書き
-            // 真ん中の場所を探る
-            float prev_page_div_x;
-            do {
-                prev_page_div_x = page_div_x;
-                for(auto blockid: block_idx) {
-                    if(blockparams[blockid].x_min < page_div_x) {
-                        // 左ページ
-                        page_div_x = std::max(page_div_x, blockparams[blockid].x_max + blockparams[blockid].size * float(1 + allowwidth_next_block));
-                    }
-                }
-            } while(prev_page_div_x != page_div_x);
 
-            if(fabs(page_div_x - width * scale / 2) > width * scale / 10) {
-                page_div_x = width * scale;
+        float page_div_x = width * scale / 2;
+        std::vector<std::pair<float,float>> div_points;
+        for(auto it1 = target_block_idx.begin(); it1 != target_block_idx.end(); ++it1) {
+            auto it2 = std::find_if(it1+1, target_block_idx.end(), [&](const auto x){
+                return std::min(blockparams[x].x_max,blockparams[*it1].x_max) - std::max(blockparams[x].x_min,blockparams[*it1].x_min) <= 0;
+            });
+            if(it2 != target_block_idx.end()) {
+                if(blockparams[*it2].x_min > blockparams[*it1].x_max) {
+                    div_points.emplace_back(blockparams[*it1].x_max, blockparams[*it2].x_min);
+                }
             }
-            
-            // 横書きなので、左から
-            for(auto blockid: block_idx) {
-                if(blockparams[blockid].x_max <= page_div_x) {
-                    blockparams[blockid].p = 0;
+        }
+        
+        if(div_points.empty()) {
+            page_div_x = 0;
+        }
+        else {
+            auto calc_dist = [&](std::pair<float,float> x){
+                float d1 = page_div_x - x.first;
+                float d2 = page_div_x - x.second;
+                if(d1 * d2 > 0) {
+                    return std::min(fabs(d1), fabs(d2));
                 }
                 else {
+                    return 0.0f;
+                }
+            };
+            std::sort(div_points.begin(), div_points.end(), [&](const auto a, const auto b){
+                return calc_dist(a) < calc_dist(b);
+            });
+            
+            if(div_points.front().first <= page_div_x && page_div_x <= div_points.front().second) {
+                // keep page_div_x
+            }
+            else {
+                page_div_x = (div_points.front().first + div_points.front().second) / 2;
+            }
+            
+            // 真ん中から外れてるので、なかったことにする
+            if(fabs(page_div_x - width * scale / 2) > width * scale / 10) {
+                page_div_x = 0;
+            }
+        }
+
+        if (orientation_score >= 0) {
+            // 横書きなので、左から
+            for(auto blockid: block_idx) {
+                if(blockparams[blockid].x_min > page_div_x) {
                     blockparams[blockid].p = 1;
+                }
+                else {
+                    blockparams[blockid].p = 0;
                 }
             }
         }
         else {
-            float page_div_x = width * scale * 3 / 5;
-            // 縦書き
-            // 真ん中の場所を探る
-            float prev_page_div_x;
-            do {
-                prev_page_div_x = page_div_x;
-                for(auto blockid: block_idx) {
-                    if(blockparams[blockid].x_min > page_div_x) {
-                        // 右ページ
-                        page_div_x = std::min(page_div_x, blockparams[blockid].x_min - blockparams[blockid].size * float(1 + allowwidth_next_block));
-                    }
-                }
-            } while(prev_page_div_x != page_div_x);
-
-            if(fabs(page_div_x - width * scale / 2) > width * scale / 10) {
-                page_div_x = width * scale;
-            }
-
             // 縦書きなので、右から
             for(auto blockid: block_idx) {
-                if(blockparams[blockid].x_max >= page_div_x) {
+                if(blockparams[blockid].x_min > page_div_x) {
                     blockparams[blockid].p = 0;
                 }
                 else {
@@ -1361,28 +1565,6 @@ void make_block(
             if (orientation_score < 0) {
                 // 縦書き
                 std::sort(st, ed, [&](const int a, const int b){
-                    // 右から
-                    return blockparams[a].x_max > blockparams[b].x_max;
-                });
-
-                auto it1 = st;
-                while(it1 != ed) {
-                    float x_min = blockparams[*it1].x_min;
-                    float x_max = blockparams[*it1].x_max;
-                    auto it2 = std::partition(it1, ed, [&](const auto x){
-                        return std::min(x_max, blockparams[x].x_max) - std::max(x_min, blockparams[x].x_min) > 0;
-                    });
-                    std::sort(it1, it2, [&](const int a, const int b){
-                        // 上から
-                        return blockparams[a].y_min < blockparams[b].y_min;
-                    });
-
-                    it1 = it2;
-                }
-            }
-            else {
-                // 横書き
-                std::sort(st, ed, [&](const int a, const int b){
                     // 上から
                     return blockparams[a].y_min < blockparams[b].y_min;
                 });
@@ -1395,8 +1577,30 @@ void make_block(
                         return std::min(y_max, blockparams[x].y_max) - std::max(y_min, blockparams[x].y_min) > 0;
                     });
                     std::sort(it1, it2, [&](const int a, const int b){
-                        // 左から
-                        return blockparams[a].x_min < blockparams[b].x_min;
+                        // 右から
+                        return blockparams[a].x_max > blockparams[b].x_max;
+                    });
+
+                    it1 = it2;
+                }
+            }
+            else {
+                // 横書き
+                std::sort(st, ed, [&](const int a, const int b){
+                    // 左から
+                    return blockparams[a].x_min < blockparams[b].x_min;
+                });
+
+                auto it1 = st;
+                while(it1 != ed) {
+                    float x_min = blockparams[*it1].x_min;
+                    float x_max = blockparams[*it1].x_max;
+                    auto it2 = std::partition(it1, ed, [&](const auto x){
+                        return std::min(x_max, blockparams[x].x_max) - std::max(x_min, blockparams[x].x_min) > 0;
+                    });
+                    std::sort(it1, it2, [&](const int a, const int b){
+                        // 上から
+                        return blockparams[a].y_min < blockparams[b].y_min;
                     });
 
                     it1 = it2;

@@ -28,6 +28,18 @@ int number_unbind(
     }
     std::cerr << "number_unbind " << unbind_boxes.size() << std::endl;
 
+    // 文章全体が、縦書きか横書きかを判定する
+    int direction = 0;
+    for(const auto &box: boxes) {
+        if(box.idx < 0) continue;
+        if((box.subtype & 1) == 0) {
+            direction++;
+        }
+        else {
+            direction--;
+        }
+    }
+
     if(unbind_boxes.size() > 1) {
 
         std::vector<std::vector<int>> hori_line_boxid;
@@ -279,7 +291,15 @@ int number_unbind(
                 [dupid](auto a){ return std::count(a.begin(), a.end(), dupid) > 0; });
             if(vp == vert_line_boxid.end()) continue;
 
-            if(hp->size() >= vp->size()) {
+            if(hp->size() == vp->size()) {
+                if(direction < 0) {
+                    hori_line_boxid.erase(hp);
+                }
+                else {
+                    vert_line_boxid.erase(vp);
+                }
+            }
+            else if(hp->size() > vp->size()) {
                 vert_line_boxid.erase(vp);
             }
             else {
@@ -300,26 +320,14 @@ int number_unbind(
         }
 
         for(const auto &chain: vert_line_boxid) {
-            int idx = next_id++;
+            int lineidx = next_id++;
             int subidx = 0;
             for(const auto boxid: chain) {
-                boxes[boxid].idx = idx;
+                boxes[boxid].idx = lineidx;
                 boxes[boxid].subidx = subidx++;
                 boxes[boxid].subtype |= 1;
                 boxes[boxid].direction = M_PI_2;
             }
-        }
-    }
-
-    // 文章全体が、縦書きか横書きかを判定する
-    int direction = 0;
-    for(const auto &box: boxes) {
-        if(box.idx < 0) continue;
-        if((box.subtype & 1) == 0) {
-            direction++;
-        }
-        else {
-            direction--;
         }
     }
 

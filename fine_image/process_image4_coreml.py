@@ -125,7 +125,11 @@ for target_file in target_files:
         p += 4
         subtype = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
         p += 4
-        detected_boxes.append((id,block,idx,subidx,subtype))
+        pageidx = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        p += 4
+        sectionidx = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+        p += 4
+        detected_boxes.append((id,block,idx,subidx,subtype,pageidx,sectionidx))
 
     # im = Image.open(target_file).convert('RGB')
 
@@ -186,7 +190,7 @@ for target_file in target_files:
 
     centers = []
     boxlist = []
-    for id, block, idx, subidx, subtype in detected_boxes:
+    for id, block, idx, subidx, subtype, pageidx, sectionidx in detected_boxes:
         if id < 0:
             continue
         boxlist.append({

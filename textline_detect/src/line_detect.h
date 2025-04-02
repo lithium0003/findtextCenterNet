@@ -4,7 +4,7 @@ struct charbox {
     int id;
     int block;
     int idx;
-    int subtype; // 1: vert, 2,4: (10, rubybase, 11, ruby), 8: sp
+    int subtype; // 1: vert, 2,4: (10, rubybase, 11, ruby), 8: sp, 16: emphasis / 32: alone ruby
     int subidx;
     int double_line;
     int page;

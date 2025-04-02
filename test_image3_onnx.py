@@ -364,7 +364,11 @@ for i in range(count):
     p += 4
     subtype = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
     p += 4
-    detected_boxes.append((id,block,idx,subidx,subtype))
+    pageidx = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+    p += 4
+    sectionidx = int.from_bytes(result[p:p+4], byteorder='little', signed=True)
+    p += 4
+    detected_boxes.append((id,block,idx,subidx,subtype,pageidx,sectionidx))
 
 # print(detected_boxes)
 
@@ -372,7 +376,7 @@ features = []
 prev_block = 0
 prev_idx = 0
 vertical = 0
-for id, block, idx, subidx, subtype in detected_boxes:
+for id, block, idx, subidx, subtype, pageidx, sectionidx in detected_boxes:
     if id < 0:
         continue
 
