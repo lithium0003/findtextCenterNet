@@ -7,7 +7,7 @@
 
 #include <stdio.h>
 #include <iostream>
-#include <math.h>
+#include <cmath>
 
 void sort_chain(
     std::vector<int> &chain,
