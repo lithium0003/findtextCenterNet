@@ -1,4 +1,5 @@
 #pragma once
+#define _USE_MATH_DEFINES
 
 struct charbox {
     int id;
@@ -37,11 +38,3 @@ extern int scale;
 extern int run_mode;
 extern int width;
 extern int height;
-
-void call(int imwidth,
-          int imheight,
-          const float *linedata,
-          const float *sepdata,
-          int count,
-          const float *boxdata,
-          int *outinfo);
