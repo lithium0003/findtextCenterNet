@@ -78,53 +78,6 @@ int renumber_chain(
     return int(chain_remap.size());
 }
 
-// ゴミっぽい外れの小さいboxを外す
-void filter_box(
-    int id_max,
-    std::vector<charbox> &boxes)
-{
-    if(boxes.size() < 20) return;
-
-    std::vector<std::vector<int>> linecount(id_max);
-    std::vector<float> sizes;
-    for(auto &box: boxes) {
-        if(box.idx < 0) continue;
-        linecount[box.idx].push_back(box.id);
-        sizes.push_back(std::max(box.w, box.h));
-    }
-    float mean1_size = std::reduce(sizes.begin(), sizes.end()) / std::max(1.0, double(sizes.size()));
-    std::vector<float> lsizes;
-    std::copy_if(sizes.begin(), sizes.end(), std::back_inserter(lsizes), [mean1_size](auto x){
-        return x > mean1_size;
-    });
-    float mean2_size = std::reduce(lsizes.begin(), lsizes.end()) / std::max(1.0, double(lsizes.size()));
-
-    for(auto chain: linecount) {
-        if(chain.size() != 1) continue;
-        int idx = chain.front();
-        if(std::max(boxes[idx].w, boxes[idx].h) > 25) continue;
-        float cx = boxes[idx].cx;
-        float cy = boxes[idx].cy;
-
-        std::vector<float> dist;
-        for(auto &box: boxes) {
-            if(box.idx < 0) continue;
-            if(box.id == idx) continue;
-            float d = sqrt((box.cx - cx) * (box.cx - cx) + (box.cy - cy) * (box.cy - cy));
-            dist.push_back(d);
-        }
-
-        float min_dist = std::reduce(dist.begin(), dist.end(), INFINITY, [](auto acc, auto i){
-            return std::min(acc, i);
-        });
-
-        if(min_dist > mean2_size * 5) {
-            // std::cerr << min_dist << "," << idx << std::endl;
-            boxes[idx].idx = -1;
-        }
-    }
-}
-
 void after_search(
     std::vector<charbox> &boxes,
     std::vector<std::vector<int>> &line_box_chain,
@@ -143,8 +96,6 @@ void after_search(
 
     id_max = number_unbind(boxes, lineblocker, idimage, id_max);
     std::cerr << "id max " << id_max << std::endl;
-
-    filter_box(id_max, boxes);
 
     make_block(boxes, lineblocker);
 

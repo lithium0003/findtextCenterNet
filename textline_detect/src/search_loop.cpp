@@ -81,12 +81,6 @@ void fix_chain_info(
     // chain内をソート
     for(auto &chain: line_box_chain) {
         sort_chain(chain, boxes);
-        float direction, start_cx, start_cy, end_cx, end_cy;
-        double w, h;
-        search_chain(chain, boxes, direction, w, h, start_cx, start_cy, end_cx, end_cy);
-        for(auto boxid: chain) {
-            boxes[boxid].direction = direction;
-        }
     }
 }
 

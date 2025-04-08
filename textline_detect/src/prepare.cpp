@@ -130,4 +130,40 @@ void make_lineblocker(
             }
         }
     }
+
+    std::vector<int> search_idx;
+    for(int y = 0; y < height; y++) {
+        for(int x = 0; x < width; x++) {
+            if(lineblocker[width * y + x]) {
+                search_idx.push_back(width * y + x);
+            }
+        }
+    }
+    for(auto i: search_idx) {
+        float value_th = sepimage[i] * 0.1;
+        std::vector<int> stack;
+        stack.push_back(i);
+        while(!stack.empty()) {
+            int i2 = stack.back();
+            stack.pop_back();
+
+            if(sepimage[i2] < value_th) continue;
+            lineblocker[i2] = true;
+
+            int x0 = i2 % width;
+            int y0 = i2 / width;
+
+            std::vector<int> tmp;
+            for(int y = y0-1; y <= y0+1; y++) {
+                for(int x = x0-1; x <= x0+1; x++) {
+                    if(x < 0 || x >= width || y < 0 || y >= height) continue;
+                    int i3 = y * width + x;
+                    if(lineblocker[i3]) continue;
+                    if(sepimage[i3] < value_th) continue;
+                    tmp.push_back(i3);
+                }
+            }
+            std::copy(tmp.begin(), tmp.end(), std::back_inserter(stack));
+        }
+    }
 }
