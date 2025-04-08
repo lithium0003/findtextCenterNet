@@ -292,7 +292,16 @@ int number_unbind(
             if(vp == vert_line_boxid.end()) continue;
 
             if(hp->size() == vp->size()) {
-                if(direction < 0) {
+                // 同じ長さの時のチェック
+                float hori_space = 0;
+                float vert_space = 0;
+                for(int i = 0; i < hp->size()-1; i++) {
+                    int idx1 = (*hp)[i];
+                    int idx2 = (*hp)[i+1];
+                    hori_space += boxes[idx2].cx - boxes[idx1].cx;
+                    vert_space += boxes[idx2].cy - boxes[idx1].cy;
+                }
+                if(hori_space < vert_space) {
                     hori_line_boxid.erase(hp);
                 }
                 else {
