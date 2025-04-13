@@ -14,8 +14,8 @@
 #include "line_detect.h"
 #include "process.h"
 
-double ruby_cutoff = 0.5;
-double rubybase_cutoff = 0.5;
+double ruby_cutoff = 0.25;
+double rubybase_cutoff = 0.75;
 double space_cutoff = 0.5;
 double emphasis_cutoff = 0.5;
 float line_valueth = 0.4;
