@@ -500,8 +500,7 @@ while cur_i < features.shape[0]:
 
         listp = []
         listi = []
-        for output1 in output:
-            pred_p1 = softmax(output1)
+        for pred_p1 in output:
             topi = np.argpartition(-pred_p1, 5, axis=-1)[...,:5]
             topp = np.take_along_axis(pred_p1, topi, axis=-1)
             listp.append(np.transpose(topp, (2,0,1)))

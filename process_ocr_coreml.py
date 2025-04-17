@@ -2,7 +2,7 @@ from PIL import Image
 import numpy as np
 import itertools
 
-from process_ocr_base import OCR_Processer, max_encoderlen, max_decoderlen, decoder_SOT, decoder_EOT, decoder_MSK, modulo_list, softmax, calc_predid
+from process_ocr_base import OCR_Processer, max_encoderlen, max_decoderlen, decoder_SOT, decoder_EOT, decoder_MSK, modulo_list, calc_predid
 
 class OCR_coreml_Processer(OCR_Processer):
     def __init__(self):
@@ -37,14 +37,16 @@ class OCR_coreml_Processer(OCR_Processer):
         for k in range(rep_count):
             output = self.mlmodel_transformer_decoder.predict({
                 'encoder_output': encoder_output,
-                'decoder_input': decoder_input,
+                'decoder_input_1091': decoder_input % 1091,
+                'decoder_input_1093': decoder_input % 1093,
+                'decoder_input_1097': decoder_input % 1097,
                 'key_mask': key_mask,
             })
 
             listp = []
             listi = []
             for m in modulo_list:
-                pred_p1 = softmax(output['modulo_%d'%m])
+                pred_p1 = output['modulo_%d'%m]
                 topi = np.argpartition(-pred_p1, 5, axis=-1)[...,:5]
                 topp = np.take_along_axis(pred_p1, topi, axis=-1)
                 listp.append(np.transpose(topp, (2,0,1)))

@@ -1,7 +1,7 @@
 import numpy as np
 import itertools
 
-from process_ocr_base import OCR_Processer, max_encoderlen, max_decoderlen, decoder_SOT, decoder_EOT, decoder_MSK, modulo_list, softmax, calc_predid
+from process_ocr_base import OCR_Processer, max_encoderlen, max_decoderlen, decoder_SOT, decoder_EOT, decoder_MSK, modulo_list, calc_predid
 
 class OCR_onnx_Processer(OCR_Processer):
     def __init__(self):
@@ -41,8 +41,7 @@ class OCR_onnx_Processer(OCR_Processer):
 
             listp = []
             listi = []
-            for output1 in output:
-                pred_p1 = softmax(output1)
+            for pred_p1 in output:
                 topi = np.argpartition(-pred_p1, 4, axis=-1)[...,:4]
                 topp = np.take_along_axis(pred_p1, topi, axis=-1)
                 listp.append(np.transpose(topp, (2,0,1)))

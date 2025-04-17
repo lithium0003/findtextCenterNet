@@ -499,7 +499,9 @@ while cur_i < features.shape[0]:
     for k in range(rep_count):
         output = mlmodel_transformer_decoder.predict({
             'encoder_output': encoder_output,
-            'decoder_input': decoder_input,
+            'decoder_input_1091': decoder_input % 1091,
+            'decoder_input_1093': decoder_input % 1093,
+            'decoder_input_1097': decoder_input % 1097,
             'key_mask': key_mask,
         })
 
