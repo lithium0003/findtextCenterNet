@@ -6,8 +6,8 @@ import os
 from datetime import datetime
 import itertools
 
-from models.transformer import ModelDimensions, Transformer, TransformerEncoderPredictor, TransformerDecoderPredictor
-from util_func import feature_dim, modulo_list, calc_predid, softmax
+from models.transformer import ModelDimensions, Transformer, TransformerEncoderPredictor, TransformerDecoderPredictor1
+from util_func import feature_dim, modulo_list, calc_predid
 from const import encoder_add_dim, max_decoderlen, max_encoderlen, decoder_SOT, decoder_EOT, decoder_MSK
 
 def convert3():
@@ -26,7 +26,7 @@ def convert3():
         print('empty model')
     model.eval()
     encoder = TransformerEncoderPredictor(model.encoder)
-    decoder = TransformerDecoderPredictor(model.decoder)
+    decoder = TransformerDecoderPredictor1(model.decoder)
     encoder.eval()
     decoder.eval()
 
@@ -57,7 +57,7 @@ def convert3():
 
     encoder_output = torch.rand(1, max_encoderlen, config.embed_dim)
     decoder_input = torch.randint(0, 1000, size=(1, max_decoderlen), dtype=torch.long)
-    traced_model = torch.jit.trace(decoder, (encoder_output, decoder_input, key_mask))
+    traced_model = torch.jit.trace(decoder, (encoder_output, decoder_input, decoder_input, decoder_input, key_mask))
 
     # def op_selector(op):
     #     print(op.op_type, [o.name for o in op.outputs])
@@ -67,7 +67,9 @@ def convert3():
                                  convert_to="mlprogram",
                                  inputs=[
                                     ct.TensorType(name='encoder_output', shape=(1, max_encoderlen, config.embed_dim)),
-                                    ct.TensorType(name='decoder_input', shape=(1, max_decoderlen), dtype=np.int32),
+                                    ct.TensorType(name='decoder_input_1091', shape=(1, max_decoderlen)),
+                                    ct.TensorType(name='decoder_input_1093', shape=(1, max_decoderlen)),
+                                    ct.TensorType(name='decoder_input_1097', shape=(1, max_decoderlen)),
                                     ct.TensorType(name='key_mask', shape=(1, 1, 1, max_encoderlen)),
                                  ],
                                  outputs=[
@@ -115,14 +117,16 @@ def test3():
     for k in range(rep_count):
         output = mlmodel_decoder.predict({
             'encoder_output': encoder_output,
-            'decoder_input': decoder_input,
+            'decoder_input_1091': decoder_input % 1091,
+            'decoder_input_1093': decoder_input % 1093,
+            'decoder_input_1097': decoder_input % 1097,
             'key_mask': key_mask,
         })
 
         listp = []
         listi = []
         for m in modulo_list:
-            pred_p1 = softmax(output['modulo_%d'%m])
+            pred_p1 = output['modulo_%d'%m]
             topi = np.argpartition(-pred_p1, 4, axis=-1)[...,:4]
             topp = np.take_along_axis(pred_p1, topi, axis=-1)
             listp.append(np.transpose(topp, (2,0,1)))
@@ -219,4 +223,4 @@ def test32():
 if __name__ == '__main__':
     convert3()
     test3()
-    test32()
+    # test32()

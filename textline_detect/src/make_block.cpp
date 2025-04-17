@@ -33,7 +33,7 @@ void process_line(
     for(int chainid = 0; chainid < id_max; chainid++) {
         //std::cerr << "chain " << chainid << std::endl;
 
-        if(lineparams[chainid].d == 2 || (lineparams[chainid].d == 0 && run_mode == 1)) {
+        if(lineparams[chainid].d == 2 || (lineparams[chainid].d == 0 && (run_mode == 1 || run_mode == 3))) {
             // 横書き
             float s_s = 0;
             for(int i = 0; i < line_box_chain[chainid].size(); i++) {
@@ -113,7 +113,7 @@ void process_line(
                 }
             }
         }
-        else if (lineparams[chainid].d == 1 || (lineparams[chainid].d == 0 && run_mode == 2)){
+        else if (lineparams[chainid].d == 1 || (lineparams[chainid].d == 0 && (run_mode == 2 || run_mode == 4))){
             // 縦書き
             float s_s = 0;
             for(int i = 0; i < line_box_chain[chainid].size(); i++) {
@@ -306,14 +306,14 @@ bool rechain_search(
                         if((boxes[n_i].subtype & 1) == 0) {
                             // 横書き
                             if(boxes[line_box_chain[n].back()].cx < boxes[line_box_chain[m].front()].cx && fabs(boxes[line_box_chain[n].back()].cy - boxes[line_box_chain[m].front()].cy) < size) {
-                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                boxes[line_box_chain[m].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
                                 line_box_chain[m].clear();
                                 ret = false;
                                 continue;
                             }
                             if(boxes[line_box_chain[m].back()].cx < boxes[line_box_chain[n].front()].cx && fabs(boxes[line_box_chain[m].back()].cy - boxes[line_box_chain[n].front()].cy) < size) {
-                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                boxes[line_box_chain[n].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
                                 line_box_chain[n].clear();
                                 ret = false;
@@ -323,14 +323,14 @@ bool rechain_search(
                         else {
                             // 縦書き
                             if(boxes[line_box_chain[n].back()].cy < boxes[line_box_chain[m].front()].cy && fabs(boxes[line_box_chain[n].back()].cx - boxes[line_box_chain[m].front()].cx) < size) {
-                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                boxes[line_box_chain[m].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
                                 line_box_chain[m].clear();
                                 ret = false;
                                 continue;
                             }
                             if(boxes[line_box_chain[m].back()].cy < boxes[line_box_chain[n].front()].cy && fabs(boxes[line_box_chain[m].back()].cx - boxes[line_box_chain[n].front()].cx) < size) {
-                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                boxes[line_box_chain[n].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
                                 line_box_chain[n].clear();
                                 ret = false;
@@ -342,14 +342,14 @@ bool rechain_search(
                         if((boxes[m_i].subtype & 1) == 0) {
                             // 横書き
                             if(boxes[line_box_chain[n].back()].cx < boxes[line_box_chain[m].front()].cx && fabs(boxes[line_box_chain[n].back()].cy - boxes[line_box_chain[m].front()].cy) < size) {
-                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                boxes[line_box_chain[m].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
                                 line_box_chain[m].clear();
                                 ret = false;
                                 continue;
                             }
                             if(boxes[line_box_chain[m].back()].cx < boxes[line_box_chain[n].front()].cx && fabs(boxes[line_box_chain[m].back()].cy - boxes[line_box_chain[n].front()].cy) < size) {
-                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                boxes[line_box_chain[n].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
                                 line_box_chain[n].clear();
                                 ret = false;
@@ -359,14 +359,14 @@ bool rechain_search(
                         else {
                             // 縦書き
                             if(boxes[line_box_chain[n].back()].cy < boxes[line_box_chain[m].front()].cy && fabs(boxes[line_box_chain[n].back()].cx - boxes[line_box_chain[m].front()].cx) < size) {
-                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                boxes[line_box_chain[m].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
                                 line_box_chain[m].clear();
                                 ret = false;
                                 continue;
                             }
                             if(boxes[line_box_chain[m].back()].cy < boxes[line_box_chain[n].front()].cy && fabs(boxes[line_box_chain[m].back()].cx - boxes[line_box_chain[n].front()].cx) < size) {
-                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                boxes[line_box_chain[n].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
                                 line_box_chain[n].clear();
                                 ret = false;
@@ -378,14 +378,14 @@ bool rechain_search(
                         if((boxes[n_i].subtype & 1) == 0) {
                             // 横書き
                             if(boxes[line_box_chain[n].back()].cx < boxes[line_box_chain[m].front()].cx && fabs(boxes[line_box_chain[n].back()].cy - boxes[line_box_chain[m].front()].cy) < size) {
-                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                boxes[line_box_chain[m].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
                                 line_box_chain[m].clear();
                                 ret = false;
                                 continue;
                             }
                             if(boxes[line_box_chain[m].back()].cx < boxes[line_box_chain[n].front()].cx && fabs(boxes[line_box_chain[m].back()].cy - boxes[line_box_chain[n].front()].cy) < size) {
-                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                boxes[line_box_chain[n].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
                                 line_box_chain[n].clear();
                                 ret = false;
@@ -395,14 +395,14 @@ bool rechain_search(
                         else {
                             // 縦書き
                             if(boxes[line_box_chain[n].back()].cy < boxes[line_box_chain[m].front()].cy && fabs(boxes[line_box_chain[n].back()].cx - boxes[line_box_chain[m].front()].cx) < size) {
-                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                boxes[line_box_chain[m].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
                                 line_box_chain[m].clear();
                                 ret = false;
                                 continue;
                             }
                             if(boxes[line_box_chain[m].back()].cy < boxes[line_box_chain[n].front()].cy && fabs(boxes[line_box_chain[m].back()].cx - boxes[line_box_chain[n].front()].cx) < size) {
-                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                boxes[line_box_chain[n].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
                                 line_box_chain[n].clear();
                                 ret = false;
@@ -464,14 +464,14 @@ bool rechain_search(
                         if((boxes[n_i].subtype & 1) == 0) {
                             // 横書き
                             if(boxes[line_box_chain[n].back()].cx < boxes[line_box_chain[m].front()].cx && fabs(boxes[line_box_chain[n].back()].cy - boxes[line_box_chain[m].front()].cy) < size) {
-                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                boxes[line_box_chain[m].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
                                 line_box_chain[m].clear();
                                 ret = false;
                                 continue;
                             }
                             if(boxes[line_box_chain[m].back()].cx < boxes[line_box_chain[n].front()].cx && fabs(boxes[line_box_chain[m].back()].cy - boxes[line_box_chain[n].front()].cy) < size) {
-                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                boxes[line_box_chain[n].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
                                 line_box_chain[n].clear();
                                 ret = false;
@@ -481,14 +481,14 @@ bool rechain_search(
                         else {
                             // 縦書き
                             if(boxes[line_box_chain[n].back()].cy < boxes[line_box_chain[m].front()].cy && fabs(boxes[line_box_chain[n].back()].cx - boxes[line_box_chain[m].front()].cx) < size) {
-                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                boxes[line_box_chain[m].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
                                 line_box_chain[m].clear();
                                 ret = false;
                                 continue;
                             }
                             if(boxes[line_box_chain[m].back()].cy < boxes[line_box_chain[n].front()].cy && fabs(boxes[line_box_chain[m].back()].cx - boxes[line_box_chain[n].front()].cx) < size) {
-                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                boxes[line_box_chain[n].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
                                 line_box_chain[n].clear();
                                 ret = false;
@@ -500,14 +500,14 @@ bool rechain_search(
                         if((boxes[m_i].subtype & 1) == 0) {
                             // 横書き
                             if(boxes[line_box_chain[n].back()].cx < boxes[line_box_chain[m].front()].cx && fabs(boxes[line_box_chain[n].back()].cy - boxes[line_box_chain[m].front()].cy) < size) {
-                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                boxes[line_box_chain[m].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
                                 line_box_chain[m].clear();
                                 ret = false;
                                 continue;
                             }
                             if(boxes[line_box_chain[m].back()].cx < boxes[line_box_chain[n].front()].cx && fabs(boxes[line_box_chain[m].back()].cy - boxes[line_box_chain[n].front()].cy) < size) {
-                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                boxes[line_box_chain[n].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
                                 line_box_chain[n].clear();
                                 ret = false;
@@ -517,14 +517,14 @@ bool rechain_search(
                         else {
                             // 縦書き
                             if(boxes[line_box_chain[n].back()].cy < boxes[line_box_chain[m].front()].cy && fabs(boxes[line_box_chain[n].back()].cx - boxes[line_box_chain[m].front()].cx) < size) {
-                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                boxes[line_box_chain[m].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
                                 line_box_chain[m].clear();
                                 ret = false;
                                 continue;
                             }
                             if(boxes[line_box_chain[m].back()].cy < boxes[line_box_chain[n].front()].cy && fabs(boxes[line_box_chain[m].back()].cx - boxes[line_box_chain[n].front()].cx) < size) {
-                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                boxes[line_box_chain[n].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
                                 line_box_chain[n].clear();
                                 ret = false;
@@ -536,14 +536,14 @@ bool rechain_search(
                         if((boxes[n_i].subtype & 1) == 0) {
                             // 横書き
                             if(boxes[line_box_chain[n].back()].cx < boxes[line_box_chain[m].front()].cx && fabs(boxes[line_box_chain[n].back()].cy - boxes[line_box_chain[m].front()].cy) < size) {
-                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                boxes[line_box_chain[m].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
                                 line_box_chain[m].clear();
                                 ret = false;
                                 continue;
                             }
                             if(boxes[line_box_chain[m].back()].cx < boxes[line_box_chain[n].front()].cx && fabs(boxes[line_box_chain[m].back()].cy - boxes[line_box_chain[n].front()].cy) < size) {
-                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                boxes[line_box_chain[n].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
                                 line_box_chain[n].clear();
                                 ret = false;
@@ -553,14 +553,14 @@ bool rechain_search(
                         else {
                             // 縦書き
                             if(boxes[line_box_chain[n].back()].cy < boxes[line_box_chain[m].front()].cy && fabs(boxes[line_box_chain[n].back()].cx - boxes[line_box_chain[m].front()].cx) < size) {
-                                boxes[line_box_chain[m].front()].subtype |= 8;
+                                boxes[line_box_chain[m].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[m].begin(),line_box_chain[m].end(), std::back_inserter(line_box_chain[n]));
                                 line_box_chain[m].clear();
                                 ret = false;
                                 continue;
                             }
                             if(boxes[line_box_chain[m].back()].cy < boxes[line_box_chain[n].front()].cy && fabs(boxes[line_box_chain[m].back()].cx - boxes[line_box_chain[n].front()].cx) < size) {
-                                boxes[line_box_chain[n].front()].subtype |= 8;
+                                boxes[line_box_chain[n].front()].subtype |= 8+512;
                                 std::copy(line_box_chain[n].begin(),line_box_chain[n].end(), std::back_inserter(line_box_chain[m]));
                                 line_box_chain[n].clear();
                                 ret = false;
@@ -1520,6 +1520,7 @@ void make_block(
         if((box.subtype & 32) == 32) continue;
 
         int block = blockid_of_chain[box.idx];
+        if(block < 0) continue;
         blockparams[block].d = ((box.subtype & 1) == 0) ? 0: 1;
         blockparams[block].count++;
         blockparams[block].size = std::max(blockparams[block].size, std::max(box.w, box.h));

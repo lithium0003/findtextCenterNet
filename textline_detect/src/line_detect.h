@@ -5,7 +5,7 @@ struct charbox {
     int id;
     int block;
     int idx;
-    int subtype; // 1: vert, 2,4: (10, rubybase, 11, ruby), 8: sp, 16: emphasis / 32: alone ruby
+    int subtype; // 1: vert, 2,4: (10, rubybase, 11, ruby), 8: sp, 16: emphasis / 32: alone ruby 512: tab split
     int subidx;
     int double_line;
     int page;
@@ -32,6 +32,7 @@ extern const float sep_clusterth;
 extern const int linearea_th;
 extern double allowwidth_next_block;
 extern double allow_sizediff;
+extern double chain_line_ratio;
 extern int page_divide;
 extern int scale;
 
