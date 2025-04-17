@@ -34,6 +34,11 @@ wget https://huggingface.co/lithium0003/findtextCenterNet/resolve/main/model.pt
 wget https://huggingface.co/lithium0003/findtextCenterNet/resolve/main/model3.pt
 ```
 
+検出したBoxを配列するためのモジュール、textline_detectをコンパイルします。
+```bash
+make -C textline_detect
+```
+
 対象ファイルを指定して、run_ocr.pyを呼び出します。
 ```bash
 ./run_ocr.py img/test1.png
