@@ -1,6 +1,7 @@
 #include "prepare.h"
 #include <cstdio>
 #include <vector>
+#include <iterator>
 
 int search_connection(const std::vector<bool> &immap, std::vector<int> &idmap)
 {

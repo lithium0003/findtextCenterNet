@@ -25,6 +25,7 @@ const float sep_clusterth = 10.0;
 const int linearea_th = 20;
 double allowwidth_next_block = 1.5;
 double allow_sizediff = 0.5;
+double chain_line_ratio = 0.0;
 int page_divide = 0;
 int scale = 4;
 

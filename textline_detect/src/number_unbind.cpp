@@ -43,7 +43,7 @@ int number_unbind(
     if(unbind_boxes.size() > 1) {
 
         std::vector<std::vector<int>> hori_line_boxid;
-        if(run_mode == 0 || run_mode == 1) {
+        if(run_mode == 0 || run_mode == 1 || run_mode == 3) {
             // 水平方向の文字列があるかも
             // cyがどこかに固まっている
             std::vector<int> sortedcy_idx = unbind_boxes;
@@ -155,7 +155,7 @@ int number_unbind(
         }
 
         std::vector<std::vector<int>> vert_line_boxid;
-        if(run_mode == 0 || run_mode == 2) {
+        if(run_mode == 0 || run_mode == 2 || run_mode == 4) {
             // 垂直方向の文字列があるかも
             // cxがどこかに固まっている
             std::vector<int> sortedcx_idx = unbind_boxes;

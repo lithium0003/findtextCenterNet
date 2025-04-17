@@ -1,6 +1,7 @@
 #include "space_check.h"
 #include <cmath>
 #include <numeric>
+#include <algorithm>
 
 // 文字boxが重なっているときに、先行するBoxにのみspace flagを残す
 void remove_dupspace(std::vector<charbox> &boxes)
@@ -107,7 +108,7 @@ void find_lostspace(std::vector<charbox> &boxes)
             }
             for(auto it = lines_box.begin(); it != lines_box.end();) {
                 // 深いインデントの行は処理しない
-                if(boxes[it->front()].cx - x0 > s0 * 2) {
+                if(boxes[it->front()].cx - x0 > s0 * 2.5) {
                     it = lines_box.erase(it);
                 }
                 else {
@@ -123,7 +124,7 @@ void find_lostspace(std::vector<charbox> &boxes)
             }
             for(auto it = lines_box.begin(); it != lines_box.end();) {
                 // 深いインデントの行は処理しない
-                if(boxes[it->front()].cy - x0 > s0 * 2) {
+                if(boxes[it->front()].cy - x0 > s0 * 2.5) {
                     it = lines_box.erase(it);
                 }
                 else {

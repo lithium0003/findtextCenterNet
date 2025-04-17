@@ -213,6 +213,9 @@ int detect_line(
         if(lineid_map[i] >= 0) continue;
         if(lineblocker[i]) continue;
 
+        int start_x = i % width;
+        int start_y = i / width;
+        
         std::vector<int> stack;
         stack.push_back(i);
         while(!stack.empty()) {
@@ -230,6 +233,9 @@ int detect_line(
             for(int y = y0-2; y <= y0+2; y++) {
                 for(int x = x0-2; x <= x0+2; x++) {
                     if(x < 0 || x >= width || y < 0 || y >= height) continue;
+                    if(run_mode == 1 && abs(y - start_y) > 10) continue;
+                    if(run_mode == 2 && abs(x - start_x) > 10) continue;
+
                     int i3 = y * width + x;
                     if(lineid_map[i3] >= 0) continue;
                     if(lineblocker[i3]) goto next_loop;
@@ -274,7 +280,7 @@ int set_angle(
             min_y = std::min(y, min_y);
         }
         if(max_x - min_x < max_y - min_y) {
-            if(run_mode == 0 || run_mode == 2) {
+            if(run_mode == 0 || run_mode == 2 || run_mode > 2) {
                 std::pair<int,int> p1(width, height);
                 std::pair<int,int> p2(0,0);
                 for(auto i: lineid_list) {
@@ -295,7 +301,7 @@ int set_angle(
             }
         }
         else {
-            if(run_mode == 0 || run_mode == 1) {
+            if(run_mode == 0 || run_mode == 1 || run_mode > 2) {
                 std::pair<int,int> p1(width, height);
                 std::pair<int,int> p2(0,0);
                 for(auto i: lineid_list) {

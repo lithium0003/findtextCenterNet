@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
-import onnxruntime.tools
-import onnxruntime.tools.make_dynamic_shape_fixed
-import onnx
 import onnxruntime
 import torch
 import numpy as np
 import os
 import itertools
 
-from models.transformer import ModelDimensions, Transformer, TransformerEncoderPredictor, TransformerDecoderPredictor
-from util_func import feature_dim, modulo_list, calc_predid, softmax
+from models.transformer import ModelDimensions, Transformer, TransformerEncoderPredictor, TransformerDecoderPredictor2
+from util_func import feature_dim, modulo_list, calc_predid
 from const import encoder_add_dim, max_decoderlen, max_encoderlen, decoder_SOT, decoder_EOT, decoder_MSK
 
 def convert3():
@@ -28,7 +25,7 @@ def convert3():
         print('empty model')
     model.eval()
     encoder = TransformerEncoderPredictor(model.encoder)
-    decoder = TransformerDecoderPredictor(model.decoder)
+    decoder = TransformerDecoderPredictor2(model.decoder)
     encoder.eval()
     decoder.eval()
 
@@ -114,8 +111,7 @@ def test3():
 
         listp = []
         listi = []
-        for output1 in output:
-            pred_p1 = softmax(output1)
+        for pred_p1 in output:
             topi = np.argpartition(-pred_p1, 4, axis=-1)[...,:4]
             topp = np.take_along_axis(pred_p1, topi, axis=-1)
             listp.append(np.transpose(topp, (2,0,1)))

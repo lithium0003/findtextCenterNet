@@ -34,26 +34,65 @@ class QuntizationDataReader(CalibrationDataReader):
 def optimize1(nodes_to_exclude=None):
     qdr = QuntizationDataReader()
 
-    config = StaticQuantConfig(qdr, 
-                               quant_format=QuantFormat.QOperator, 
-                               activation_type=QuantType.QUInt8, 
+    config = StaticQuantConfig(qdr,
+                               quant_format=QuantFormat.QOperator,
+                               activation_type=QuantType.QUInt8,
+                               weight_type=QuantType.QInt8,
                                nodes_to_exclude=nodes_to_exclude,
                                extra_options={
                                    'CalibMovingAverage': True,
                                })
-    quantize('TextDetector.onnx',
+    quantize('TextDetector.pre.onnx',
              'TextDetector.quant.onnx',
              config)
 
+def convert2():
+    import onnx
+    model = onnx.load("TextDetector.quant.onnx")
+
+    model.graph.input[0].type.tensor_type.elem_type = 10
+    model.graph.output[0].type.tensor_type.elem_type = 10
+    model.graph.output[1].type.tensor_type.elem_type = 10
+
+    cast_node = onnx.helper.make_node(op_type='Cast', name='cast_'+model.graph.input[0].name, inputs=[model.graph.input[0].name], outputs=['cast_'+model.graph.input[0].name], to=1)
+
+    node = [node for node in model.graph.node if model.graph.input[0].name in node.input][0]
+    node.input[node.input.index(model.graph.input[0].name)] = 'cast_'+model.graph.input[0].name
+    model.graph.node.insert(0, cast_node)
+
+    cast_node = onnx.helper.make_node(op_type='Cast', name='cast_'+model.graph.output[0].name, inputs=['cast_'+model.graph.output[0].name], outputs=[model.graph.output[0].name], to=10)
+
+    node = [node for node in model.graph.node if model.graph.output[0].name in node.output][0]
+    node.output[0] = 'cast_'+model.graph.output[0].name
+    model.graph.node.insert(model.graph.node.index(node)+1, cast_node)
+
+    cast_node = onnx.helper.make_node(op_type='Cast', name='cast_'+model.graph.output[1].name, inputs=['cast_'+model.graph.output[1].name], outputs=[model.graph.output[1].name], to=10)
+
+    node = [node for node in model.graph.node if model.graph.output[1].name in node.output][0]
+    node.output[0] = 'cast_'+model.graph.output[1].name
+    model.graph.node.insert(model.graph.node.index(node)+1, cast_node)
+
+    graph = onnx.helper.make_graph(model.graph.node, model.graph.name, model.graph.input, model.graph.output, model.graph.initializer)
+    info_model = onnx.helper.make_model(graph, opset_imports=model.opset_import)
+    model_fixed = onnx.shape_inference.infer_shapes(info_model)
+
+    onnx.checker.check_model(model_fixed)
+    onnx.save(model_fixed, 'TextDetector.quant.fp16.onnx')
+
 if __name__ == "__main__":
+    from onnxruntime.quantization.shape_inference import quant_pre_process
     from onnx import shape_inference
     import onnx
     import os
 
     if os.path.exists('TextDetector.quant.onnx'):
         os.remove('TextDetector.quant.onnx')
+    if os.path.exists('TextDetector.pre.onnx'):
+        os.remove('TextDetector.pre.onnx')
     
-    model = onnx.load('TextDetector.onnx')
+    quant_pre_process('TextDetector.onnx', 'TextDetector.pre.onnx', skip_symbolic_shape=True)
+
+    model = onnx.load('TextDetector.pre.onnx')
     model = shape_inference.infer_shapes(model)
     outputs = [o.name for o in model.graph.output]
     nodes_to_exclude = []
@@ -76,4 +115,6 @@ if __name__ == "__main__":
     print(nodes_to_exclude)
 
     optimize1(nodes_to_exclude)
+
+    convert2()
 
