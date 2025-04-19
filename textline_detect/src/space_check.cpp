@@ -77,14 +77,14 @@ void find_lostspace(std::vector<charbox> &boxes)
             for(auto bidx: *it) {
                 if((boxes[bidx].subtype & 1) == 0) {
                     // 横書き
-                    if(s0 - boxes[bidx].w < s0 * 0.25) {
+                    if(s0 - boxes[bidx].w < s0 * 0.5) {
                         pass = true;
                         break;
                     }
                 }
                 else {
                     // 縦書き
-                    if(s0 - boxes[bidx].h < s0 * 0.25) {
+                    if(s0 - boxes[bidx].h < s0 * 0.5) {
                         pass = true;
                         break;
                     }
@@ -222,11 +222,12 @@ void find_lostspace(std::vector<charbox> &boxes)
             int offset = -1;
             int th_c = 1;
             while(offset < 0) {
-                for(int j = 0; j < x1.size(); j++) {
+                {
+                    int j = 0;
                     std::vector<float> diff;
                     // line2 がインデント
                     diff.push_back(j + 1 < x1.size() && j < x2.size() ? fabs(x1[j+1] - x2[j]): INFINITY);
-                    diff.push_back(j + 1 < x1.size() && j < x2.size() ? fabs(x1[j+1] - s1[j+1] - x2[j]): INFINITY);
+                    diff.push_back(INFINITY);
                     diff.push_back(j + 1 < x1.size() && j < x2.size() ? fabs(x1[j+1] - x2[j] + s2[j]): INFINITY);
                     // 同じ高さ
                     diff.push_back(j < x2.size() ? fabs(x1[j] - x2[j]): INFINITY);
@@ -235,7 +236,7 @@ void find_lostspace(std::vector<charbox> &boxes)
                     // line1 がインデント
                     diff.push_back(j + 1 < x2.size() ? fabs(x1[j] - x2[j+1]): INFINITY);
                     diff.push_back(j + 1 < x2.size() ? fabs(x1[j] - s1[j] - x2[j+1]): INFINITY);
-                    diff.push_back(j + 1 < x2.size() ? fabs(x1[j] - x2[j+1] + s2[j+1]): INFINITY);
+                    diff.push_back(INFINITY);
 
                     std::vector<int> index(diff.size());
                     std::iota(index.begin(), index.end(), 0);
@@ -244,6 +245,19 @@ void find_lostspace(std::vector<charbox> &boxes)
                     });
                     if(diff[index.front()] < s * th_c * 0.1) {
                         offset = index.front() / 3;
+                        break;
+                    }
+                }
+                for(int j = 1; j < x1.size(); j++) {
+                    std::vector<float> diff;
+                    // 同じ高さ
+                    if(j < x2.size()) {
+                        if(fabs(x1[j] - x2[j]) < s * th_c * 0.1) {
+                            offset = 1;
+                            break;
+                        }
+                    }
+                    else {
                         break;
                     }
                 }
