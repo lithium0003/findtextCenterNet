@@ -354,6 +354,33 @@ void search_ruby(
                 }
             }
 
+            // ルビの数を数える
+            std::vector<int> ruby_count(rubybaseBlock.size());
+            for(auto i: ruby_to_base) {
+                if(i < 0) continue;
+                ruby_count[i]++;
+            }
+            // ゴミっぽいルビは除去する
+            for(int i = 0; i < rubyid.size(); i++) {
+                if(ruby_to_base[i] < 0) {
+                    if(std::max(boxes[rubyid[i]].w, boxes[rubyid[i]].h) < 13) {
+                        boxes[rubyid[i]].subtype |= 32;
+                        boxes[rubyid[i]].idx = -1;
+                    }
+                }
+                else if (ruby_count[ruby_to_base[i]] < 2) {
+                    if(std::max(boxes[rubyid[i]].w, boxes[rubyid[i]].h) < 13) {
+                        boxes[rubyid[i]].subtype |= 32;
+                        boxes[rubyid[i]].idx = -1;
+
+                        int bi = ruby_to_base[i];
+                        for(auto bidx: rubybaseBlock[bi]) {
+                            boxes[bidx].subtype &= ~(2+4);
+                        }
+                    }
+                }
+            }
+            
             // rubybaseの直後にrubyを挿入する
             std::vector<int> baselast;
             for(int i = 0; i < rubybaseBlock.size(); i++) {
@@ -365,6 +392,7 @@ void search_ruby(
                 if(p == baselast.end()) continue;
                 auto idx = std::distance(baselast.begin(), p);
                 for(int i = 0; i < rubyid.size(); i++) {
+                    if(boxes[rubyid[i]].idx < 0) continue;
                     if(ruby_to_base[i] == idx) {
                         fixlist.push_back(rubyid[i]);
                     }
@@ -382,6 +410,7 @@ void search_ruby(
 
             // 親を見つけられなかったルビの処理
             for(int i = 0; i < rubyid.size(); i++) {
+                if(boxes[rubyid[i]].idx < 0) continue;
                 if(ruby_to_base[i] == -1) {
                     // ルビ扱いを外して、行のそれっぽい場所に挿入する
                     int ridx = rubyid[i];
@@ -585,6 +614,33 @@ void search_ruby(
                 }
             }
 
+            // ルビの数を数える
+            std::vector<int> ruby_count(rubybaseBlock.size());
+            for(auto i: ruby_to_base) {
+                if(i < 0) continue;
+                ruby_count[i]++;
+            }
+            // ゴミっぽいルビは除去する
+            for(int i = 0; i < rubyid.size(); i++) {
+                if(ruby_to_base[i] < 0) {
+                    if(std::max(boxes[rubyid[i]].w, boxes[rubyid[i]].h) < 13) {
+                        boxes[rubyid[i]].subtype |= 32;
+                        boxes[rubyid[i]].idx = -1;
+                    }
+                }
+                else if (ruby_count[ruby_to_base[i]] < 2) {
+                    if(std::max(boxes[rubyid[i]].w, boxes[rubyid[i]].h) < 13) {
+                        boxes[rubyid[i]].subtype |= 32;
+                        boxes[rubyid[i]].idx = -1;
+
+                        int bi = ruby_to_base[i];
+                        for(auto bidx: rubybaseBlock[bi]) {
+                            boxes[bidx].subtype &= ~(2+4);
+                        }
+                    }
+                }
+            }
+            
             // rubybaseの直後にrubyを挿入する
             std::vector<int> baselast;
             for(int i = 0; i < rubybaseBlock.size(); i++) {
@@ -596,6 +652,7 @@ void search_ruby(
                 if(p == baselast.end()) continue;
                 auto idx = std::distance(baselast.begin(), p);
                 for(int i = 0; i < rubyid.size(); i++) {
+                    if(boxes[rubyid[i]].idx < 0) continue;
                     if(ruby_to_base[i] == idx) {
                         fixlist.push_back(rubyid[i]);
                     }
@@ -613,6 +670,7 @@ void search_ruby(
 
             // 親を見つけられなかったルビの処理
             for(int i = 0; i < rubyid.size(); i++) {
+                if(boxes[rubyid[i]].idx < 0) continue;
                 if(ruby_to_base[i] == -1) {
                     // ルビ扱いを外して、行のそれっぽい場所に挿入する
                     int ridx = rubyid[i];

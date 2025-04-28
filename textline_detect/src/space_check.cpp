@@ -3,6 +3,39 @@
 #include <numeric>
 #include <algorithm>
 
+//#include <iostream>
+//#include <iterator>
+
+#include "minpack/minpack.hpp"
+
+std::vector<float> x_data;
+std::vector<float> y_data;
+
+int func(int m, int n, double *x, double *fvec)
+{
+    for(int i = 0; i < m; i++) {
+        double xx = 1;
+        double yy = 0;
+        for(int j = 0; j < n; j++) {
+            yy += x[j] * xx;
+            xx *= x_data[i];
+        }
+        fvec[i] = y_data[i] - yy;
+    }
+    return 0;
+}
+
+double fit_curve(double x, const std::vector<double> &c)
+{
+    double xx = 1;
+    double yy = 0;
+    for(int j = 0; j < c.size(); j++) {
+        yy += c[j] * xx;
+        xx *= x;
+    }
+    return yy;
+}
+
 // 文字boxが重なっているときに、先行するBoxにのみspace flagを残す
 void remove_dupspace(std::vector<charbox> &boxes)
 {
@@ -135,168 +168,498 @@ void find_lostspace(std::vector<charbox> &boxes)
         // 2行以上ないblockは処理対象外
         if(lines_box.size() < 2) continue;
 
-        std::vector<int> head_offsets;
+        // 現在のインデントをチェックする
         std::vector<bool> head_indents;
         for(int i = 0; i < lines_box.size(); i++) {
             auto line1 = lines_box[i];
             head_indents.push_back((boxes[line1.front()].subtype & 8) == 8);
         }
-        for(int i = 0; i < lines_box.size() - 1; i++) {
-            auto line1 = lines_box[i];
-            auto line2 = lines_box[i+1];
-            if(line1.size() < 1 || line2.size() < 1) continue;
-            std::vector<float> x1;
-            std::vector<float> x2;
-            float s = 0;
-            std::vector<float> s1;
-            std::vector<float> s2;
-            // 座標とサイズの確認
-            for(int j = 0; j < line1.size(); j++) {
-                if((boxes[line1.front()].subtype & 1) == 0) {
-                    // 横書き
-                    s = std::max(s, boxes[line1[j]].w);
-                    x1.push_back(boxes[line1[j]].cx - boxes[line1[j]].w/2);
-                }
-                else {
-                    // 縦書き
-                    s = std::max(s, boxes[line1[j]].h);
-                    x1.push_back(boxes[line1[j]].cy - boxes[line1[j]].h/2);
-                }
-            }
-            for(int j = 0; j < line2.size(); j++) {
-                if((boxes[line2.front()].subtype & 1) == 0) {
-                    // 横書き
-                    s = std::max(s, boxes[line2[j]].w);
-                    x2.push_back(boxes[line2[j]].cx - boxes[line2[j]].w/2);
-                }
-                else {
-                    // 縦書き
-                    s = std::max(s, boxes[line2[j]].h);
-                    x2.push_back(boxes[line2[j]].cy - boxes[line2[j]].h/2);
-                }
-            }
-            for(int j = 0; j < line1.size(); j++) {
-                if((boxes[line1.front()].subtype & 1) == 0) {
-                    // 横書き
-                    if((s - boxes[line1[j]].w) / s > 0.6) {
-                        // 句読点など小さすぎる文字はサイズを無視する
-                        s1.push_back(0);
-                    }
-                    else {
-                        s1.push_back(s - boxes[line1[j]].w);
-                    }
-                }
-                else {
-                    // 縦書き
-                    if((s - boxes[line1[j]].h) / s > 0.6) {
-                        // 句読点など小さすぎる文字はサイズを無視する
-                        s1.push_back(0);
-                    }
-                    else {
-                        s1.push_back(s - boxes[line1[j]].h);
-                    }
-                }
-            }
-            for(int j = 0; j < line2.size(); j++) {
-                if((boxes[line2.front()].subtype & 1) == 0) {
-                    // 横書き
-                    if((s - boxes[line2[j]].w) / s > 0.6) {
-                        // 句読点など小さすぎる文字はサイズを無視する
-                        s2.push_back(0);
-                    }
-                    else {
-                        s2.push_back(s - boxes[line2[j]].w);
-                    }
-                }
-                else {
-                    // 縦書き
-                    if((s - boxes[line2[j]].h) / s > 0.6) {
-                        // 句読点など小さすぎる文字はサイズを無視する
-                        s2.push_back(0);
-                    }
-                    else {
-                        s2.push_back(s - boxes[line2[j]].h);
-                    }
-                }
-            }
-            int offset = -1;
-            int th_c = 1;
-            while(offset < 0) {
-                {
-                    int j = 0;
-                    std::vector<float> diff;
-                    // line2 がインデント
-                    diff.push_back(j + 1 < x1.size() && j < x2.size() ? fabs(x1[j+1] - x2[j]): INFINITY);
-                    diff.push_back(INFINITY);
-                    diff.push_back(j + 1 < x1.size() && j < x2.size() ? fabs(x1[j+1] - x2[j] + s2[j]): INFINITY);
-                    // 同じ高さ
-                    diff.push_back(j < x2.size() ? fabs(x1[j] - x2[j]): INFINITY);
-                    diff.push_back(j < x2.size() ? fabs(x1[j] - s1[j] - x2[j]): INFINITY);
-                    diff.push_back(j < x2.size() ? fabs(x1[j] - x2[j] + s2[j]): INFINITY);
-                    // line1 がインデント
-                    diff.push_back(j + 1 < x2.size() ? fabs(x1[j] - x2[j+1]): INFINITY);
-                    diff.push_back(j + 1 < x2.size() ? fabs(x1[j] - s1[j] - x2[j+1]): INFINITY);
-                    diff.push_back(INFINITY);
 
-                    std::vector<int> index(diff.size());
-                    std::iota(index.begin(), index.end(), 0);
-                    std::sort(index.begin(), index.end(), [&](const auto a, const auto b){
-                        return diff[a] < diff[b];
-                    });
-                    if(diff[index.front()] < s * th_c * 0.1) {
-                        offset = index.front() / 3;
-                        break;
-                    }
+        // インデントがおかしい行をチェック
+        std::vector<bool> head_skip(head_indents.size());
+        std::vector<float> amx(head_indents.size());
+        // 細くない文字で、一番上になっている行から開始する
+        int k = 0;
+        float minx = INFINITY;
+        for(int i = 0; i < lines_box.size(); i++) {
+            auto line2 = lines_box[i];
+            if(line2.size() < 2) continue;
+            if((boxes[line2.front()].subtype & 1) == 0) {
+                // 横書き
+                float w = boxes[line2[0]].w;
+                if(w < s0 * 0.6) continue;
+                float sx = boxes[line2[0]].cx - boxes[line2[0]].w / 2;
+                if(sx < minx) {
+                    minx = sx;
+                    k = i;
                 }
-                for(int j = 1; j < x1.size(); j++) {
-                    std::vector<float> diff;
-                    // 同じ高さ
-                    if(j < x2.size()) {
-                        if(fabs(x1[j] - x2[j]) < s * th_c * 0.1) {
-                            offset = 1;
-                            break;
+            }
+            else {
+                // 縦書き
+                float w = boxes[line2[0]].h;
+                if(w < s0 * 0.6) continue;
+                float sx = boxes[line2[0]].cy - boxes[line2[0]].h / 2;
+                if(sx < minx) {
+                    minx = sx;
+                    k = i;
+                }
+            }
+        }
+        if(k < lines_box.size() / 2) {
+            for(int i = k; i < lines_box.size(); i++) {
+                auto line2 = lines_box[i];
+                if(line2.size() < 2) continue;
+                float sx2,mx2;
+                bool skip = false;
+                if((boxes[line2.front()].subtype & 1) == 0) {
+                    // 横書き
+                    mx2 = (boxes[line2[0]].cx + boxes[line2[0]].w / 2 + boxes[line2[1]].cx - boxes[line2[1]].w / 2) / 2;
+                    mx2 = std::max(mx2, (boxes[line2[0]].cx + boxes[line2[1]].cx) / 2);
+                    sx2 = mx2 - s0;
+                    if(boxes[line2[1]].cx - boxes[line2[0]].cx > s0 * 1.15) {
+                        skip = true;
+                    }
+                    if(boxes[line2[0]].w + boxes[line2[1]].w < s0 * 0.85) {
+                        skip = true;
+                    }
+                    if(line2.size() == 3) {
+                        if(boxes[line2[2]].cx - boxes[line2[0]].cx < s0) {
+                            skip = true;
+                        }
+                        if(boxes[line2[2]].cx - boxes[line2[0]].cx > s0 * 2.2) {
+                            skip = true;
                         }
                     }
-                    else {
-                        break;
+                }
+                else {
+                    // 縦書き
+                    mx2 = (boxes[line2[0]].cy + boxes[line2[0]].h / 2 + boxes[line2[1]].cy - boxes[line2[1]].h / 2) / 2;
+                    mx2 = std::max(mx2, (boxes[line2[0]].cy + boxes[line2[1]].cy) / 2);
+                    sx2 = mx2 - s0;
+                    if(boxes[line2[1]].cy - boxes[line2[0]].cy > s0 * 1.15) {
+                        skip = true;
+                    }
+                    if(boxes[line2[0]].h + boxes[line2[1]].h < s0 * 0.85) {
+                        skip = true;
+                    }
+                    if(line2.size() == 3) {
+                        if(boxes[line2[2]].cy - boxes[line2[0]].cy < s0) {
+                            skip = true;
+                        }
+                        if(boxes[line2[2]].cy - boxes[line2[0]].cy > s0 * 2.2) {
+                            skip = true;
+                        }
                     }
                 }
-                th_c++;
+                float delta = 0;
+                for(int j = k+1; j < i; j++) {
+                    if(amx[j] != 0 && amx[j-1] != 0) {
+                        delta = (amx[j] - amx[j-1]) * 0.25 + delta * 0.75;
+                    }
+                }
+                if(skip) {
+                    head_skip[i] = true;
+                }
+                else {
+                    if(i > 0 && amx[i-1] != 0) {
+                        float fmx = amx[i-1] + delta;
+
+                        if(mx2 < fmx && fabs(fmx - mx2) > s0 * 0.25) {
+                            head_skip[i] = true;
+                        }
+                        else {
+                            if(fabs(fmx - mx2) < s0 * 0.6) {
+                                head_indents[i] = false;
+                            }
+                            else {
+                                if(fabs(fmx - s0 - mx2) < s0 * 0.6) {
+                                    head_indents[i] = false;
+                                }
+                                else if(fabs(fmx - sx2) < s0 * 0.6) {
+                                    head_indents[i] = true;
+                                }
+                                else {
+                                    head_skip[i] = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                if(head_skip[i]) {
+                    if(i > 0 && amx[i-1] != 0) {
+                        float fmx = amx[i-1] + delta;
+                        amx[i] = fmx;
+                    }
+                }
+                else {
+                    if(head_indents[i]) {
+                        amx[i] = sx2;
+                    }
+                    else {
+                        amx[i] = mx2;
+                    }
+                }
             }
-            head_offsets.push_back(offset - 1);
+            std::fill(head_skip.begin(), head_skip.end(), false);
+            for(int i = (int)lines_box.size() - 1; i >= 0; i--) {
+                auto line2 = lines_box[i];
+                if(line2.size() < 2) continue;
+                float sx2,mx2;
+                bool skip = false;
+                if((boxes[line2.front()].subtype & 1) == 0) {
+                    // 横書き
+                    mx2 = (boxes[line2[0]].cx + boxes[line2[0]].w / 2 + boxes[line2[1]].cx - boxes[line2[1]].w / 2) / 2;
+                    mx2 = std::max(mx2, (boxes[line2[0]].cx + boxes[line2[1]].cx) / 2);
+                    sx2 = mx2 - s0;
+                    if(boxes[line2[1]].cx - boxes[line2[0]].cx > s0 * 1.15) {
+                        skip = true;
+                    }
+                    if(boxes[line2[0]].w + boxes[line2[1]].w < s0 * 0.85) {
+                        skip = true;
+                    }
+                    if(line2.size() == 3) {
+                        if(boxes[line2[2]].cx - boxes[line2[0]].cx < s0) {
+                            skip = true;
+                        }
+                        if(i > 0 && i < lines_box.size()-1 && boxes[line2[2]].cx - boxes[line2[0]].cx > s0 * 2.2) {
+                            skip = true;
+                        }
+                    }
+                }
+                else {
+                    // 縦書き
+                    mx2 = (boxes[line2[0]].cy + boxes[line2[0]].h / 2 + boxes[line2[1]].cy - boxes[line2[1]].h / 2) / 2;
+                    mx2 = std::max(mx2, (boxes[line2[0]].cy + boxes[line2[1]].cy) / 2);
+                    sx2 = mx2 - s0;
+                    if(boxes[line2[1]].cy - boxes[line2[0]].cy > s0 * 1.15) {
+                        skip = true;
+                    }
+                    if(boxes[line2[0]].h + boxes[line2[1]].h < s0 * 0.85) {
+                        skip = true;
+                    }
+                    if(line2.size() == 3) {
+                        if(boxes[line2[2]].cy - boxes[line2[0]].cy < s0) {
+                            skip = true;
+                        }
+                        if(i > 0 && i < lines_box.size()-1 && boxes[line2[2]].cy - boxes[line2[0]].cy > s0 * 2.2) {
+                            skip = true;
+                        }
+                    }
+                }
+                float delta = 0;
+                for(int j = (int)lines_box.size() - 2; j > i; j--) {
+                    if(amx[j] != 0 && amx[j+1] != 0) {
+                        delta = (amx[j] - amx[j+1]) * 0.25 + delta * 0.75;
+                    }
+                }
+                if(skip) {
+                    head_skip[i] = true;
+                }
+                else {
+                    if(i < lines_box.size()-1 && amx[i+1] != 0) {
+                        float fmx = amx[i] != 0 && delta == 0 ? amx[i] : amx[i+1] + delta;
+
+                        if(mx2 < fmx && fabs(fmx - mx2) > s0 * 0.25) {
+                            head_skip[i] = true;
+                        }
+                        else {
+                            if(fabs(fmx - mx2) < s0 * 0.6) {
+                                head_indents[i] = false;
+                            }
+                            else {
+                                if(fabs(fmx - s0 - mx2) < s0 * 0.6) {
+                                    head_indents[i] = false;
+                                }
+                                else if(fabs(fmx - sx2) < s0 * 0.6) {
+                                    head_indents[i] = true;
+                                }
+                                else {
+                                    head_skip[i] = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                if(head_skip[i]) {
+                    if(i < lines_box.size()-1 && amx[i+1] != 0 && amx[i] == 0) {
+                        float fmx = amx[i+1] + delta;
+                        amx[i] = fmx;
+                    }
+                }
+                else {
+                    if(head_indents[i]) {
+                        amx[i] = sx2;
+                    }
+                    else {
+                        amx[i] = mx2;
+                    }
+                }
+            }
         }
-        for(int i = 0; i < lines_box.size()-1; i++) {
-            if(head_offsets[i] == 0) {
-                head_indents[i+1] = head_indents[i];
+        else {
+            for(int i = k; i >= 0; i--) {
+                auto line2 = lines_box[i];
+                if(line2.size() < 2) continue;
+                float sx2,mx2;
+                bool skip = false;
+                if((boxes[line2.front()].subtype & 1) == 0) {
+                    // 横書き
+                    mx2 = (boxes[line2[0]].cx + boxes[line2[0]].w / 2 + boxes[line2[1]].cx - boxes[line2[1]].w / 2) / 2;
+                    mx2 = std::max(mx2, (boxes[line2[0]].cx + boxes[line2[1]].cx) / 2);
+                    sx2 = mx2 - s0;
+                    if(boxes[line2[1]].cx - boxes[line2[0]].cx > s0 * 1.15) {
+                        skip = true;
+                    }
+                    if(boxes[line2[0]].w + boxes[line2[1]].w < s0 * 0.75) {
+                        skip = true;
+                    }
+                    if(line2.size() == 3) {
+                        if(boxes[line2[2]].cx - boxes[line2[0]].cx < s0) {
+                            skip = true;
+                        }
+                        if(i > 0 && i < lines_box.size()-1 && boxes[line2[2]].cx - boxes[line2[0]].cx > s0 * 2.2) {
+                            skip = true;
+                        }
+                    }
+                }
+                else {
+                    // 縦書き
+                    mx2 = (boxes[line2[0]].cy + boxes[line2[0]].h / 2 + boxes[line2[1]].cy - boxes[line2[1]].h / 2) / 2;
+                    mx2 = std::max(mx2, (boxes[line2[0]].cy + boxes[line2[1]].cy) / 2);
+                    sx2 = mx2 - s0;
+                    if(boxes[line2[1]].cy - boxes[line2[0]].cy > s0 * 1.15) {
+                        skip = true;
+                    }
+                    if(boxes[line2[0]].h + boxes[line2[1]].h < s0 * 0.75) {
+                        skip = true;
+                    }
+                    if(line2.size() == 3) {
+                        if(boxes[line2[2]].cy - boxes[line2[0]].cy < s0) {
+                            skip = true;
+                        }
+                        if(i > 0 && i < lines_box.size()-1 && boxes[line2[2]].cy - boxes[line2[0]].cy > s0 * 2.2) {
+                            skip = true;
+                        }
+                    }
+                }
+                float delta = 0;
+                for(int j = k-1; j > i; j--) {
+                    if(amx[j] != 0 && amx[j+1] != 0) {
+                        delta = (amx[j] - amx[j+1]) * 0.25 + delta * 0.75;
+                    }
+                }
+                if(skip) {
+                    head_skip[i] = true;
+                }
+                else {
+                    if(i < lines_box.size()-1 && amx[i+1] != 0) {
+                        float fmx = amx[i+1] + delta;
+
+                        if(mx2 < fmx && fabs(fmx - mx2) > s0 * 0.25) {
+                            head_skip[i] = true;
+                        }
+                        else {
+                            if(fabs(fmx - mx2) < s0 * 0.6) {
+                                head_indents[i] = false;
+                            }
+                            else {
+                                if(fabs(fmx - s0 - mx2) < s0 * 0.6) {
+                                    head_indents[i] = false;
+                                }
+                                else if(fabs(fmx - sx2) < s0 * 0.6) {
+                                    head_indents[i] = true;
+                                }
+                                else {
+                                    head_skip[i] = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                if(head_skip[i]) {
+                    if(i < lines_box.size()-1 && amx[i+1] != 0) {
+                        float fmx = amx[i+1] + delta;
+                        amx[i] = fmx;
+                    }
+                }
+                else {
+                    if(head_indents[i]) {
+                        amx[i] = sx2;
+                    }
+                    else {
+                        amx[i] = mx2;
+                    }
+                }
             }
-            else if(head_offsets[i] > 0) {
-                head_indents[i+1] = false;
-                head_indents[i] = true;
-            }
-            else if(head_offsets[i] < 0) {
-                head_indents[i+1] = true;
-                head_indents[i] = false;
-            }
-        }
-        for(int i = (int)lines_box.size()-1; i > 0; i--) {
-            if(head_offsets[i-1] == 0) {
-                head_indents[i-1] = head_indents[i];
-            }
-        }
-        for(int i = 0; i < lines_box.size()-1; i++) {
-            if(head_offsets[i] == 0) {
-                head_indents[i+1] = head_indents[i];
-            }
-            else if(head_offsets[i] > 0) {
-                head_indents[i+1] = false;
-                head_indents[i] = true;
-            }
-            else if(head_offsets[i] < 0) {
-                head_indents[i+1] = true;
-                head_indents[i] = false;
+            std::fill(head_skip.begin(), head_skip.end(), false);
+            for(int i = 0; i < lines_box.size(); i++) {
+                auto line2 = lines_box[i];
+                if(line2.size() < 2) continue;
+                float sx2,mx2;
+                bool skip = false;
+                if((boxes[line2.front()].subtype & 1) == 0) {
+                    // 横書き
+                    mx2 = (boxes[line2[0]].cx + boxes[line2[0]].w / 2 + boxes[line2[1]].cx - boxes[line2[1]].w / 2) / 2;
+                    mx2 = std::max(mx2, (boxes[line2[0]].cx + boxes[line2[1]].cx) / 2);
+                    sx2 = mx2 - s0;
+                    if(boxes[line2[1]].cx - boxes[line2[0]].cx > s0 * 1.15) {
+                        skip = true;
+                    }
+                    if(boxes[line2[0]].w + boxes[line2[1]].w < s0 * 0.75) {
+                        skip = true;
+                    }
+                    if(line2.size() == 3) {
+                        if(boxes[line2[2]].cx - boxes[line2[0]].cx < s0) {
+                            skip = true;
+                        }
+                        if(boxes[line2[2]].cx - boxes[line2[0]].cx > s0 * 2.2) {
+                            skip = true;
+                        }
+                    }
+                }
+                else {
+                    // 縦書き
+                    mx2 = (boxes[line2[0]].cy + boxes[line2[0]].h / 2 + boxes[line2[1]].cy - boxes[line2[1]].h / 2) / 2;
+                    mx2 = std::max(mx2, (boxes[line2[0]].cy + boxes[line2[1]].cy) / 2);
+                    sx2 = mx2 - s0;
+                    if(boxes[line2[1]].cy - boxes[line2[0]].cy > s0 * 1.15) {
+                        skip = true;
+                    }
+                    if(boxes[line2[0]].h + boxes[line2[1]].h < s0) {
+                        skip = true;
+                    }
+                    if(line2.size() == 3) {
+                        if(boxes[line2[2]].cy - boxes[line2[0]].cy < s0 * 0.75) {
+                            skip = true;
+                        }
+                        if(boxes[line2[2]].cy - boxes[line2[0]].cy > s0 * 2.2) {
+                            skip = true;
+                        }
+                    }
+                }
+                float delta = 0;
+                for(int j = 1; j < i; j++) {
+                    if(amx[j] != 0 && amx[j-1] != 0) {
+                        delta = (amx[j] - amx[j-1]) * 0.25 + delta * 0.75;
+                    }
+                }
+                if(skip) {
+                    head_skip[i] = true;
+                }
+                else {
+                    if(i > 0 && amx[i-1] != 0) {
+                        float fmx = amx[i] != 0 && delta == 0 ? amx[i] : amx[i-1] + delta;
+
+                        if(mx2 < fmx && fabs(fmx - mx2) > s0 * 0.25) {
+                            head_skip[i] = true;
+                        }
+                        else {
+                            if(fabs(fmx - mx2) < s0 * 0.6) {
+                                head_indents[i] = false;
+                            }
+                            else {
+                                if(fabs(fmx - s0 - mx2) < s0 * 0.6) {
+                                    head_indents[i] = false;
+                                }
+                                else if(fabs(fmx - sx2) < s0 * 0.6) {
+                                    head_indents[i] = true;
+                                }
+                                else {
+                                    head_skip[i] = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                if(head_skip[i]) {
+                    if(i > 0 && amx[i-1] != 0 && amx[i] == 0) {
+                        float fmx = amx[i-1] + delta;
+                        amx[i] = fmx;
+                    }
+                }
+                else {
+                    if(head_indents[i]) {
+                        amx[i] = sx2;
+                    }
+                    else {
+                        amx[i] = mx2;
+                    }
+                }
             }
         }
 
+        std::vector<std::vector<float>> sx;
+        std::vector<std::vector<float>> sy;
+        std::vector<std::vector<float>> cx;
+        for(int i = 0; i < lines_box.size(); i++) {
+            auto line1 = lines_box[i];
+            std::vector<float> tmp_sx;
+            std::vector<float> tmp_sy;
+            std::vector<float> tmp_cx;
+            for(auto bidx: line1) {
+                if((boxes[bidx].subtype & 1) == 0) {
+                    // 横書き
+                    tmp_sx.push_back(boxes[bidx].cx - boxes[bidx].w/2);
+                    tmp_sx.push_back(boxes[bidx].cx + boxes[bidx].w/2);
+                    tmp_sy.push_back(boxes[bidx].cy);
+                    tmp_sy.push_back(boxes[bidx].cy);
+                    tmp_cx.push_back(boxes[bidx].cx);
+                }
+                else {
+                    // 縦書き
+                    tmp_sx.push_back(boxes[bidx].cy - boxes[bidx].h/2);
+                    tmp_sx.push_back(boxes[bidx].cy + boxes[bidx].h/2);
+                    tmp_sy.push_back(boxes[bidx].cx);
+                    tmp_sy.push_back(boxes[bidx].cx);
+                    tmp_cx.push_back(boxes[bidx].cy);
+                }
+            }
+            sx.push_back(tmp_sx);
+            sy.push_back(tmp_sy);
+            cx.push_back(tmp_cx);
+        }
+
+        x_data.clear();
+        y_data.clear();
+        
+        for(int i = 0; i < lines_box.size(); i++) {
+            if(sx[i].size() < 2) continue;
+            if(head_skip[i]) continue;
+            if(head_indents[i]) {
+                x_data.push_back(sy[i][0]);
+                y_data.push_back(sx[i][0]);
+            }
+            else {
+                x_data.push_back(sy[i][1]);
+                y_data.push_back(sx[i][1]);
+            }
+        }
+
+        int m = (int)y_data.size();
+        int n = std::min(4, m);
+        std::vector<double> x(n);
+        std::vector<double> fvec(m);
+        std::fill(x.begin(), x.end(), 0);
+        lmdif1(func, m, n, x.data(), fvec.data());
+
+//        std::cout << "x=[" << std::endl;
+//        std::copy(x_data.begin(), x_data.end(), std::ostream_iterator<double>(std::cout,","));
+//        std::cout << std::endl;
+//        std::cout << "]" << std::endl;
+//        std::cout << "y=[" << std::endl;
+//        std::copy(y_data.begin(), y_data.end(), std::ostream_iterator<double>(std::cout,","));
+//        std::cout << std::endl;
+//        std::cout << "]" << std::endl;
+//        std::cout << "c2 = np.array([" << std::endl;
+//        std::copy(x.begin(), x.end(), std::ostream_iterator<double>(std::cout,","));
+//        std::cout << std::endl;
+//        std::cout << "])[::-1]" << std::endl;
+
+        for(int i = 0; i < lines_box.size(); i++) {
+            float lx = fit_curve(sy[i][0], x);
+            head_indents[i] = cx[i][0] > lx;
+        }
+        
         for(int i = 0; i < lines_box.size(); i++) {
             auto line1 = lines_box[i];
             if(head_indents[i]) {

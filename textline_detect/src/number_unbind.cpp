@@ -20,7 +20,9 @@ int number_unbind(
     std::vector<int> unbind_boxes;
     for(const auto &box: boxes) {
         if(box.idx < 0) {
-            unbind_boxes.push_back(box.id);
+            if((box.subtype & 32) != 32) {
+                unbind_boxes.push_back(box.id);
+            }
         }
     }
     if(unbind_boxes.size() == 0) {
