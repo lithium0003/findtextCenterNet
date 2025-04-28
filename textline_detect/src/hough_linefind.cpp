@@ -143,6 +143,7 @@ void line_grow(
             else {
                 // 縦書き
                 max_width = std::max(max_width, boxes[boxid].w);
+                max_width = std::max(max_width, boxes[boxid].h);
             }
         }
         line_width[i] = max_width / scale;

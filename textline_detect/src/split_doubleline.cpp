@@ -234,6 +234,7 @@ void split_doubleline3(
         }
         else {
             //縦書き
+            float max_h = std::reduce(chain_it->begin(), chain_it->end(), 0.0f, [&](float acc, int i) { return std::max(acc, boxes[i].h); });
             float last_sy = -1;
             float last_ey = -1;
             int last_idx = -1;
@@ -244,19 +245,21 @@ void split_doubleline3(
                 float miny = std::max(last_sy, cy - h/2);
                 float maxy = std::min(last_ey, cy + h/2);
                 if(last_idx >= 0) {
-                    if(miny < maxy && (maxy - miny) > h * 0.2) {
-                        if(boxes[last_idx].cx > boxes[boxid].cx) {
-                            if(boxes[boxid].cx + boxes[boxid].w / 2 * 0.75 < boxes[last_idx].cx - boxes[last_idx].w / 2 * 0.75) {
-                                boxes[last_idx].double_line = 1;
-                                boxes[boxid].double_line = 2;
+                    if(h < max_h * 0.75) {
+                        if(miny < maxy && (maxy - miny) > h * 0.2) {
+                            if(boxes[last_idx].cx > boxes[boxid].cx) {
+                                if(boxes[boxid].cx + boxes[boxid].w / 2 * 0.75 < boxes[last_idx].cx - boxes[last_idx].w / 2 * 0.75) {
+                                    boxes[last_idx].double_line = 1;
+                                    boxes[boxid].double_line = 2;
+                                }
                             }
-                        }
-                        else {
-                            if(boxes[last_idx].cx + boxes[last_idx].w / 2 * 0.75 < boxes[boxid].cx - boxes[boxid].w / 2 * 0.75) {
-                                boxes[last_idx].double_line = 2;
-                                boxes[boxid].double_line = 1;
+                            else {
+                                if(boxes[last_idx].cx + boxes[last_idx].w / 2 * 0.75 < boxes[boxid].cx - boxes[boxid].w / 2 * 0.75) {
+                                    boxes[last_idx].double_line = 2;
+                                    boxes[boxid].double_line = 1;
+                                }
                             }
-                        }
+                        }    
                     }
                 }
                 last_sy = cy - h/2;
