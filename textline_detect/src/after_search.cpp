@@ -86,9 +86,11 @@ int chain_line_force(
     
     std::vector<std::vector<int>> line_box_chain(id_max);
     for(const auto &box: boxes) {
+        if(box.idx < 0) continue;
         line_box_chain[box.idx].push_back(-1);
     }
     for(const auto &box: boxes) {
+        if(box.idx < 0) continue;
         line_box_chain[box.idx][box.subidx] = box.id;
     }
 
