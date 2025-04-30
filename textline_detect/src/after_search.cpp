@@ -185,8 +185,15 @@ int chain_line_force(
                     boxes[i].subtype |= 1;
                 }
             }
+            auto idx1 = std::distance(line_box_chain.begin(), it);
+            auto idx2 = std::distance(line_box_chain.begin(), it2);
             line_box_chain.erase(it2);
-            ++it;
+            if(idx1 < idx2) {
+                it = line_box_chain.begin() + idx1 + 1;
+            }
+            else {
+                it = line_box_chain.begin() + idx1;
+            }
         }
         else {
             // b -> a
