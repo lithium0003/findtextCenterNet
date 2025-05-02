@@ -213,6 +213,12 @@ mv train_data1 ../
 ```
 この例では、test=64, train=1024ファイルを作成します。
 
+また、xlサイズで学習させる場合は、事前重みをmodels/フォルダに配置する必要があります。
+```bash
+cd models
+wget https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/efficientnetv2-xl-21k.npz
+```
+
 ## Train for step1
 ```bash
 ./train1.py --lr=1e-3 --logstep=10 --output=1000 --gamma=0.95 32
