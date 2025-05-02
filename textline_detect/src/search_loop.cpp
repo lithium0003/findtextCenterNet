@@ -322,7 +322,7 @@ void make_track_line(
             double x2 = xi[i+1];
             double y2 = yi[i+1];
             double a = (y2 - y1) / (x2 - x1);
-            if(!isfinite(a)) continue;
+            if(!std::isfinite(a)) continue;
             for(int xp = x1; xp < x2; xp += scale) {
                 int yp = (xp - x1) * a + y1;
                 x.push_back(xp);
@@ -417,7 +417,7 @@ void make_track_line(
             double x2 = xi[i+1];
             double y2 = yi[i+1];
             double a = (x2 - x1) / (y2 - y1);
-            if(!isfinite(a)) continue;
+            if(!std::isfinite(a)) continue;
             for(int yp = y1; yp < y2; yp += scale) {
                 int xp = (yp - y1) * a + x1;
                 x.push_back(xp);

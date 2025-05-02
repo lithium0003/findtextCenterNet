@@ -1583,7 +1583,7 @@ void make_block(
                 float d1 = page_div_x - x.first;
                 float d2 = page_div_x - x.second;
                 if(d1 * d2 > 0) {
-                    return std::min(fabs(d1), fabs(d2));
+                    return std::min(fabsf(d1), fabsf(d2));
                 }
                 else {
                     return 0.0f;
