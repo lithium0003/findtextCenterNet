@@ -18,6 +18,7 @@ from loss_func import loss_function, CoVWeightingLoss
 lr = 1e-3
 EPOCHS = 40
 batch=32
+workers=16
 logstep=10
 iters_to_accumulate=1
 iters_to_sploss=0
@@ -78,10 +79,10 @@ class RunningLoss(torch.nn.modules.Module):
 
 def train():
     training_dataset = get_dataset(train=True)
-    training_loader = DataLoader(training_dataset, batch_size=batch, num_workers=4)
+    training_loader = DataLoader(training_dataset, batch_size=batch, num_workers=workers)
 
     validation_dataset = get_dataset(train=False)
-    validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=4)
+    validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=workers)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('using device:', device, flush=True)
@@ -251,14 +252,14 @@ def train():
 
         running_loss.reset()
 
-
-
 if __name__=='__main__':
     if len(sys.argv) > 1:
         argv = sys.argv[1:]
         for arg in argv:
             if arg.startswith('--epoch'):
                 EPOCHS = int(arg.split('=')[1])
+            elif arg.startswith('--workers'):
+                workers = int(arg.split('=')[1])
             elif arg.startswith('--accumulate'):
                 iters_to_accumulate = int(arg.split('=')[1])
             elif arg.startswith('--lr'):
