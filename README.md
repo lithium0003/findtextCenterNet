@@ -195,8 +195,8 @@ Step1を学習する際には、データセットをWebから直接ロードし
 ダウンロードするに次のようにします。
 ```bash
 mkdir train_data1 && cd train_data1
-curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/train{00000000..00001023}.tar"
-curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test{00000000..00000063}.tar"
+curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/train[00000000-00001023].tar"
+curl -LO "https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test[00000000-00000063].tar"
 ```
 
 自身で学習データを作成するには、フォントデータが必要です。
