@@ -23,8 +23,7 @@ class CoVWeightingLoss(torch.nn.modules.Module):
         self.running_std_l = None
 
     def forward(self, losses):
-        L = torch.stack([losses[key].clone().detach().to(torch.float32) for key in self.losses])
-        L = torch.nan_to_num(L)
+        L = torch.stack([losses[key].detach().to(torch.float32) for key in self.losses])
 
         # If we are doing validation, we would like to return an unweighted loss be able
         # to see if we do not overfit on the training set.
@@ -37,7 +36,6 @@ class CoVWeightingLoss(torch.nn.modules.Module):
         L0 = L.clone() if self.current_iter == 0 else self.running_mean_L
         # Compute the loss ratios for the current iteration given the current loss L.
         l = L / L0
-        l = torch.nan_to_num(l)
 
         # If we are in the first iteration set alphas to all 1/32
         if self.current_iter <= 1:
@@ -45,7 +43,6 @@ class CoVWeightingLoss(torch.nn.modules.Module):
         # Else, apply the loss weighting method.
         else:
             ls = self.running_std_l / self.running_mean_l
-            ls = torch.nan_to_num(ls)
             self.alphas = ls / torch.sum(ls)
 
         # Apply Welford's algorithm to keep running means, variances of L,l. But only do this throughout
@@ -57,7 +54,7 @@ class CoVWeightingLoss(torch.nn.modules.Module):
             mean_param = (1. - max(self.momentum, 1 / (self.current_iter + 1)))
 
         # 2. Update the statistics for l
-        x_l = l.clone().detach()
+        x_l = l.detach()
         new_mean_l = mean_param * self.running_mean_l + (1 - mean_param) * x_l
         self.running_S_l += (x_l - self.running_mean_l) * (x_l - new_mean_l)
         self.running_mean_l = new_mean_l
@@ -67,7 +64,7 @@ class CoVWeightingLoss(torch.nn.modules.Module):
         self.running_std_l = torch.sqrt(running_variance_l.clamp_min(1e-16))
 
         # 3. Update the statistics for L
-        x_L = L.clone().detach()
+        x_L = L.detach()
         self.running_mean_L = mean_param * self.running_mean_L + (1 - mean_param) * x_L
 
         # Get the weighted losses and perform a standard back-pass.
