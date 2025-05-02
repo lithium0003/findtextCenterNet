@@ -26,6 +26,8 @@ output_iter=None
 model_size = 'xl'
 decoder_only = False
 
+torch.backends.cudnn.benchmark = True
+
 class RunningLoss(torch.nn.modules.Module):
     def __init__(self, *args, **kwargs) -> None:
         self.device = kwargs.pop('device', 'cpu')
@@ -79,10 +81,10 @@ class RunningLoss(torch.nn.modules.Module):
 
 def train():
     training_dataset = get_dataset(train=True)
-    training_loader = DataLoader(training_dataset, batch_size=batch, num_workers=workers)
+    training_loader = DataLoader(training_dataset, batch_size=batch, num_workers=workers, pin_memory=True)
 
     validation_dataset = get_dataset(train=False)
-    validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=workers)
+    validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=workers, pin_memory=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('using device:', device, flush=True)
