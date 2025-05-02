@@ -81,7 +81,7 @@ def get_dataset(train=True, calib=False):
                 shard_pattern = 'pipe:%s https://huggingface.co/datasets/lithium0003/findtextCenterNet_dataset/resolve/main/train_data1/test{00000000..00000063}.tar'
                 shard_pattern = shard_pattern%(downloader)
     dataset = (
-        wds.WebDataset(shard_pattern, shardshuffle=True)
+        wds.WebDataset(shard_pattern, shardshuffle=100)
         .shuffle(1000)
         .decode('l8')
         .rename(
