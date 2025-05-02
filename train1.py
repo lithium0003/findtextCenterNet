@@ -2,10 +2,11 @@
 
 import torch
 from torch.utils.tensorboard.writer import SummaryWriter
-# from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader
 import os
 import sys
 import datetime
+import itertools
 
 torch.set_float32_matmul_precision('high')
 
@@ -13,7 +14,6 @@ from models.radam_schedulefree import RAdamScheduleFree
 from models.detector import TextDetectorModel
 from dataset.data_detector import get_dataset
 from loss_func import loss_function, CoVWeightingLoss
-from dataset.multi import MultiLoader
 
 lr = 1e-3
 EPOCHS = 40
@@ -78,12 +78,10 @@ class RunningLoss(torch.nn.modules.Module):
 
 def train():
     training_dataset = get_dataset(train=True)
-    # training_loader = DataLoader(training_dataset, batch_size=batch, num_workers=4)
-    training_loader = MultiLoader(training_dataset.batched(batch, partial=False), workers=8)
+    training_loader = DataLoader(training_dataset, batch_size=batch, num_workers=4)
 
     validation_dataset = get_dataset(train=False)
-    # validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=4)
-    validation_loader = MultiLoader(validation_dataset.batched(batch, partial=False), workers=8)
+    validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=4)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('using device:', device, flush=True)
@@ -168,12 +166,9 @@ def train():
         optimizer.zero_grad()
         for i, data in enumerate(training_loader):
             image, labelmap, idmap = data
-            # image = image.to(device=device)
-            # labelmap = labelmap.to(device=device)
-            # idmap = idmap.to(dtype=torch.long, device=device)
-            image = torch.tensor(image, dtype=torch.float, device=device)
-            labelmap = torch.tensor(labelmap, dtype=torch.float, device=device)
-            idmap = torch.tensor(idmap, dtype=torch.long, device=device)
+            image = image.to(device=device, non_blocking=True)
+            labelmap = labelmap.to(device=device, non_blocking=True)
+            idmap = idmap.to(dtype=torch.long, device=device, non_blocking=True)
 
             fmask = model.get_fmask(labelmap, fmask)
             loss, rawloss = train_step(image, labelmap, idmap, fmask)
@@ -214,6 +209,15 @@ def train():
         running_loss.reset()
 
         optimizer.eval()
+        with torch.no_grad():
+            for batch in itertools.islice(training_loader, 50):
+                image, labelmap, idmap = batch
+                image = image.to(device=device, non_blocking=True)
+                labelmap = labelmap.to(device=device, non_blocking=True)
+                idmap = idmap.to(dtype=torch.long, device=device, non_blocking=True)
+                fmask = model.get_fmask(labelmap, fmask)
+                loss, rawloss = train_step(image, labelmap, idmap, fmask)
+
         torch.save({
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
@@ -226,12 +230,9 @@ def train():
         with torch.no_grad():
             for vdata in validation_loader:
                 image, labelmap, idmap = vdata
-                # image = image.to(device=device)
-                # labelmap = labelmap.to(device=device)
-                # idmap = idmap.to(dtype=torch.long, device=device)
-                image = torch.tensor(image, dtype=torch.float, device=device)
-                labelmap = torch.tensor(labelmap, dtype=torch.float, device=device)
-                idmap = torch.tensor(idmap, dtype=torch.long, device=device)
+                image = image.to(device=device, non_blocking=True)
+                labelmap = labelmap.to(device=device, non_blocking=True)
+                idmap = idmap.to(dtype=torch.long, device=device, non_blocking=True)
 
                 fmask = model.get_fmask(labelmap, fmask)
                 loss, rawloss = test_step(image, labelmap, idmap, fmask)
