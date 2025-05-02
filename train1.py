@@ -210,8 +210,8 @@ def train():
 
         optimizer.eval()
         with torch.no_grad():
-            for batch in itertools.islice(training_loader, 50):
-                image, labelmap, idmap = batch
+            for data in itertools.islice(training_loader, 50):
+                image, labelmap, idmap = data
                 image = image.to(device=device, non_blocking=True)
                 labelmap = labelmap.to(device=device, non_blocking=True)
                 idmap = idmap.to(dtype=torch.long, device=device, non_blocking=True)
