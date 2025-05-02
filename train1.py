@@ -163,6 +163,7 @@ def train():
         running_loss.train()
         if decoder_only:
             model.detector.eval()
+        optimizer.train()
 
         optimizer.zero_grad()
         for i, data in enumerate(training_loader):
@@ -195,11 +196,13 @@ def train():
                     print(epoch, i+1, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
             if output_iter is not None and (i + 1) % output_iter == 0:
+                optimizer.eval()
                 torch.save({
                     'epoch': epoch,
                     'step': i,
                     'model_state_dict': model.state_dict(),
                     }, 'result1/model.pt')
+                optimizer.train()
 
         CoW_value = losslog['CoWloss'].item()
         loss_value = losslog['loss'].item()
@@ -210,6 +213,7 @@ def train():
 
         running_loss.reset()
 
+        optimizer.eval()
         torch.save({
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
