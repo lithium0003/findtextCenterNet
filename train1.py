@@ -18,7 +18,7 @@ from loss_func import loss_function, CoVWeightingLoss
 lr = 1e-3
 EPOCHS = 40
 batch=32
-workers=16
+workers=10
 logstep=10
 iters_to_accumulate=1
 iters_to_sploss=0
