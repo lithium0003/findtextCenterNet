@@ -10,12 +10,12 @@ import itertools
 
 torch.set_float32_matmul_precision('high')
 
-from models.radam_schedulefree import RAdamScheduleFree
+from models.adamw_schedulefree import AdamWScheduleFree
 from models.detector import TextDetectorModel
 from dataset.data_detector import get_dataset
 from loss_func import loss_function, CoVWeightingLoss
 
-lr = 5e-3
+lr = 2.5e-3
 EPOCHS = 40
 batch=32
 workers=10
@@ -101,7 +101,7 @@ def train():
         model.detector.eval()
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
-    optimizer = RAdamScheduleFree(all_params, lr=lr)
+    optimizer = AdamWScheduleFree(all_params, lr=lr)
 
     CoWloss = CoVWeightingLoss(device=device, losses=[
         'keymap_loss',
