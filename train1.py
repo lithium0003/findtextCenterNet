@@ -15,16 +15,16 @@ from models.detector import TextDetectorModel
 from dataset.data_detector import get_dataset
 from loss_func import loss_function, CoVWeightingLoss
 
-lr = 1e-3
+lr = 5e-3
 EPOCHS = 40
 batch=32
-workers=16
+workers=10
 logstep=10
 iters_to_accumulate=1
-iters_to_sploss=0
-output_iter=None
 model_size = 'xl'
 decoder_only = False
+
+torch.backends.cudnn.benchmark = True
 
 class RunningLoss(torch.nn.modules.Module):
     def __init__(self, *args, **kwargs) -> None:
@@ -79,10 +79,10 @@ class RunningLoss(torch.nn.modules.Module):
 
 def train():
     training_dataset = get_dataset(train=True)
-    training_loader = DataLoader(training_dataset, batch_size=batch, num_workers=workers)
+    training_loader = DataLoader(training_dataset, batch_size=batch, num_workers=workers, pin_memory=True)
 
     validation_dataset = get_dataset(train=False)
-    validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=workers)
+    validation_loader = DataLoader(validation_dataset, batch_size=batch, num_workers=workers, pin_memory=True)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('using device:', device, flush=True)
@@ -191,15 +191,6 @@ def train():
                 with open('log.txt','a') as wf:
                     print(epoch, i+1, datetime.datetime.now(), 'CoW', CoW_value, 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
-            if output_iter is not None and (i + 1) % output_iter == 0:
-                optimizer.eval()
-                torch.save({
-                    'epoch': epoch,
-                    'step': i,
-                    'model_state_dict': model.state_dict(),
-                    }, 'result1/model.pt')
-                optimizer.train()
-
         CoW_value = losslog['CoWloss'].item()
         loss_value = losslog['loss'].item()
         acc_value = losslog['accuracy'].item()
@@ -266,8 +257,6 @@ if __name__=='__main__':
                 lr = float(arg.split('=')[1])
             elif arg.startswith('--logstep'):
                 logstep = int(arg.split('=')[1])
-            elif arg.startswith('--output'):
-                output_iter = int(arg.split('=')[1])
             elif arg.startswith('--model'):
                 model_size = arg.split('=')[1].lower()
             elif arg.startswith('--decoder'):
