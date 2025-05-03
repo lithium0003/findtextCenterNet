@@ -103,7 +103,7 @@ def train():
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
     optimizer = RAdamScheduleFree(all_params, lr=lr)
 
-    CoWloss = CoVWeightingLoss(momentum=1/1000, device=device, losses=[
+    CoWloss = CoVWeightingLoss(device=device, losses=[
         'keymap_loss',
         'size_loss',
         'textline_loss',

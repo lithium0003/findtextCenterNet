@@ -7,7 +7,6 @@ from util_func import modulo_list
 # https://github.com/rickgroen/cov-weighting
 class CoVWeightingLoss(torch.nn.modules.Module):
     def __init__(self, *args, **kwargs) -> None:
-        self.momentum = kwargs.pop('momentum', 1e-3)
         self.device = kwargs.pop('device', 'cpu')
         self.losses = kwargs.pop('losses', [])
         self.num_losses = len(self.losses)
@@ -23,7 +22,7 @@ class CoVWeightingLoss(torch.nn.modules.Module):
         self.running_std_l = None
 
     def forward(self, losses):
-        L = torch.stack([losses[key].detach().to(torch.float32) for key in self.losses])
+        L = torch.stack([losses[key].detach().clone().requires_grad_(False).to(torch.float32) for key in self.losses])
 
         # If we are doing validation, we would like to return an unweighted loss be able
         # to see if we do not overfit on the training set.
@@ -51,10 +50,10 @@ class CoVWeightingLoss(torch.nn.modules.Module):
         if self.current_iter == 0:
             mean_param = 0.0
         else:
-            mean_param = (1. - max(self.momentum, 1 / (self.current_iter + 1)))
+            mean_param = (1. - 1 / (self.current_iter + 1))
 
         # 2. Update the statistics for l
-        x_l = l.detach()
+        x_l = l.detach().clone()
         new_mean_l = mean_param * self.running_mean_l + (1 - mean_param) * x_l
         self.running_S_l += (x_l - self.running_mean_l) * (x_l - new_mean_l)
         self.running_mean_l = new_mean_l
@@ -64,7 +63,7 @@ class CoVWeightingLoss(torch.nn.modules.Module):
         self.running_std_l = torch.sqrt(running_variance_l.clamp_min(1e-16))
 
         # 3. Update the statistics for L
-        x_L = L.detach()
+        x_L = L.detach().clone()
         self.running_mean_L = mean_param * self.running_mean_L + (1 - mean_param) * x_L
 
         # Get the weighted losses and perform a standard back-pass.
