@@ -300,8 +300,8 @@ class ModelDimensions:
     enc_input_dim: int = encoder_dim
     embed_dim: int = 512
     head_num: int = 16
-    enc_block_num: int = 16
-    dec_block_num: int = 16
+    enc_block_num: int = 6
+    dec_block_num: int = 2
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
 
@@ -357,7 +357,33 @@ class TransformerEncoderPredictor(nn.Module):
         enc_output = self.encoder(enc_input, key_mask)
         return enc_output
 
-class TransformerDecoderPredictor(nn.Module):
+class DecoderSplited(Decoder):
+    def forward(self, x1, y, causal_mask=None, key_mask=None):
+        x = None
+        for x2, layer in zip(x1, self.embed):
+            if x is None:
+                x = layer(x2)
+            else:
+                x += layer(x2)
+        x = self.pos_emb(x)
+        x = self.norm(x)
+        x = self.dropout(x)
+        for block in self.blocks:
+            x = block(x, y, causal_mask=causal_mask, key_mask=key_mask)
+        return [layer(x) for layer in self.out_layers]
+
+class TransformerDecoderPredictor1(nn.Module):
+    def __init__(self, decoder):
+        super().__init__()
+        self.head_num = decoder.head_num
+        self.decoder = decoder
+        self.decoder.__class__ = DecoderSplited
+
+    def forward(self, enc_output, decoder_input1, decoder_input2, decoder_input3, key_mask):
+        outputs = self.decoder([decoder_input1, decoder_input2, decoder_input3], enc_output, key_mask=key_mask)
+        return [torch.softmax(output, dim=-1) for output in outputs]
+
+class TransformerDecoderPredictor2(nn.Module):
     def __init__(self, decoder):
         super().__init__()
         self.head_num = decoder.head_num
@@ -365,7 +391,7 @@ class TransformerDecoderPredictor(nn.Module):
 
     def forward(self, enc_output, decoder_input, key_mask):
         outputs = self.decoder(decoder_input, enc_output, key_mask=key_mask)
-        return outputs
+        return [torch.softmax(output, dim=-1) for output in outputs]
 
 if __name__ == '__main__':
     model = Transformer(enc_input_dim=100, embed_dim=512, head_num=8)
@@ -374,7 +400,9 @@ if __name__ == '__main__':
     # print(out)
     # print([o.shape for o in out])
 
-    model2 = TransformerPredictor(model.encoder, model.decoder)
-    print(model2)
-    d = model2(torch.ones(4,5,100))
-    print(d)
+    # model2 = TransformerPredictor(model.encoder, model.decoder)
+    # print(model2)
+    # d = model2(torch.ones(4,5,100))
+    # print(d)
+
+    TransformerDecoderPredictor2(model.decoder)
