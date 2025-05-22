@@ -344,7 +344,7 @@ class TransformerPredictor(nn.Module):
                 print(f'[{k} early stop]')
                 break
             if k < rep_count-1:
-                decoder_input[:,1:] = torch.where(pred_p < 1/rep_count*k, decoder_MSK, decoder_output)[:,:-1]
+                decoder_input[:,1:] = torch.where(pred_p < 1/rep_count*k, decoder_MSK, decoder_output)[:,1:]
         return decoder_output
 
 class TransformerEncoderPredictor(nn.Module):

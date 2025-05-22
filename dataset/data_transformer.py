@@ -53,6 +53,9 @@ UNICODE_WHITESPACE_CHARACTERS = [
 def is_ascii(s):
     return s and s in '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~!@#$%^&*()_+-={}[]|\\:;"\'<>,.?/‘’“”'
 
+def is_hangul(s):
+    return re.match(s,r'\p{Block=Hangul Syllables}+') is not None
+
 jp_type_list = {}
 with open(os.path.join('data','id_map.csv'),'r') as f:
     reader = csv.reader(f)
@@ -287,7 +290,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                 self.vcodes.append(c)
         self.charparam = charparam
 
-        self.real_ratio = 1000
+        self.real_ratio = 10
         self.realdata = []
         if train:
             npyfiles = sorted(glob.glob(os.path.join(train_data4, '*.npy')))
@@ -340,7 +343,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                     cur_idx = len(target_text)
                     if subtype & 8 == 8:
                         space = 1
-                        if is_ascii(text):
+                        if is_ascii(text) or is_hangul(text):
                             target_text += ' '
                         else:
                             target_text += '　'
@@ -665,18 +668,18 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         codes += [0] * max(0,max_decoderlen+1-len(codes))
         codes = np.array(codes, dtype=int)
         input_codes = codes[:max_decoderlen]
-        true_codes = np.array(codes[1:max_decoderlen+1])
+        true_codes = np.array(codes[:max_decoderlen])
         p = rng.uniform()
         if p < 0.1:
-            input_codes[1:] = decoder_MSK
+            input_codes[:] = decoder_MSK
         elif p < 0.2:
             p = rng.uniform()
-            input_codes[1:] = np.where(rng.uniform(size=(max_decoderlen-1,)) < p, rng.integers(2, 0x3FFFF, size=(max_decoderlen-1,)), input_codes[1:])
+            input_codes[:] = np.where(rng.uniform(size=(max_decoderlen,)) < p, rng.integers(4, 0x3FFFF, size=(max_decoderlen,)), input_codes)
             p = rng.uniform()
-            input_codes[1:] = np.where(rng.uniform(size=(max_decoderlen-1,)) < p, decoder_MSK, input_codes[1:])
+            input_codes[:] = np.where(rng.uniform(size=(max_decoderlen,)) < p, decoder_MSK, input_codes)
         else:
             p = rng.uniform()
-            input_codes[1:] = np.where(rng.uniform(size=(max_decoderlen-1,)) < p, decoder_MSK, input_codes[1:])
+            input_codes[:] = np.where(rng.uniform(size=(max_decoderlen,)) < p, decoder_MSK, input_codes)
         return text, feature, input_codes, true_codes
 
 
@@ -697,6 +700,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
 #
 # sot = 1
 # eot = 2
+# msk = 3
 # pad = 0
 #######################################################
 
