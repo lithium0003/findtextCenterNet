@@ -300,8 +300,8 @@ class ModelDimensions:
     enc_input_dim: int = encoder_dim
     embed_dim: int = 512
     head_num: int = 16
-    enc_block_num: int = 8
-    dec_block_num: int = 3
+    enc_block_num: int = 4
+    dec_block_num: int = 4
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
 
@@ -345,13 +345,13 @@ class TransformerPredictor(nn.Module):
                 break
             decoder_output = torch.where(decoder_input == decoder_MSK, decoder_output, decoder_input)
             if k < rep_count-1:
-                r = int(max_decoderlen / rep_count * (k+1))
+                r = int(max_decoderlen * k / rep_count)
                 remask = decoder_input == decoder_MSK
                 remask = torch.logical_and(remask, torch.arange(max_decoderlen, device=enc_input.device) > r)
                 sorted, indices = torch.sort(pred_p[:,r:])
                 s = int((max_decoderlen - r) / rep_count * (k+1))
                 p_th = sorted[:,s]
-                remask = torch.logical_or(remask, pred_p < p_th)
+                remask = torch.logical_and(remask, pred_p < p_th)
                 if not torch.any(remask):
                     break
                 decoder_output = torch.where(remask, decoder_MSK, decoder_output)
