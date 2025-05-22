@@ -421,7 +421,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         p = len(self.realdata) * self.real_ratio + len(self.txtfile)
-        return len(self.realdata) * self.real_ratio + len(self.txtfile) + p // 10
+        return len(self.realdata) * self.real_ratio + len(self.txtfile) + p // 2
     
     def __getitem__(self, idx):
         if idx < len(self.realdata) * self.real_ratio:
@@ -673,11 +673,6 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         p = rng.uniform()
         if p < 0.1:
             input_codes[:] = decoder_MSK
-        elif p < 0.2:
-            p = rng.uniform()
-            input_codes[:] = np.where(rng.uniform(size=(max_decoderlen,)) < p, rng.integers(4, 0x3FFFF, size=(max_decoderlen,)), input_codes)
-            p = rng.uniform()
-            input_codes[:] = np.where(rng.uniform(size=(max_decoderlen,)) < p, decoder_MSK, input_codes)
         else:
             p = rng.uniform()
             input_codes[:] = np.where(rng.uniform(size=(max_decoderlen,)) < p, decoder_MSK, input_codes)

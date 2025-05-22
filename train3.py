@@ -14,7 +14,7 @@ from models.radam_schedulefree import RAdamScheduleFree
 from models.transformer import ModelDimensions, Transformer, TransformerPredictor
 from dataset.data_transformer import TransformerDataDataset
 from loss_func import loss_function3
-from const import decoder_MSK
+from const import decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK
 
 EPOCHS = 100
 lr=1e-4
@@ -258,9 +258,9 @@ def train():
                 pred = model2(feature).squeeze(0).cpu().numpy()
             predstr = ''
             for p in pred:
-                if p == 1:
+                if p == decoder_SOT:
                     continue
-                if p == 0 or p == 2:
+                if p == decoder_PAD or p == decoder_EOT:
                     break
                 if p >= 0xD800 and p <= 0xDFFF:
                     predstr += '\uFFFD'
