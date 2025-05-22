@@ -18,7 +18,7 @@ from const import decoder_MSK
 
 EPOCHS = 100
 lr=1e-4
-batch=512
+batch=128
 logstep=10
 output_iter=None
 save_all=False
