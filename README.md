@@ -373,3 +373,5 @@ https://aclanthology.org/2024.lrec-main.1478/
 https://arxiv.org/abs/1904.09324
 - Attending to Future Tokens For Bidirectional Sequence Generation
 https://arxiv.org/abs/1908.05915
+- Large Language Diffusion Models
+https://arxiv.org/abs/2502.09992
