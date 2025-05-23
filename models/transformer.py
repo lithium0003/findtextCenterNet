@@ -59,9 +59,9 @@ class PositionalEncoding(nn.Module):
 class SwiGLU(nn.Module):
     def __init__(self, dim, dropout = 0.1):
         super().__init__()
-        self.w1 = nn.Linear(dim, dim*3)
-        self.wg = nn.Linear(dim, dim*3)
-        self.w2 = nn.Linear(dim*3, dim)
+        self.w1 = nn.Linear(dim, dim*2)
+        self.wg = nn.Linear(dim, dim*2)
+        self.w2 = nn.Linear(dim*2, dim)
         self.dropout = nn.Dropout(p = dropout, inplace=True)
 
     def forward(self, x):
