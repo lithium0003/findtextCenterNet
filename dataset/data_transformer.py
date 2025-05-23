@@ -669,13 +669,13 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         codes += [0] * max(0,max_decoderlen+1-len(codes))
         codes = np.array(codes, dtype=int)
         input_codes = codes[:max_decoderlen]
-        true_codes = np.array(codes[:max_decoderlen])
+        true_codes = np.array(codes[1:max_decoderlen+1])
         p = rng.uniform()
         if p < 0.1:
-            input_codes[:] = decoder_MSK
+            input_codes[1:] = decoder_MSK
         else:
             p = rng.uniform()
-            input_codes[:] = np.where(rng.uniform(size=(max_decoderlen,)) < p, decoder_MSK, input_codes)
+            input_codes[1:] = np.where(rng.uniform(size=(max_decoderlen,)) < p, decoder_MSK, input_codes[1:])
         return text, feature, input_codes, true_codes
 
 
