@@ -23,7 +23,7 @@ class PositionalEncoding(nn.Module):
         :param max_len: max sequence length
         :param device: hardware device setting
         """
-        super(PositionalEncoding, self).__init__()
+        super().__init__()
 
         # same size with input matrix (for adding with input matrix)
         encoding = torch.zeros(max_len, d_model)
@@ -40,8 +40,8 @@ class PositionalEncoding(nn.Module):
         encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
         # compute positional encoding to consider positional information of words
 
-        self.encoding = nn.Buffer(encoding).requires_grad_(False)
-        # self.encoding = nn.Parameter(encoding, requires_grad=True)
+        # self.encoding = nn.Buffer(encoding).requires_grad_(False)
+        self.encoding = nn.Parameter(encoding, requires_grad=True)
 
     def forward(self, x):
         # self.encoding
@@ -296,7 +296,7 @@ class Transformer(nn.Module):
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
     embed_dim: int = 512
-    head_num: int = 8
+    head_num: int = 32
     enc_block_num: int = 4
     dec_block_num: int = 4
     max_enc_seq_len: int = max_encoderlen
