@@ -126,14 +126,14 @@ def train():
 
     @torch.compile
     def train_step(encoder_input, decoder_input, label_code):
-        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+        with torch.autocast(device_type='cuda', dtype=torch.float16):
             outputs = model(encoder_input, decoder_input)
             rawloss = loss_function3(outputs, label_code, torch.logical_or(decoder_input == decoder_SOT, decoder_input == decoder_MSK))
         return rawloss['loss'], rawloss
 
     @torch.compile
     def test_step(encoder_input, decoder_input, label_code):
-        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+        with torch.autocast(device_type='cuda', dtype=torch.float16):
             outputs = model(encoder_input, decoder_input)
             rawloss = loss_function3(outputs, label_code, torch.logical_or(decoder_input == decoder_SOT, decoder_input == decoder_MSK))
         return rawloss['loss'], rawloss
@@ -199,6 +199,7 @@ def train():
                         'config': config.__dict__,
                         'model_state_dict': model.state_dict(),
                         }, 'result3/model.pt')
+                optimizer.train()
 
         running_loss.write(losslog)
         loss_value = losslog['loss'].item()
