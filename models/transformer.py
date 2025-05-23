@@ -198,7 +198,7 @@ class EncoderBlock(nn.Module):
         _x = x
         x = self.ff(x)
         x = self.dropout2(x)
-        x = x + _x #+ skip
+        x = x + _x + skip
         x = self.norm2(x)
         return x
 
@@ -249,7 +249,7 @@ class DecoderBlock(nn.Module):
         _x = x
         x = self.ff(x)
         x = self.dropout3(x)
-        x = x + _x #+ skip
+        x = x + _x + skip
         x = self.norm3(x)
         return x
 
@@ -298,10 +298,10 @@ class Transformer(nn.Module):
 @dataclass
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
-    embed_dim: int = 512
+    embed_dim: int = 256
     head_num: int = 16
-    enc_block_num: int = 4
-    dec_block_num: int = 4
+    enc_block_num: int = 16
+    dec_block_num: int = 16
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
     dropout: float = 0.0
