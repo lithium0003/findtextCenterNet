@@ -59,8 +59,8 @@ class PositionalEncoding(nn.Module):
 class FeedForward(nn.Module):
     def __init__(self, dim, dropout = 0.1):
         super().__init__()
-        self.w1 = nn.Linear(dim, dim*4)
-        self.w2 = nn.Linear(dim*4, dim)
+        self.w1 = nn.Linear(dim, dim*4, bias=False)
+        self.w2 = nn.Linear(dim*4, dim, bias=False)
         self.dropout = nn.Dropout(p = dropout, inplace=True)
 
     def forward(self, x):
@@ -301,7 +301,7 @@ class ModelDimensions:
     dec_block_num: int = 8
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
-    dropout: float = 0.01
+    dropout: float = 0.15
 
 class TransformerPredictor(nn.Module):
     def __init__(self, encoder, decoder):
