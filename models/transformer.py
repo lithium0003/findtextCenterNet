@@ -56,18 +56,15 @@ class PositionalEncoding(nn.Module):
 
         return x + pe.type_as(x)
 
-class SwiGLU(nn.Module):
+class FeedForward(nn.Module):
     def __init__(self, dim, dropout = 0.1):
         super().__init__()
-        self.w1 = nn.Linear(dim, dim*2)
-        self.wg = nn.Linear(dim, dim*2)
-        self.w2 = nn.Linear(dim*2, dim)
+        self.w1 = nn.Linear(dim, dim*4)
+        self.w2 = nn.Linear(dim*4, dim)
         self.dropout = nn.Dropout(p = dropout, inplace=True)
 
     def forward(self, x):
-        x1 = self.w1(x)
-        xg = F.silu(self.wg(x))
-        x = x1 * xg
+        x = self.w1(x)
         x = self.dropout(x)
         return self.w2(x)
 
@@ -185,7 +182,7 @@ class EncoderBlock(nn.Module):
         self.mha = MultiheadDiffAttn(embed_dim=embed_dim, depth=depth, num_heads=num_heads, dropout=dropout, max_seq_len=max_seq_len)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
-        self.ff = SwiGLU(embed_dim, dropout=dropout)
+        self.ff = FeedForward(embed_dim, dropout=dropout)
         self.dropout1 = nn.Dropout(dropout, inplace=True)
         self.dropout2 = nn.Dropout(dropout, inplace=True)
 
@@ -230,7 +227,7 @@ class DecoderBlock(nn.Module):
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.norm3 = nn.LayerNorm([embed_dim])
-        self.ff = SwiGLU(embed_dim, dropout=dropout)
+        self.ff = FeedForward(embed_dim, dropout=dropout)
         self.dropout1 = nn.Dropout(dropout, inplace=True)
         self.dropout2 = nn.Dropout(dropout, inplace=True)
         self.dropout3 = nn.Dropout(dropout, inplace=True)
@@ -298,8 +295,8 @@ class Transformer(nn.Module):
 @dataclass
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
-    embed_dim: int = 768
-    head_num: int = 48
+    embed_dim: int = 512
+    head_num: int = 32
     enc_block_num: int = 4
     dec_block_num: int = 4
     max_enc_seq_len: int = max_encoderlen
