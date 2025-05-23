@@ -278,12 +278,12 @@ class Decoder(nn.Module):
         return [layer(x) for layer in self.out_layers]
 
 class Transformer(nn.Module):
-    def __init__(self, enc_input_dim, embed_dim, head_num, enc_block_num = 6, dec_block_num = 6, max_enc_seq_len = 5000, max_dec_seq_len = 5000):
+    def __init__(self, enc_input_dim, embed_dim, head_num, enc_block_num = 6, dec_block_num = 6, max_enc_seq_len = 5000, max_dec_seq_len = 5000, dropout = 0.1):
         super().__init__()
         self.head_num = head_num
         self.max_len = max(max_enc_seq_len, max_dec_seq_len)
-        self.encoder = Encoder(input_dim=enc_input_dim, embed_dim=embed_dim, head_num=head_num, max_seq_len=max_enc_seq_len, block_num=enc_block_num)
-        self.decoder = Decoder(embed_dim=embed_dim, head_num=head_num, max_seq_len=max_dec_seq_len, block_num=dec_block_num)
+        self.encoder = Encoder(input_dim=enc_input_dim, embed_dim=embed_dim, head_num=head_num, max_seq_len=max_enc_seq_len, block_num=enc_block_num, dropout=dropout)
+        self.decoder = Decoder(embed_dim=embed_dim, head_num=head_num, max_seq_len=max_dec_seq_len, block_num=dec_block_num, dropout=dropout)
 
     def forward(self, enc_input, dec_input):
         key_mask = torch.all(enc_input == 0, dim=-1)
@@ -297,10 +297,11 @@ class ModelDimensions:
     enc_input_dim: int = encoder_dim
     embed_dim: int = 512
     head_num: int = 16
-    enc_block_num: int = 16
+    enc_block_num: int = 2
     dec_block_num: int = 2
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
+    dropout: float = 0.01
 
 class TransformerPredictor(nn.Module):
     def __init__(self, encoder, decoder):
