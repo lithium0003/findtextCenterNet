@@ -56,15 +56,18 @@ class PositionalEncoding(nn.Module):
 
         return x + pe.type_as(x)
 
-class FeedForward(nn.Module):
+class SwiGLU(nn.Module):
     def __init__(self, dim, dropout = 0.1):
         super().__init__()
-        self.w1 = nn.Linear(dim, dim*4, bias=False)
-        self.w2 = nn.Linear(dim*4, dim, bias=False)
+        self.w1 = nn.Linear(dim, dim*3)
+        self.wg = nn.Linear(dim, dim*3)
+        self.w2 = nn.Linear(dim*3, dim)
         self.dropout = nn.Dropout(p = dropout, inplace=True)
 
     def forward(self, x):
-        x = self.w1(x)
+        x1 = self.w1(x)
+        xg = F.silu(self.wg(x))
+        x = x1 * xg
         x = self.dropout(x)
         return self.w2(x)
 
@@ -182,7 +185,7 @@ class EncoderBlock(nn.Module):
         self.mha = MultiheadDiffAttn(embed_dim=embed_dim, depth=depth, num_heads=num_heads, dropout=dropout, max_seq_len=max_seq_len)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
-        self.ff = FeedForward(embed_dim, dropout=dropout)
+        self.ff = SwiGLU(embed_dim, dropout=dropout)
         self.dropout1 = nn.Dropout(dropout, inplace=True)
         self.dropout2 = nn.Dropout(dropout, inplace=True)
 
@@ -227,7 +230,7 @@ class DecoderBlock(nn.Module):
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.norm3 = nn.LayerNorm([embed_dim])
-        self.ff = FeedForward(embed_dim, dropout=dropout)
+        self.ff = SwiGLU(embed_dim, dropout=dropout)
         self.dropout1 = nn.Dropout(dropout, inplace=True)
         self.dropout2 = nn.Dropout(dropout, inplace=True)
         self.dropout3 = nn.Dropout(dropout, inplace=True)
@@ -295,10 +298,10 @@ class Transformer(nn.Module):
 @dataclass
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
-    embed_dim: int = 512
-    head_num: int = 16
-    enc_block_num: int = 8
-    dec_block_num: int = 8
+    embed_dim: int = 1024
+    head_num: int = 32
+    enc_block_num: int = 4
+    dec_block_num: int = 4
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
     dropout: float = 0.0
