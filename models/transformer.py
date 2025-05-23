@@ -179,10 +179,91 @@ class MultiheadDiffAttn(nn.Module):
         attn = self.out_proj(attn)
         return attn
 
+class MultiheadAttn(nn.Module):
+    def __init__(
+        self,
+        embed_dim,
+        depth,
+        num_heads,
+        dropout = 0.1,
+        max_seq_len=5000,
+    ):
+        super().__init__()
+        self.embed_dim = embed_dim
+        
+        # arg num_heads set to half of Transformer's num_heads
+        self.num_heads = num_heads
+        
+        # arg decoder_kv_attention_heads set to half of Transformer's num_kv_heads if use GQA
+        # set to same as num_heads if use normal MHA
+        self.num_kv_heads = num_heads
+        self.n_rep = self.num_heads // self.num_kv_heads
+        
+        self.head_dim = embed_dim // num_heads
+        self.scaling = self.head_dim ** -0.5
+        
+        self.q_proj = nn.Linear(embed_dim, embed_dim, bias=False)
+        self.k_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
+        self.v_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
+        self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
+
+        self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
+        self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
+
+        self.subln = nn.LayerNorm([self.head_dim], bias=False)
+        self.dropout = nn.Dropout(p = dropout, inplace=True)
+
+    def forward(
+        self,
+        query, key=None, value=None,
+        causal_mask=None,
+        key_mask=None,
+    ):
+        if key is None:
+            key = query
+            pos_emb_k = self.pos_emb_q
+        else:
+            pos_emb_k = self.pos_emb_k
+        if value is None:
+            value = key
+        bsz, tgt_len, embed_dim = query.size()
+        bsz, src_len, embed_dim = key.size()
+
+        query = self.pos_emb_q(query)
+        key = pos_emb_k(key)
+
+        q = self.q_proj(query)
+        k = self.k_proj(key)
+        v = self.v_proj(value)
+
+        q = q.view(bsz, tgt_len, self.num_heads, self.head_dim)
+        k = k.view(bsz, src_len, self.num_kv_heads, self.head_dim)
+        v = v.view(bsz, src_len, self.num_kv_heads, self.head_dim)
+
+        q = q.transpose(1, 2).contiguous()
+        k = repeat_kv(k.transpose(1, 2), self.n_rep)
+        v = repeat_kv(v.transpose(1, 2), self.n_rep)
+        q *= self.scaling
+        attn_weights = torch.matmul(q, k.transpose(-1, -2))
+        if key_mask is not None:
+            attn_weights += key_mask[:,:,:,:src_len].type_as(attn_weights)
+        if causal_mask is not None:
+            attn_weights += causal_mask[:tgt_len,:src_len].type_as(attn_weights)
+        attn_weights = F.softmax(attn_weights.float(), dim=-1, dtype=torch.float32).type_as(attn_weights)
+
+        attn_weights = self.dropout(attn_weights)
+
+        attn = torch.matmul(attn_weights, v)
+        attn = self.subln(attn)
+        attn = attn.transpose(1, 2).reshape(bsz, tgt_len, self.num_heads * self.head_dim)
+
+        attn = self.out_proj(attn)
+        return attn
+
 class EncoderBlock(nn.Module):
     def __init__(self, embed_dim, depth, num_heads, dropout = 0.1, max_seq_len=5000):
         super().__init__()
-        self.mha = MultiheadDiffAttn(embed_dim=embed_dim, depth=depth, num_heads=num_heads, dropout=dropout, max_seq_len=max_seq_len)
+        self.mha = MultiheadAttn(embed_dim=embed_dim, depth=depth, num_heads=num_heads, dropout=dropout, max_seq_len=max_seq_len)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.ff = SwiGLU(embed_dim, dropout=dropout)
@@ -225,8 +306,8 @@ class Encoder(nn.Module):
 class DecoderBlock(nn.Module):
     def __init__(self, embed_dim, depth, head_num, dropout = 0.1, max_seq_len=5000):
         super().__init__()
-        self.self_attn = MultiheadDiffAttn(embed_dim, depth, head_num, dropout=dropout, max_seq_len=max_seq_len)
-        self.cross_attn = MultiheadDiffAttn(embed_dim, depth, head_num, dropout=dropout, max_seq_len=max_seq_len)
+        self.self_attn = MultiheadAttn(embed_dim, depth, head_num, dropout=dropout, max_seq_len=max_seq_len)
+        self.cross_attn = MultiheadAttn(embed_dim, depth, head_num, dropout=dropout, max_seq_len=max_seq_len)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.norm3 = nn.LayerNorm([embed_dim])
@@ -298,10 +379,10 @@ class Transformer(nn.Module):
 @dataclass
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
-    embed_dim: int = 256
-    head_num: int = 16
-    enc_block_num: int = 24
-    dec_block_num: int = 24
+    embed_dim: int = 1024
+    head_num: int = 32
+    enc_block_num: int = 3
+    dec_block_num: int = 3
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
     dropout: float = 0.0
