@@ -40,8 +40,8 @@ class PositionalEncoding(nn.Module):
         encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
         # compute positional encoding to consider positional information of words
 
-        # self.encoding = nn.Buffer(encoding).requires_grad_(False)
-        self.encoding = nn.Parameter(encoding, requires_grad=True)
+        self.encoding = nn.Buffer(encoding).requires_grad_(False)
+        # self.encoding = nn.Parameter(encoding, requires_grad=True)
 
     def forward(self, x):
         # self.encoding
@@ -59,9 +59,9 @@ class PositionalEncoding(nn.Module):
 class SwiGLU(nn.Module):
     def __init__(self, dim, dropout = 0.1):
         super().__init__()
-        self.w1 = nn.Linear(dim, dim*4)
-        self.wg = nn.Linear(dim, dim*4)
-        self.w2 = nn.Linear(dim*4, dim)
+        self.w1 = nn.Linear(dim, dim*2)
+        self.wg = nn.Linear(dim, dim*2)
+        self.w2 = nn.Linear(dim*2, dim)
         self.dropout = nn.Dropout(p = dropout, inplace=True)
 
     def forward(self, x):
