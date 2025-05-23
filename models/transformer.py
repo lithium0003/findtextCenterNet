@@ -279,7 +279,7 @@ class EncoderBlock(nn.Module):
         _x = x
         x = self.ff(x)
         x = self.dropout2(x)
-        x = x + _x #+ skip
+        x = x + _x + skip
         x = self.norm2(x)
         return x
 
@@ -330,7 +330,7 @@ class DecoderBlock(nn.Module):
         _x = x
         x = self.ff(x)
         x = self.dropout3(x)
-        x = x + _x #+ skip
+        x = x + _x + skip
         x = self.norm3(x)
         return x
 
