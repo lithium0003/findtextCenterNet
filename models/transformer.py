@@ -292,10 +292,10 @@ class Transformer(nn.Module):
         self.decoder = Decoder(embed_dim=embed_dim, head_num=head_num, max_seq_len=max_dec_seq_len, block_num=dec_block_num, dropout=dropout)
 
     def forward(self, enc_input, dec_input):
-        key_mask = torch.all(enc_input == 0, dim=-1)
-        key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0)
-        enc_output = self.encoder(enc_input, key_mask=key_mask)
-        output = self.decoder(dec_input, enc_output, key_mask=key_mask)
+        # key_mask = torch.all(enc_input == 0, dim=-1)
+        # key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0)
+        enc_output = self.encoder(enc_input)
+        output = self.decoder(dec_input, enc_output)
         return output
 
 @dataclass
