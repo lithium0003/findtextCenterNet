@@ -114,6 +114,7 @@ class MultiheadAttn(nn.Module):
         
         self.head_dim = embed_dim // num_heads
         self.seq_len_threshold = seq_len_threshold
+        self.scaling = self.head_dim ** -0.5
         self.mha_scale = ScaleUp(np.log2(self.seq_len_threshold**2 - self.seq_len_threshold))
         
         self.q_proj = nn.Linear(embed_dim, embed_dim, bias=False)
@@ -123,9 +124,6 @@ class MultiheadAttn(nn.Module):
 
         self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
-
-        self.q_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False)
-        self.k_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False)
 
         self.dropout = nn.Dropout(p = dropout, inplace=True)
 
@@ -160,12 +158,8 @@ class MultiheadAttn(nn.Module):
         k = repeat_kv(k.transpose(1, 2), self.n_rep)
         v = repeat_kv(v.transpose(1, 2), self.n_rep)
 
-        q = self.q_norm(q)
-        k = self.k_norm(k)
-        ### Scale up att_weights before we softmax
-        ### Since the elements of QKt are now the cosine similarity between the embeddings of Q and K we need to 
-        ### scale up by some factor to ensure attention can still produce concentrated distributions as needed
-        attn_weights = self.mha_scale(torch.matmul(q, k.transpose(-1, -2)))
+        q *= self.scaling
+        attn_weights = torch.matmul(q, k.transpose(-1, -2))
 
         if key_mask is not None:
             attn_weights += key_mask[:,:,:,:src_len].type_as(attn_weights)
