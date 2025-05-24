@@ -121,8 +121,8 @@ class MultiheadAttn(nn.Module):
         self.v_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
 
-        self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
-        self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
+        # self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
+        # self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
 
         self.q_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False)
         self.k_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False)
@@ -137,16 +137,17 @@ class MultiheadAttn(nn.Module):
     ):
         if key is None:
             key = query
-            pos_emb_k = self.pos_emb_q
+            # pos_emb_k = self.pos_emb_q
         else:
-            pos_emb_k = self.pos_emb_k
+            pass
+            # pos_emb_k = self.pos_emb_k
         if value is None:
             value = key
         bsz, tgt_len, embed_dim = query.size()
         bsz, src_len, embed_dim = key.size()
 
-        query = self.pos_emb_q(query)
-        key = pos_emb_k(key)
+        # query = self.pos_emb_q(query)
+        # key = pos_emb_k(key)
 
         q = self.q_proj(query)
         k = self.k_proj(key)
@@ -300,8 +301,8 @@ class Transformer(nn.Module):
 @dataclass
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
-    embed_dim: int = 1024
-    head_num: int = 32
+    embed_dim: int = 512
+    head_num: int = 16
     enc_block_num: int = 4
     dec_block_num: int = 4
     max_enc_seq_len: int = max_encoderlen
@@ -385,18 +386,7 @@ class DecoderSplited(Decoder):
             x = block(x, y, causal_mask=causal_mask, key_mask=key_mask)
         return [layer(x) for layer in self.out_layers]
 
-class TransformerDecoderPredictor1(nn.Module):
-    def __init__(self, decoder):
-        super().__init__()
-        self.head_num = decoder.head_num
-        self.decoder = decoder
-        self.decoder.__class__ = DecoderSplited
-
-    def forward(self, enc_output, decoder_input1, decoder_input2, decoder_input3, key_mask):
-        outputs = self.decoder([decoder_input1, decoder_input2, decoder_input3], enc_output, key_mask=key_mask)
-        return [torch.softmax(output, dim=-1) for output in outputs]
-
-class TransformerDecoderPredictor2(nn.Module):
+class TransformerDecoderPredictor(nn.Module):
     def __init__(self, decoder):
         super().__init__()
         self.head_num = decoder.head_num
@@ -418,4 +408,4 @@ if __name__ == '__main__':
     # d = model2(torch.ones(4,5,100))
     # print(d)
 
-    TransformerDecoderPredictor2(model.decoder)
+    TransformerDecoderPredictor(model.decoder)
