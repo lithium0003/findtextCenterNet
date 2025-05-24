@@ -6,7 +6,7 @@ import numpy as np
 import itertools
 
 from util_func import modulo_list, calc_predid, feature_dim
-from const import decoder_SOT, decoder_EOT, decoder_MSK, max_decoderlen, max_encoderlen, encoder_add_dim
+from const import decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK, max_decoderlen, max_encoderlen, encoder_add_dim
 
 encoder_dim = feature_dim + encoder_add_dim
 
@@ -315,8 +315,7 @@ class TransformerPredictor(nn.Module):
         key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0)
         enc_output = self.encoder(enc_input, key_mask=key_mask)
         decoder_input = torch.zeros((enc_input.shape[0],max_decoderlen), dtype=torch.long, device=enc_input.device)
-        decoder_input[:,0] = decoder_SOT
-        decoder_input[:,1:] = decoder_MSK
+        decoder_input[:,:] = decoder_MSK
         rep_count = 10
         for k in range(rep_count):
             outputs = self.decoder(decoder_input, enc_output, key_mask=key_mask)
@@ -340,18 +339,33 @@ class TransformerPredictor(nn.Module):
             if k > 0 and torch.all(pred_p[decoder_output > 0] > 0.99):
                 print(f'[{k} early stop]')
                 break
+            # pred = decoder_output.squeeze(0).cpu().numpy()
+            # predstr = ''
+            # for p in pred:
+            #     if p == decoder_SOT:
+            #         continue
+            #     if p == decoder_PAD or p == decoder_EOT:
+            #         break
+            #     if p >= 0xD800 and p <= 0xDFFF:
+            #         predstr += '\uFFFD'
+            #     elif p < 0x3FFFF:
+            #         predstr += chr(p)
+            #     else:
+            #         predstr += '\uFFFD'
+            # print('------------------')
+            # print(predstr)
             if k < rep_count-1:
-                r = int(max_decoderlen * (k + 1) / rep_count)
+                r = int(max_decoderlen * (k+1) / rep_count)
                 remask = torch.arange(max_decoderlen, device=enc_input.device) > r
                 if r > 0:
-                    sorted, indices = torch.sort(-pred_p[:,:r])
-                    s = int(r / rep_count * (k+1))
+                    sorted, indices = torch.sort(pred_p[:,:r])
+                    s = int(r * (k+1) / rep_count)
                     p_th = sorted[:,s]
-                    remask = torch.logical_or(remask, pred_p < p_th)
+                    remask = torch.logical_or(remask, torch.logical_and(torch.logical_or(decoder_input == decoder_SOT, decoder_input == decoder_MSK), pred_p < p_th))
                 if not torch.any(remask):
                     break
                 decoder_output = torch.where(remask, decoder_MSK, decoder_output)
-                decoder_input[:,1:] = decoder_output[:,:-1]
+                decoder_input[:,:] = decoder_output[:,:]
         return decoder_output
 
 class TransformerEncoderPredictor(nn.Module):
