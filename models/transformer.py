@@ -82,16 +82,6 @@ def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
         .reshape(bs, n_kv_heads * n_rep, slen, head_dim)
     )
 
-class ScaleUp(nn.Module):
-    ### Learned pararmeter used to scale up QKt before taking the softmax
-    """ScaleUp"""
-    def __init__(self, scale):
-        super().__init__()
-        self.scale = nn.Parameter(torch.tensor(scale).float())
-
-    def forward(self, x):
-        return x * self.scale
-
 class MultiheadAttn(nn.Module):
     def __init__(
         self,
@@ -115,7 +105,6 @@ class MultiheadAttn(nn.Module):
         self.head_dim = embed_dim // num_heads
         self.seq_len_threshold = seq_len_threshold
         self.scaling = self.head_dim ** -0.5
-        self.mha_scale = ScaleUp(np.log2(self.seq_len_threshold**2 - self.seq_len_threshold))
         
         self.q_proj = nn.Linear(embed_dim, embed_dim, bias=False)
         self.k_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
@@ -318,6 +307,30 @@ class TransformerPredictor(nn.Module):
         decoder_input[:,:] = decoder_MSK
         rep_count = 10
         for k in range(rep_count):
+            print(decoder_input)
+            pred = decoder_input.squeeze(0).cpu().numpy()
+            predstr = ''
+            for p in pred:
+                if p == decoder_SOT:
+                    continue
+                if p == decoder_PAD or p == decoder_EOT:
+                    break
+                if p == decoder_MSK:
+                    predstr += '<MSK>'
+                elif p == 0xFFF9:
+                    predstr += '<base>'
+                elif p == 0xFFFA:
+                    predstr += '<ruby>'
+                elif p == 0xFFFB:
+                    predstr += '</ruby>'
+                elif p >= 0xD800 and p <= 0xDFFF:
+                    predstr += '\uFFFD'
+                elif p < 0x3FFFF:
+                    predstr += chr(p)
+                else:
+                    predstr += '\uFFFD'
+            print('------------------')
+            print(predstr)
             outputs = self.decoder(decoder_input, enc_output, key_mask=key_mask)
             listp = []
             listi = []
@@ -336,32 +349,39 @@ class TransformerPredictor(nn.Module):
             maxi = torch.argmax(pred_p, dim=0)
             decoder_output = torch.gather(decoder_output, 0, maxi.unsqueeze(0))[0]
             pred_p = torch.gather(pred_p, 0, maxi.unsqueeze(0))[0]
-            if k > 0 and torch.all(pred_p[decoder_output > 0] > 0.99):
+            # print(pred_p[decoder_output > 0])
+            if k > 0 and torch.all(pred_p[torch.logical_and(decoder_input == decoder_MSK, decoder_output > 0)] > 0.99):
                 print(f'[{k} early stop]')
                 break
-            # pred = decoder_output.squeeze(0).cpu().numpy()
-            # predstr = ''
-            # for p in pred:
-            #     if p == decoder_SOT:
-            #         continue
-            #     if p == decoder_PAD or p == decoder_EOT:
-            #         break
-            #     if p >= 0xD800 and p <= 0xDFFF:
-            #         predstr += '\uFFFD'
-            #     elif p < 0x3FFFF:
-            #         predstr += chr(p)
-            #     else:
-            #         predstr += '\uFFFD'
-            # print('------------------')
-            # print(predstr)
+            decoder_output = torch.where(decoder_input == decoder_MSK, decoder_output, decoder_input)
+            print(decoder_output)
+            pred = decoder_output.squeeze(0).cpu().numpy()
+            predstr = ''
+            for p in pred:
+                if p == decoder_SOT:
+                    continue
+                if p == decoder_PAD or p == decoder_EOT:
+                    break
+                if p == 0xFFF9:
+                    predstr += '<base>'
+                elif p == 0xFFFA:
+                    predstr += '<ruby>'
+                elif p == 0xFFFB:
+                    predstr += '</ruby>'
+                elif p >= 0xD800 and p <= 0xDFFF:
+                    predstr += '\uFFFD'
+                elif p < 0x3FFFF:
+                    predstr += chr(p)
+                else:
+                    predstr += '\uFFFD'
+            print('------------------')
+            print(predstr)
             if k < rep_count-1:
                 r = int(max_decoderlen * (k+1) / rep_count)
                 remask = torch.arange(max_decoderlen, device=enc_input.device) > r
+                remask = torch.logical_or(remask, decoder_output > 0x3FFFF)
                 if r > 0:
-                    sorted, indices = torch.sort(pred_p[:,:r])
-                    s = int(r * (k+1) / rep_count)
-                    p_th = sorted[:,s]
-                    remask = torch.logical_or(remask, torch.logical_and(torch.logical_or(decoder_input == decoder_SOT, decoder_input == decoder_MSK), pred_p < p_th))
+                    remask = torch.logical_or(remask, torch.logical_and(decoder_input == decoder_MSK, pred_p < 0.9))
                 if not torch.any(remask):
                     break
                 decoder_output = torch.where(remask, decoder_MSK, decoder_output)
