@@ -41,7 +41,7 @@ class PositionalEncoding(nn.Module):
         # compute positional encoding to consider positional information of words
 
         # self.encoding = nn.Buffer(encoding).requires_grad_(False)
-        self.encoding = nn.Parameter(encoding, requires_grad=True)
+        self.encoding = nn.Parameter(encoding)
 
     def forward(self, x):
         # self.encoding
@@ -87,7 +87,7 @@ class ScaleUp(nn.Module):
     """ScaleUp"""
     def __init__(self, scale):
         super().__init__()
-        self.scale = nn.Parameter(torch.tensor(scale))
+        self.scale = nn.Parameter(torch.tensor(scale).float())
 
     def forward(self, x):
         return x * self.scale
@@ -172,7 +172,6 @@ class MultiheadAttn(nn.Module):
 
         attn_weights = self.dropout(attn_weights)
 
-        v = F.normalize(v, p=2, dim=-1)
         attn = torch.matmul(attn_weights, v)
         attn = attn.transpose(1, 2).reshape(bsz, tgt_len, self.num_heads * self.head_dim)
 
@@ -298,13 +297,13 @@ class Transformer(nn.Module):
 @dataclass
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
-    embed_dim: int = 1024
-    head_num: int = 32
-    enc_block_num: int = 3
-    dec_block_num: int = 3
+    embed_dim: int = 512
+    head_num: int = 16
+    enc_block_num: int = 4
+    dec_block_num: int = 4
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
-    dropout: float = 0.0
+    dropout: float = 0.1
 
 class TransformerPredictor(nn.Module):
     def __init__(self, encoder, decoder):
