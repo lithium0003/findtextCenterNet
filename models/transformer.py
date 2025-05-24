@@ -210,8 +210,9 @@ class MultiheadAttn(nn.Module):
         self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
 
-        self.q_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False, bias=False)
-        self.k_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False, bias=False)
+        self.q_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False)
+        self.k_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False)
+        self.v_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False)
         self.dropout = nn.Dropout(p = dropout, inplace=True)
 
     def forward(
@@ -256,6 +257,7 @@ class MultiheadAttn(nn.Module):
 
         attn_weights = self.dropout(attn_weights)
 
+        v = self.k_norm(v)
         attn = torch.matmul(attn_weights, v)
         attn = attn.transpose(1, 2).reshape(bsz, tgt_len, self.num_heads * self.head_dim)
 
