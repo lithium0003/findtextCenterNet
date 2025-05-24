@@ -257,7 +257,7 @@ class MultiheadAttn(nn.Module):
 
         attn_weights = self.dropout(attn_weights)
 
-        v = self.k_norm(v)
+        v = self.v_norm(v)
         attn = torch.matmul(attn_weights, v)
         attn = attn.transpose(1, 2).reshape(bsz, tgt_len, self.num_heads * self.head_dim)
 
