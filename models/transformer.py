@@ -36,8 +36,8 @@ class PositionalEncoding(nn.Module):
         # 'i' means index of d_model (e.g. embedding size = 50, 'i' = [0,50])
         # "step=2" means 'i' multiplied with two (same with 2 * i)
 
-        encoding[:, 0::2] = torch.sin(pos / (10000 ** (_2i / d_model)))
-        encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
+        encoding[:, 0::2] = torch.sin(pos / (10000 ** (_2i / d_model / 4)))
+        encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model / 4)))
         # compute positional encoding to consider positional information of words
 
         # self.encoding = nn.Buffer(encoding).requires_grad_(False)
@@ -62,7 +62,7 @@ class SwiGLU(nn.Module):
         self.w1 = nn.Linear(dim, dim*2)
         self.wg = nn.Linear(dim, dim*2)
         self.w2 = nn.Linear(dim*2, dim)
-        self.dropout = nn.Dropout(p = dropout, inplace=True)
+        self.dropout = nn.Dropout(p = dropout)
 
     def forward(self, x):
         x1 = self.w1(x)
@@ -121,8 +121,8 @@ class MultiheadAttn(nn.Module):
         self.v_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
 
-        # self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
-        # self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
+        self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
+        self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
 
         self.q_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False)
         self.k_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False)
@@ -137,17 +137,16 @@ class MultiheadAttn(nn.Module):
     ):
         if key is None:
             key = query
-            # pos_emb_k = self.pos_emb_q
+            pos_emb_k = self.pos_emb_q
         else:
-            pass
-            # pos_emb_k = self.pos_emb_k
+            pos_emb_k = self.pos_emb_k
         if value is None:
             value = key
         bsz, tgt_len, embed_dim = query.size()
         bsz, src_len, embed_dim = key.size()
 
-        # query = self.pos_emb_q(query)
-        # key = pos_emb_k(key)
+        query = self.pos_emb_q(query)
+        key = pos_emb_k(key)
 
         q = self.q_proj(query)
         k = self.k_proj(key)
@@ -189,8 +188,8 @@ class EncoderBlock(nn.Module):
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.ff = SwiGLU(embed_dim, dropout=dropout)
-        self.dropout1 = nn.Dropout(dropout, inplace=True)
-        self.dropout2 = nn.Dropout(dropout, inplace=True)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
 
     def forward(self, x, key_mask=None):
         skip = x
@@ -201,7 +200,7 @@ class EncoderBlock(nn.Module):
         _x = x
         x = self.ff(x)
         x = self.dropout2(x)
-        x = x + _x #+ skip
+        x = x + _x + skip
         x = self.norm2(x)
         return x
 
@@ -210,10 +209,10 @@ class Encoder(nn.Module):
         super().__init__()
         self.dim = embed_dim
         self.head_num = head_num
-        self.embed = nn.Linear(input_dim, embed_dim)
+        self.embed = nn.Linear(input_dim, embed_dim, bias=False)
         self.pos_emb = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.norm = nn.LayerNorm([embed_dim])
-        self.dropout = nn.Dropout(dropout, inplace=True)
+        self.dropout = nn.Dropout(dropout)
         self.blocks = nn.ModuleList([EncoderBlock(embed_dim, d, head_num, dropout=dropout, max_seq_len=max_seq_len) for d in range(block_num)])        
 
     def forward(self, x, key_mask=None):
@@ -234,9 +233,9 @@ class DecoderBlock(nn.Module):
         self.norm2 = nn.LayerNorm([embed_dim])
         self.norm3 = nn.LayerNorm([embed_dim])
         self.ff = SwiGLU(embed_dim, dropout=dropout)
-        self.dropout1 = nn.Dropout(dropout, inplace=True)
-        self.dropout2 = nn.Dropout(dropout, inplace=True)
-        self.dropout3 = nn.Dropout(dropout, inplace=True)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.dropout3 = nn.Dropout(dropout)
 
     def forward(self, x, y, causal_mask=None, key_mask=None):
         skip = x
@@ -252,7 +251,7 @@ class DecoderBlock(nn.Module):
         _x = x
         x = self.ff(x)
         x = self.dropout3(x)
-        x = x + _x #+ skip
+        x = x + _x + skip
         x = self.norm3(x)
         return x
 
@@ -261,7 +260,7 @@ class Decoder(nn.Module):
         super().__init__()
         self.head_num = head_num
         self.max_seq_len = max_seq_len
-        self.embed = nn.ModuleList([nn.Embedding(m, embed_dim) for m in modulo_list])
+        self.embed = nn.ModuleList([nn.Embedding(m, embed_dim, max_norm=1.0) for m in modulo_list])
         self.pos_emb = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.norm = nn.LayerNorm([embed_dim])
         self.blocks = nn.ModuleList([DecoderBlock(embed_dim, d, head_num, dropout=dropout, max_seq_len=max_seq_len) for d in range(block_num)])
@@ -292,10 +291,10 @@ class Transformer(nn.Module):
         self.decoder = Decoder(embed_dim=embed_dim, head_num=head_num, max_seq_len=max_dec_seq_len, block_num=dec_block_num, dropout=dropout)
 
     def forward(self, enc_input, dec_input):
-        # key_mask = torch.all(enc_input == 0, dim=-1)
-        # key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0)
-        enc_output = self.encoder(enc_input)
-        output = self.decoder(dec_input, enc_output)
+        key_mask = torch.all(enc_input == 0, dim=-1)
+        key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0)
+        enc_output = self.encoder(enc_input, key_mask=key_mask)
+        output = self.decoder(dec_input, enc_output, key_mask=key_mask)
         return output
 
 @dataclass
