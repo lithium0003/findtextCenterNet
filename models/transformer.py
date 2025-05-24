@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from dataclasses import dataclass
-import math
+import numpy as np
 import itertools
 
 from util_func import modulo_list, calc_predid, feature_dim
@@ -82,111 +82,24 @@ def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
         .reshape(bs, n_kv_heads * n_rep, slen, head_dim)
     )
 
-def lambda_init_fn(depth):
-    return 0.8 - 0.6 * math.exp(-0.3 * depth)
-
-class MultiheadDiffAttn(nn.Module):
-    def __init__(
-        self,
-        embed_dim,
-        depth,
-        num_heads,
-        dropout = 0.1,
-        max_seq_len=5000,
-    ):
+class ScaleUp(nn.Module):
+    ### Learned pararmeter used to scale up QKt before taking the softmax
+    """ScaleUp"""
+    def __init__(self, scale):
         super().__init__()
-        self.embed_dim = embed_dim
-        
-        # arg num_heads set to half of Transformer's num_heads
-        self.num_heads = num_heads
-        
-        # arg decoder_kv_attention_heads set to half of Transformer's num_kv_heads if use GQA
-        # set to same as num_heads if use normal MHA
-        self.num_kv_heads = num_heads
-        self.n_rep = self.num_heads // self.num_kv_heads
-        
-        self.head_dim = embed_dim // num_heads // 2
-        self.scaling = self.head_dim ** -0.5
-        
-        self.q_proj = nn.Linear(embed_dim, embed_dim, bias=False)
-        self.k_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
-        self.v_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
-        self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
+        self.scale = nn.Parameter(torch.tensor(scale))
 
-        self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
-        self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
-
-        self.lambda_init = lambda_init_fn(depth)
-        self.lambda_q1 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
-        self.lambda_k1 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
-        self.lambda_q2 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
-        self.lambda_k2 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
-
-        self.subln = nn.LayerNorm([2 * self.head_dim], bias=False)
-        self.dropout = nn.Dropout(p = dropout, inplace=True)
-
-    def forward(
-        self,
-        query, key=None, value=None,
-        causal_mask=None,
-        key_mask=None,
-    ):
-        if key is None:
-            key = query
-            pos_emb_k = self.pos_emb_q
-        else:
-            pos_emb_k = self.pos_emb_k
-        if value is None:
-            value = key
-        bsz, tgt_len, embed_dim = query.size()
-        bsz, src_len, embed_dim = key.size()
-
-        query = self.pos_emb_q(query)
-        key = pos_emb_k(key)
-
-        q = self.q_proj(query)
-        k = self.k_proj(key)
-        v = self.v_proj(value)
-
-        q = q.view(bsz, tgt_len, 2 * self.num_heads, self.head_dim)
-        k = k.view(bsz, src_len, 2 * self.num_kv_heads, self.head_dim)
-        v = v.view(bsz, src_len, self.num_kv_heads, 2 * self.head_dim)
-
-        q = q.transpose(1, 2).contiguous()
-        k = repeat_kv(k.transpose(1, 2), self.n_rep)
-        v = repeat_kv(v.transpose(1, 2), self.n_rep)
-        q *= self.scaling
-        attn_weights = torch.matmul(q, k.transpose(-1, -2))
-        if key_mask is not None:
-            attn_weights += key_mask[:,:,:,:src_len].type_as(attn_weights)
-        if causal_mask is not None:
-            attn_weights += causal_mask[:tgt_len,:src_len].type_as(attn_weights)
-        attn_weights = F.softmax(attn_weights.float(), dim=-1, dtype=torch.float32).type_as(attn_weights)
-
-        lambda_1 = torch.exp(torch.sum(self.lambda_q1 * self.lambda_k1, dim=-1).float()).type_as(q)
-        lambda_2 = torch.exp(torch.sum(self.lambda_q2 * self.lambda_k2, dim=-1).float()).type_as(q)
-        lambda_full = lambda_1 - lambda_2 + self.lambda_init
-        attn_weights = attn_weights.view(bsz, self.num_heads, 2, tgt_len, src_len)
-        attn_weights = attn_weights[:, :, 0] - lambda_full * attn_weights[:, :, 1]
-
-        attn_weights = self.dropout(attn_weights)
-
-        attn = torch.matmul(attn_weights, v)
-        attn = self.subln(attn)
-        attn = attn * (1 - self.lambda_init)
-        attn = attn.transpose(1, 2).reshape(bsz, tgt_len, self.num_heads * 2 * self.head_dim)
-
-        attn = self.out_proj(attn)
-        return attn
+    def forward(self, x):
+        return x * self.scale
 
 class MultiheadAttn(nn.Module):
     def __init__(
         self,
         embed_dim,
-        depth,
         num_heads,
         dropout = 0.1,
         max_seq_len=5000,
+        seq_len_threshold=72,
     ):
         super().__init__()
         self.embed_dim = embed_dim
@@ -200,7 +113,8 @@ class MultiheadAttn(nn.Module):
         self.n_rep = self.num_heads // self.num_kv_heads
         
         self.head_dim = embed_dim // num_heads
-        self.scaling = self.head_dim ** -0.5
+        self.seq_len_threshold = seq_len_threshold
+        self.mha_scale = ScaleUp(np.log2(self.seq_len_threshold**2 - self.seq_len_threshold))
         
         self.q_proj = nn.Linear(embed_dim, embed_dim, bias=False)
         self.k_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
@@ -210,9 +124,6 @@ class MultiheadAttn(nn.Module):
         self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
 
-        self.q_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False)
-        self.k_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False)
-        self.v_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False)
         self.dropout = nn.Dropout(p = dropout, inplace=True)
 
     def forward(
@@ -245,10 +156,14 @@ class MultiheadAttn(nn.Module):
         q = q.transpose(1, 2).contiguous()
         k = repeat_kv(k.transpose(1, 2), self.n_rep)
         v = repeat_kv(v.transpose(1, 2), self.n_rep)
-        q *= self.scaling
-        q = self.q_norm(q)
-        k = self.k_norm(k)
-        attn_weights = torch.matmul(q, k.transpose(-1, -2))
+
+        q = F.normalize(q, p=2, dim=-1)
+        k = F.normalize(k, p=2, dim=-1)
+        ### Scale up att_weights before we softmax
+        ### Since the elements of QKt are now the cosine similarity between the embeddings of Q and K we need to 
+        ### scale up by some factor to ensure attention can still produce concentrated distributions as needed
+        attn_weights = self.mha_scale(torch.matmul(q, k.transpose(-1, -2)))
+
         if key_mask is not None:
             attn_weights += key_mask[:,:,:,:src_len].type_as(attn_weights)
         if causal_mask is not None:
@@ -257,7 +172,7 @@ class MultiheadAttn(nn.Module):
 
         attn_weights = self.dropout(attn_weights)
 
-        v = self.v_norm(v)
+        v = F.normalize(v, p=2, dim=-1)
         attn = torch.matmul(attn_weights, v)
         attn = attn.transpose(1, 2).reshape(bsz, tgt_len, self.num_heads * self.head_dim)
 
