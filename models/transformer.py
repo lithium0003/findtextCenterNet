@@ -41,7 +41,7 @@ class PositionalEncoding(nn.Module):
         # compute positional encoding to consider positional information of words
 
         # self.encoding = nn.Buffer(encoding).requires_grad_(False)
-        self.encoding = nn.Parameter(encoding)
+        self.encoding = nn.Parameter(encoding * 0.01)
 
     def forward(self, x):
         # self.encoding
