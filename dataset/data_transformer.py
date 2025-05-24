@@ -498,8 +498,8 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             feat[end_idx-start_idx,:] = -self.SP_token # EOT
         return self.pad_output(txt, feat)
 
-    def add_noize(self, value):
-        return value * (1 + 5e-2 * rng.normal(loc=0, scale=1, size=value.shape)) + 5e-1 * rng.normal(loc=0, scale=1, size=value.shape)
+    def add_noise(self, value):
+        return value * (1 + 1e-1 * rng.normal(loc=0, scale=1, size=value.shape)) + rng.normal(loc=0, scale=1, size=value.shape)
 
     def generage_feature(self, code, horizontal):
         hori, vert = self.charparam.get(code, (None, None))
@@ -569,7 +569,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                 ruby = 0
                 continue
             
-            ret[idx,:feature_dim] = self.add_noize(self.generage_feature(ord(c), horizontal))
+            ret[idx,:feature_dim] = self.add_noise(self.generage_feature(ord(c), horizontal))
             if ruby == 1:
                 ret[idx,feature_dim+1] = 5
             elif ruby == 2:
