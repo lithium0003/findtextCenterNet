@@ -297,7 +297,7 @@ class ModelDimensions:
     embed_dim: int = 512
     head_num: int = 16
     enc_block_num: int = 0
-    dec_block_num: int = 4
+    dec_block_num: int = 8
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
     dropout: float = 0.0
@@ -391,14 +391,14 @@ class TransformerDecoderPredictor(nn.Module):
 
 if __name__ == '__main__':
     model = Transformer(enc_input_dim=100, embed_dim=512, head_num=8)
-    # print(model)
-    # out = model(torch.ones(3,1,100),torch.ones(3,2, dtype=torch.long))
-    # print(out)
-    # print([o.shape for o in out])
+    print(model)
+    out = model(torch.ones(3,1,100),torch.ones(3,2, dtype=torch.long))
+    print(out)
+    print([o.shape for o in out])
 
     # model2 = TransformerPredictor(model.encoder, model.decoder)
     # print(model2)
     # d = model2(torch.ones(4,5,100))
     # print(d)
 
-    TransformerDecoderPredictor(model.decoder)
+    # TransformerDecoderPredictor(model.decoder)
