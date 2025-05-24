@@ -210,6 +210,7 @@ class Encoder(nn.Module):
         self.dim = embed_dim
         self.head_num = head_num
         self.embed = nn.Linear(input_dim, embed_dim, bias=False)
+        self.e_norm = nn.LayerNorm([embed_dim], elementwise_affine=False)
         self.pos_emb = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.norm = nn.LayerNorm([embed_dim])
         self.dropout = nn.Dropout(dropout)
@@ -217,6 +218,7 @@ class Encoder(nn.Module):
 
     def forward(self, x, key_mask=None):
         x = self.embed(x)
+        x = self.e_norm(x)
         x = self.pos_emb(x)
         x = self.norm(x)
         x = self.dropout(x)
