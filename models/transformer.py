@@ -124,6 +124,9 @@ class MultiheadAttn(nn.Module):
         self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
 
+        self.q_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False)
+        self.k_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False)
+
         self.dropout = nn.Dropout(p = dropout, inplace=True)
 
     def forward(
@@ -157,8 +160,8 @@ class MultiheadAttn(nn.Module):
         k = repeat_kv(k.transpose(1, 2), self.n_rep)
         v = repeat_kv(v.transpose(1, 2), self.n_rep)
 
-        q = F.normalize(q, p=2, dim=-1)
-        k = F.normalize(k, p=2, dim=-1)
+        q = self.q_norm(q)
+        k = self.k_norm(k)
         ### Scale up att_weights before we softmax
         ### Since the elements of QKt are now the cosine similarity between the embeddings of Q and K we need to 
         ### scale up by some factor to ensure attention can still produce concentrated distributions as needed
