@@ -36,12 +36,12 @@ class PositionalEncoding(nn.Module):
         # 'i' means index of d_model (e.g. embedding size = 50, 'i' = [0,50])
         # "step=2" means 'i' multiplied with two (same with 2 * i)
 
-        encoding[:, 0::2] = torch.sin(pos / (10000 ** (_2i / d_model / 4)))
-        encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model / 4)))
+        encoding[:, 0::2] = torch.sin(pos / (10000 ** (_2i / d_model)))
+        encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
         # compute positional encoding to consider positional information of words
 
-        self.encoding = nn.Buffer(encoding).requires_grad_(False)
-        # self.encoding = nn.Parameter(encoding)
+        # self.encoding = nn.Buffer(encoding).requires_grad_(False)
+        self.encoding = nn.Parameter(encoding * 5)
 
     def forward(self, x):
         # self.encoding
