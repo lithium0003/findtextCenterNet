@@ -296,11 +296,11 @@ class ModelDimensions:
     enc_input_dim: int = encoder_dim
     embed_dim: int = 512
     head_num: int = 16
-    enc_block_num: int = 12
-    dec_block_num: int = 12
+    enc_block_num: int = 3
+    dec_block_num: int = 3
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
-    dropout: float = 0.0
+    dropout: float = 0.05
 
 class TransformerPredictor(nn.Module):
     def __init__(self, encoder, decoder):
