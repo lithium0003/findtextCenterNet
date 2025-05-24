@@ -41,7 +41,7 @@ class PositionalEncoding(nn.Module):
         # compute positional encoding to consider positional information of words
 
         # self.encoding = nn.Buffer(encoding).requires_grad_(False)
-        self.encoding = nn.Parameter(encoding * 5)
+        self.encoding = nn.Parameter(encoding)
 
     def forward(self, x):
         # self.encoding
@@ -122,8 +122,8 @@ class MultiheadAttn(nn.Module):
         self.v_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
 
-        self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
-        self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
+        self.pos_emb_q = PositionalEncoding(embed_dim)
+        self.pos_emb_k = PositionalEncoding(embed_dim)
 
         self.dropout = nn.Dropout(p = dropout, inplace=True)
 
@@ -204,7 +204,7 @@ class Encoder(nn.Module):
         self.dim = embed_dim
         self.head_num = head_num
         self.embed = nn.Linear(input_dim, embed_dim, bias=False)
-        self.pos_emb = PositionalEncoding(embed_dim, max_len=max_seq_len)
+        self.pos_emb = PositionalEncoding(embed_dim)
         self.norm = nn.LayerNorm([embed_dim])
         self.dropout = nn.Dropout(dropout)
         self.blocks = nn.ModuleList([EncoderBlock(embed_dim, d, head_num, dropout=dropout, max_seq_len=max_seq_len) for d in range(block_num)])        
@@ -255,7 +255,7 @@ class Decoder(nn.Module):
         self.head_num = head_num
         self.max_seq_len = max_seq_len
         self.embed = nn.ModuleList([nn.Embedding(m, embed_dim) for m in modulo_list])
-        self.pos_emb = PositionalEncoding(embed_dim, max_len=max_seq_len)
+        self.pos_emb = PositionalEncoding(embed_dim)
         self.norm = nn.LayerNorm([embed_dim])
         self.blocks = nn.ModuleList([DecoderBlock(embed_dim, d, head_num, dropout=dropout, max_seq_len=max_seq_len) for d in range(block_num)])
         self.dropout = nn.Dropout(dropout, inplace=True)
