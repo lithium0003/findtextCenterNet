@@ -182,7 +182,7 @@ class MultiheadAttn(nn.Module):
 class EncoderBlock(nn.Module):
     def __init__(self, embed_dim, depth, num_heads, dropout = 0.1, max_seq_len=5000):
         super().__init__()
-        self.mha = MultiheadAttn(embed_dim=embed_dim, depth=depth, num_heads=num_heads, dropout=dropout, max_seq_len=max_seq_len)
+        self.mha = MultiheadAttn(embed_dim=embed_dim, num_heads=num_heads, dropout=dropout, max_seq_len=max_seq_len)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.ff = SwiGLU(embed_dim, dropout=dropout)
@@ -225,8 +225,8 @@ class Encoder(nn.Module):
 class DecoderBlock(nn.Module):
     def __init__(self, embed_dim, depth, head_num, dropout = 0.1, max_seq_len=5000):
         super().__init__()
-        self.self_attn = MultiheadAttn(embed_dim, depth, head_num, dropout=dropout, max_seq_len=max_seq_len)
-        self.cross_attn = MultiheadAttn(embed_dim, depth, head_num, dropout=dropout, max_seq_len=max_seq_len)
+        self.self_attn = MultiheadAttn(embed_dim, head_num, dropout=dropout, max_seq_len=max_seq_len)
+        self.cross_attn = MultiheadAttn(embed_dim, head_num, dropout=dropout, max_seq_len=max_seq_len)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.norm3 = nn.LayerNorm([embed_dim])
