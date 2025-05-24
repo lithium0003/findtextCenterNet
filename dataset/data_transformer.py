@@ -493,7 +493,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         feat = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
         feat[0,:] = self.SP_token # SOT
         txt = text[index[start_idx]:index[end_idx]]
-        feat[0:end_idx-start_idx,:] += self.add_noize(self.realdata[idx]['feature'][start_idx:end_idx])
+        feat[0:end_idx-start_idx,:] += self.add_noise(self.realdata[idx]['feature'][start_idx:end_idx])
         if end_idx-start_idx < max_encoderlen:
             feat[end_idx-start_idx,:] = -self.SP_token # EOT
         return self.pad_output(txt, feat)
