@@ -210,7 +210,6 @@ class Encoder(nn.Module):
         self.dim = embed_dim
         self.head_num = head_num
         self.embed = nn.Linear(input_dim, embed_dim, bias=False)
-        self.e_norm = nn.LayerNorm([embed_dim], elementwise_affine=False)
         self.pos_emb = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.norm = nn.LayerNorm([embed_dim])
         self.dropout = nn.Dropout(dropout)
@@ -218,7 +217,6 @@ class Encoder(nn.Module):
 
     def forward(self, x, key_mask=None):
         x = self.embed(x)
-        x = self.e_norm(x)
         x = self.pos_emb(x)
         x = self.norm(x)
         x = self.dropout(x)
@@ -262,7 +260,7 @@ class Decoder(nn.Module):
         super().__init__()
         self.head_num = head_num
         self.max_seq_len = max_seq_len
-        self.embed = nn.ModuleList([nn.Embedding(m, embed_dim, max_norm=1.0) for m in modulo_list])
+        self.embed = nn.ModuleList([nn.Embedding(m, embed_dim) for m in modulo_list])
         self.pos_emb = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.norm = nn.LayerNorm([embed_dim])
         self.blocks = nn.ModuleList([DecoderBlock(embed_dim, d, head_num, dropout=dropout, max_seq_len=max_seq_len) for d in range(block_num)])
