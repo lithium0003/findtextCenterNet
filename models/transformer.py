@@ -64,6 +64,10 @@ class SwiGLU(nn.Module):
         self.w2 = nn.Linear(dim*2, dim)
         self.dropout = nn.Dropout(p = dropout)
 
+        torch.nn.init.xavier_normal_(self.w1.weight)
+        torch.nn.init.xavier_normal_(self.wg.weight)
+        torch.nn.init.xavier_normal_(self.w2.weight)
+
     def forward(self, x):
         x1 = self.w1(x)
         xg = F.silu(self.wg(x))
@@ -128,6 +132,11 @@ class MultiheadAttn(nn.Module):
         self.k_norm = nn.LayerNorm([self.head_dim], elementwise_affine=False)
 
         self.dropout = nn.Dropout(p = dropout, inplace=True)
+
+        torch.nn.init.xavier_normal_(self.q_proj.weight)
+        torch.nn.init.xavier_normal_(self.k_proj.weight)
+        torch.nn.init.xavier_normal_(self.v_proj.weight)
+        torch.nn.init.xavier_normal_(self.out_proj.weight)
 
     def forward(
         self,
