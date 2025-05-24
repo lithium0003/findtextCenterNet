@@ -204,18 +204,18 @@ class Encoder(nn.Module):
         self.dim = embed_dim
         self.head_num = head_num
         self.embed = nn.Linear(input_dim, embed_dim, bias=False)
-        self.pos_emb = PositionalEncoding(embed_dim)
-        self.norm = nn.LayerNorm([embed_dim])
-        self.dropout = nn.Dropout(dropout)
-        self.blocks = nn.ModuleList([EncoderBlock(embed_dim, d, head_num, dropout=dropout, max_seq_len=max_seq_len) for d in range(block_num)])        
+        # self.pos_emb = PositionalEncoding(embed_dim)
+        # self.norm = nn.LayerNorm([embed_dim])
+        # self.dropout = nn.Dropout(dropout)
+        # self.blocks = nn.ModuleList([EncoderBlock(embed_dim, d, head_num, dropout=dropout, max_seq_len=max_seq_len) for d in range(block_num)])        
 
     def forward(self, x, key_mask=None):
         x = self.embed(x)
-        x = self.pos_emb(x)
-        x = self.norm(x)
-        x = self.dropout(x)
-        for block in self.blocks:
-            x = block(x, key_mask=key_mask)
+        # x = self.pos_emb(x)
+        # x = self.norm(x)
+        # x = self.dropout(x)
+        # for block in self.blocks:
+        #     x = block(x, key_mask=key_mask)
         return x
 
 class DecoderBlock(nn.Module):
@@ -296,7 +296,7 @@ class ModelDimensions:
     enc_input_dim: int = encoder_dim
     embed_dim: int = 512
     head_num: int = 16
-    enc_block_num: int = 16
+    enc_block_num: int = 0
     dec_block_num: int = 4
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
