@@ -285,8 +285,8 @@ class ModelDimensions:
     enc_input_dim: int = encoder_dim
     embed_dim: int = 512
     head_num: int = 16
-    enc_block_num: int = 8
-    dec_block_num: int = 8
+    enc_block_num: int = 15
+    dec_block_num: int = 15
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
     dropout: float = 0.1
@@ -305,7 +305,7 @@ class TransformerPredictor(nn.Module):
         enc_output = self.encoder(enc_input, key_mask=key_mask)
         decoder_input = torch.zeros((enc_input.shape[0],max_decoderlen), dtype=torch.long, device=enc_input.device)
         decoder_input[:,:] = decoder_MSK
-        rep_count = 10
+        rep_count = 8
         for k in range(rep_count):
             # print(decoder_input)
             # pred = decoder_input.squeeze(0).cpu().numpy()
@@ -350,10 +350,10 @@ class TransformerPredictor(nn.Module):
             decoder_output = torch.gather(decoder_output, 0, maxi.unsqueeze(0))[0]
             pred_p = torch.gather(pred_p, 0, maxi.unsqueeze(0))[0]
             # print(pred_p[decoder_output > 0])
-            if k > 0 and torch.all(pred_p[torch.logical_and(decoder_input == decoder_MSK, decoder_output > 0)] > 0.99):
+            decoder_output = torch.where(decoder_input == decoder_MSK, decoder_output, decoder_input)
+            if torch.all(pred_p[torch.logical_and(decoder_input == decoder_MSK, decoder_output > 0)] > 0.99):
                 print(f'[{k} early stop]')
                 break
-            decoder_output = torch.where(decoder_input == decoder_MSK, decoder_output, decoder_input)
             # print(decoder_output)
             # pred = decoder_output.squeeze(0).cpu().numpy()
             # predstr = ''
@@ -383,6 +383,7 @@ class TransformerPredictor(nn.Module):
                 if r > 0:
                     remask = torch.logical_or(remask, torch.logical_and(decoder_input == decoder_MSK, pred_p < 0.9))
                 if not torch.any(remask):
+                    print(f'[{k} no remask stop]')
                     break
                 decoder_output = torch.where(remask, decoder_MSK, decoder_output)
                 decoder_input[:,:] = decoder_output[:,:]
