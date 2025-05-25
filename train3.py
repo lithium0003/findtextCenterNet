@@ -17,8 +17,8 @@ from loss_func import loss_function3
 from const import decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK
 
 EPOCHS = 100
-lr=3e-4
-batch=64
+lr=1e-3
+batch=256
 logstep=10
 output_iter=None
 save_all=False
