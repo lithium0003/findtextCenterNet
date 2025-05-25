@@ -36,8 +36,8 @@ class PositionalEncoding(nn.Module):
         # 'i' means index of d_model (e.g. embedding size = 50, 'i' = [0,50])
         # "step=2" means 'i' multiplied with two (same with 2 * i)
 
-        encoding[:, 0::2] = torch.sin(pos / (10000 ** (_2i / d_model / 2)))
-        encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model / 2)))
+        encoding[:, 0::2] = torch.sin(pos / (10000 ** (_2i / d_model)))
+        encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
         # compute positional encoding to consider positional information of words
 
         # self.encoding = nn.Buffer(encoding).requires_grad_(False)
@@ -383,7 +383,7 @@ class TransformerEncoderPredictor(nn.Module):
         return enc_output
 
 class DecoderSplited(Decoder):
-    def forward(self, x1, y, causal_mask=None, key_mask=None):
+    def forward(self, x1, y, key_mask=None):
         x = None
         for x2, layer in zip(x1, self.embed):
             if x is None:
@@ -394,7 +394,7 @@ class DecoderSplited(Decoder):
         x = self.norm(x)
         x = self.dropout(x)
         for block in self.blocks:
-            x = block(x, y, causal_mask=causal_mask, key_mask=key_mask)
+            x = block(x, y, key_mask=key_mask)
         return [layer(x) for layer in self.out_layers]
 
 class TransformerDecoderPredictor(nn.Module):
@@ -405,6 +405,17 @@ class TransformerDecoderPredictor(nn.Module):
 
     def forward(self, enc_output, decoder_input, key_mask):
         outputs = self.decoder(decoder_input, enc_output, key_mask=key_mask)
+        return [torch.softmax(output, dim=-1) for output in outputs]
+
+class TransformerDecoderPredictorSplited(nn.Module):
+    def __init__(self, decoder):
+        super().__init__()
+        self.head_num = decoder.head_num
+        self.decoder = decoder
+        self.decoder.__class__ = DecoderSplited
+
+    def forward(self, enc_output, decoder_input1, decoder_input2, decoder_input3, key_mask):
+        outputs = self.decoder([decoder_input1, decoder_input2, decoder_input3], enc_output, key_mask=key_mask)
         return [torch.softmax(output, dim=-1) for output in outputs]
 
 if __name__ == '__main__':
