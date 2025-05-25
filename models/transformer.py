@@ -89,37 +89,28 @@ class MultiheadAttn(nn.Module):
         num_heads,
         dropout = 0.1,
         max_seq_len=5000,
-        seq_len_threshold=72,
     ):
         super().__init__()
         self.embed_dim = embed_dim
         
         # arg num_heads set to half of Transformer's num_heads
         self.num_heads = num_heads
-        
-        # arg decoder_kv_attention_heads set to half of Transformer's num_kv_heads if use GQA
-        # set to same as num_heads if use normal MHA
-        self.num_kv_heads = num_heads
-        self.n_rep = self.num_heads // self.num_kv_heads
-        
+                
         self.head_dim = embed_dim // num_heads
-        self.seq_len_threshold = seq_len_threshold
-        self.scaling = self.head_dim ** -0.5
         
         self.q_proj = nn.Linear(embed_dim, embed_dim, bias=False)
-        self.k_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
-        self.v_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
+        self.k_proj = nn.Linear(embed_dim, embed_dim, bias=False)
+        self.v_proj = nn.Linear(embed_dim, embed_dim, bias=False)
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
 
         self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
 
-        self.dropout = nn.Dropout(p = dropout, inplace=True)
+        self.dropout = dropout
 
     def forward(
         self,
         query, key=None, value=None,
-        causal_mask=None,
         key_mask=None,
     ):
         if key is None:
@@ -140,25 +131,17 @@ class MultiheadAttn(nn.Module):
         v = self.v_proj(value)
 
         q = q.view(bsz, tgt_len, self.num_heads, self.head_dim)
-        k = k.view(bsz, src_len, self.num_kv_heads, self.head_dim)
-        v = v.view(bsz, src_len, self.num_kv_heads, self.head_dim)
+        k = k.view(bsz, src_len, self.num_heads, self.head_dim)
+        v = v.view(bsz, src_len, self.num_heads, self.head_dim)
 
         q = q.transpose(1, 2).contiguous()
-        k = repeat_kv(k.transpose(1, 2), self.n_rep)
-        v = repeat_kv(v.transpose(1, 2), self.n_rep)
-
-        q *= self.scaling
-        attn_weights = torch.matmul(q, k.transpose(-1, -2))
+        k = k.transpose(1, 2).contiguous()
+        v = v.transpose(1, 2).contiguous()
 
         if key_mask is not None:
-            attn_weights += key_mask[:,:,:,:src_len].type_as(attn_weights)
-        if causal_mask is not None:
-            attn_weights += causal_mask[:tgt_len,:src_len].type_as(attn_weights)
-        attn_weights = F.softmax(attn_weights.float(), dim=-1, dtype=torch.float32).type_as(attn_weights)
+            key_mask = key_mask[:,:,:,:src_len]
 
-        attn_weights = self.dropout(attn_weights)
-
-        attn = torch.matmul(attn_weights, v)
+        attn = F.scaled_dot_product_attention(q, k, v, key_mask, self.dropout if self.training else 0.0)
         attn = attn.transpose(1, 2).reshape(bsz, tgt_len, self.num_heads * self.head_dim)
 
         attn = self.out_proj(attn)
@@ -220,9 +203,9 @@ class DecoderBlock(nn.Module):
         self.dropout2 = nn.Dropout(dropout)
         self.dropout3 = nn.Dropout(dropout)
 
-    def forward(self, x, y, causal_mask=None, key_mask=None):
+    def forward(self, x, y, key_mask=None):
         skip = x
-        x = self.self_attn(x, causal_mask=causal_mask)
+        x = self.self_attn(x)
         x = self.dropout1(x)
         x = x + skip
         x = self.norm1(x)
@@ -250,7 +233,7 @@ class Decoder(nn.Module):
         self.dropout = nn.Dropout(dropout, inplace=True)
         self.out_layers = nn.ModuleList([nn.Linear(embed_dim, m) for m in modulo_list])
 
-    def forward(self, x, y, causal_mask=None, key_mask=None):
+    def forward(self, x, y, key_mask=None):
         x1 = [x % m for m in modulo_list]
         x = None
         for x2, layer in zip(x1, self.embed):
@@ -262,7 +245,7 @@ class Decoder(nn.Module):
         x = self.norm(x)
         x = self.dropout(x)
         for block in self.blocks:
-            x = block(x, y, causal_mask=causal_mask, key_mask=key_mask)
+            x = block(x, y, key_mask=key_mask)
         return [layer(x) for layer in self.out_layers]
 
 class Transformer(nn.Module):
