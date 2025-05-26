@@ -17,11 +17,12 @@ from loss_func import loss_function3
 from const import decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK
 
 EPOCHS = 100
-lr=2e-4
+lr=1e-3
 batch=128
 logstep=10
 output_iter=None
 save_all=False
+max_norm=4.0
 
 rng = np.random.default_rng()
 
@@ -157,8 +158,8 @@ def train():
         running_loss.train()
         optimizer.train()
 
-        optimizer.zero_grad()
         for i, data in enumerate(training_loader):
+            optimizer.zero_grad()
             text, feature, in_codes, out_codes = data
             feature = feature.to(dtype=torch.float32, device=device, non_blocking=True)
             in_codes = in_codes.to(device=device, non_blocking=True)
@@ -168,9 +169,12 @@ def train():
             # loss.backward()
             # optimizer.step()
             scaler.scale(loss).backward()
+
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
+
             scaler.step(optimizer)
             scaler.update()
-            optimizer.zero_grad()
 
             # Gather data and report
             rawloss['lr'] = optimizer.param_groups[0]['lr']
