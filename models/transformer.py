@@ -272,7 +272,7 @@ class ModelDimensions:
     dec_block_num: int = 14
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
-    dropout: float = 0.1
+    dropout: float = 0.0
 
 class TransformerPredictor(nn.Module):
     def __init__(self, encoder, decoder):
