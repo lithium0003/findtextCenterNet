@@ -17,12 +17,12 @@ from loss_func import loss_function3
 from const import decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK
 
 EPOCHS = 100
-lr=4e-4
+lr=2e-4
 batch=128
 logstep=10
 output_iter=None
 save_all=False
-max_norm=2.0
+max_norm=10.0
 
 rng = np.random.default_rng()
 
