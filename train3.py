@@ -22,7 +22,7 @@ batch=128
 logstep=10
 output_iter=None
 save_all=False
-max_norm=4.0
+max_norm=2.5
 
 rng = np.random.default_rng()
 
