@@ -266,8 +266,8 @@ class Transformer(nn.Module):
 @dataclass
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
-    embed_dim: int = 512
-    head_num: int = 32
+    embed_dim: int = 768
+    head_num: int = 24
     enc_block_num: int = 10
     dec_block_num: int = 10
     max_enc_seq_len: int = max_encoderlen
