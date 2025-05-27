@@ -360,11 +360,8 @@ class TransformerPredictor(nn.Module):
             # print('------------------')
             # print(predstr)
             if k < rep_count-1:
-                r = int(max_decoderlen * (k+1) / rep_count)
-                remask = torch.arange(max_decoderlen, device=enc_input.device) > r
-                remask = torch.logical_or(remask, decoder_output > 0x3FFFF)
-                if r > 0:
-                    remask = torch.logical_or(remask, torch.logical_and(decoder_input == decoder_MSK, pred_p < 0.9))
+                remask = torch.logical_and(decoder_input == decoder_MSK, pred_p < 0.9)
+                # remask = torch.logical_or(remask, decoder_output == decoder_PAD)
                 if not torch.any(remask):
                     print(f'[{k} no remask stop]')
                     break
