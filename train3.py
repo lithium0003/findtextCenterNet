@@ -120,6 +120,7 @@ def train():
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
     optimizer = RAdamScheduleFree(all_params, lr=lr)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1)
 
     running_loss = RunningLoss(device=device, runningcount=100, losses=[
         'loss',
@@ -248,6 +249,8 @@ def train():
         print(epoch, 'val', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, flush=True)
         with open('log.txt','a') as wf:
             print(epoch, 'val', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
+
+        scheduler.step(losslog['loss'])
 
         running_loss.reset()
 
