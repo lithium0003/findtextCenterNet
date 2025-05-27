@@ -101,7 +101,10 @@ def get_random_furigana():
     # 5: 亜
     # 8: 弌
 
-    out_count = rng.integers(1,max_decoderlen-2)
+    if rng.uniform() < 0.5:
+        out_count = max_decoderlen-2
+    else:
+        out_count = rng.integers(1,max_decoderlen-2)
 
     count = 100
     txt = '　'
@@ -448,7 +451,10 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         out_count = 0
         ruby_state = 0
         
-        count = rng.integers(1, min(max_decoderlen-2,index.shape[0]-start_idx))
+        if rng.uniform() < 0.5:
+            out_count = min(max_decoderlen-2,index.shape[0]-start_idx)
+        else:
+            count = rng.integers(1, min(max_decoderlen-2,index.shape[0]-start_idx))
 
         for j in range(start_idx, start_idx+count):
             end_idx = j
@@ -593,7 +599,10 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         start_idx = rng.integers(len(txt)-1)
         txt = txt[start_idx:]
         txt = skip_remainruby(txt)
-        out_count = rng.integers(1, min(max_decoderlen-2,len(txt)))
+        if rng.uniform() < 0.5:
+            out_count = min(max_decoderlen-2,len(txt))
+        else:
+            out_count = rng.integers(1, min(max_decoderlen-2,len(txt)))
         for j in range(out_count):
             if txt[j] in UNICODE_WHITESPACE_CHARACTERS:
                 out_count -= 1
@@ -617,7 +626,10 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         if rng.uniform() < 0.5:
             return self.pad_output(*self.format_output(get_random_furigana(), orientation='both'))
 
-        out_count = rng.integers(1,max_decoderlen-2)
+        if rng.uniform() < 0.5:
+            out_count = max_decoderlen-2
+        else:
+            out_count = rng.integers(1,max_decoderlen-2)
         split_count = rng.integers(20, 80)
         # print('sprit:', split_count)
         i = 0
