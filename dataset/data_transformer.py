@@ -452,7 +452,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         ruby_state = 0
         
         if rng.uniform() < 0.5:
-            out_count = min(max_decoderlen-2,index.shape[0]-start_idx)
+            count = min(max_decoderlen-2,index.shape[0]-start_idx)
         else:
             count = rng.integers(1, min(max_decoderlen-2,index.shape[0]-start_idx))
 
