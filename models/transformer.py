@@ -2,7 +2,6 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from dataclasses import dataclass
-import numpy as np
 import itertools
 
 from util_func import modulo_list, calc_predid, feature_dim
@@ -70,17 +69,6 @@ class SwiGLU(nn.Module):
         x = x1 * xg
         x = self.dropout(x)
         return self.w2(x)
-
-def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
-    """torch.repeat_interleave(x, dim=1, repeats=n_rep)"""
-    bs, n_kv_heads, slen, head_dim = x.shape
-    if n_rep == 1:
-        return x.contiguous()
-    return (
-        x[:, :, None, :, :]
-        .expand(bs, n_kv_heads, n_rep, slen, head_dim)
-        .reshape(bs, n_kv_heads * n_rep, slen, head_dim)
-    )
 
 class MultiheadAttn(nn.Module):
     def __init__(
@@ -267,12 +255,12 @@ class Transformer(nn.Module):
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
     embed_dim: int = 768
-    head_num: int = 12
+    head_num: int = 24
     enc_block_num: int = 16
     dec_block_num: int = 16
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
-    dropout: float = 0.05
+    dropout: float = 0.0
 
 class TransformerPredictor(nn.Module):
     def __init__(self, encoder, decoder):
