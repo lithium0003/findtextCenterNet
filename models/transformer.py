@@ -348,7 +348,9 @@ class TransformerPredictor(nn.Module):
             # print('------------------')
             # print(predstr)
             if k < rep_count-1:
-                remask = pred_p < 0.8
+                # remask = pred_p < 0.9
+                remask = torch.logical_and(decoder_input == decoder_MSK, pred_p < 0.9)
+                remask = torch.logical_or(remask, decoder_output > 0x3FFFF)
                 # remask = torch.logical_or(remask, decoder_output == decoder_PAD)
                 if not torch.any(remask):
                     print(f'[{k} no remask stop]')
