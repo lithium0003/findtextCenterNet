@@ -120,7 +120,7 @@ def train():
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
     optimizer = RAdamScheduleFree(all_params, lr=lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, factor=0.5, min_lr=1e-5)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, factor=0.5, min_lr=4e-5)
 
     running_loss = RunningLoss(device=device, runningcount=100, losses=[
         'loss',
