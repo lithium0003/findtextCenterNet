@@ -7,7 +7,7 @@ import re
 import json
 
 from util_func import feature_dim
-from const import encoder_add_dim, max_decoderlen, max_encoderlen, decoder_SOT, decoder_EOT, decoder_MSK
+from const import encoder_add_dim, max_decoderlen, max_encoderlen, decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK
 encoder_dim = feature_dim + encoder_add_dim
 
 train_data3 = 'train_data3'
@@ -659,28 +659,19 @@ class TransformerDataDataset(torch.utils.data.Dataset):
     def pad_output1(self, text, feature):
         b = text.encode('utf-32-le')
         codes = [decoder_SOT] + [int.from_bytes(b[i:i+4], 'little') for i in range(0,len(b),4)] + [decoder_EOT]
-        codes += [0] * max(0,max_decoderlen-len(codes))
+        codes += [decoder_PAD] * max(0,max_decoderlen-len(codes))
         codes = np.array(codes, dtype=int)
         return text, feature, codes[:max_decoderlen]
 
     def pad_output(self, text, feature):
         b = text.encode('utf-32-le')
         codes = [decoder_SOT] + [int.from_bytes(b[i:i+4], 'little') for i in range(0,len(b),4)] + [decoder_EOT]
-        codes += [0] * max(0,max_decoderlen-len(codes))
+        codes += [decoder_PAD] * max(0,max_decoderlen-len(codes))
         codes = np.array(codes, dtype=int)
         input_codes = codes[:max_decoderlen]
         true_codes = np.array(codes[:max_decoderlen])
         p = rng.uniform()
-        if p < 0.1:
-            input_codes[:] = decoder_MSK
-        elif p < 0.5:
-            p = rng.uniform()
-            input_codes[:] = np.where(rng.uniform(size=(max_decoderlen,)) < p, decoder_MSK, input_codes[:])
-            n = rng.integers(max_decoderlen)
-            input_codes[:] = np.where(np.arange(max_decoderlen) < n, input_codes[:], decoder_MSK)
-        else:
-            p = rng.uniform()
-            input_codes[:] = np.where(rng.uniform(size=(max_decoderlen,)) < p, decoder_MSK, input_codes[:])
+        input_codes[:] = np.where(rng.uniform(size=(max_decoderlen,)) < p, decoder_MSK, input_codes[:])
         return text, feature, input_codes, true_codes
 
 
