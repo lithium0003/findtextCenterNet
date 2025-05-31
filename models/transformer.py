@@ -307,7 +307,7 @@ class TransformerPredictor(nn.Module):
             listi = []
             for decoder_id1 in outputs:
                 pred_p1 = torch.softmax(decoder_id1, dim=-1)
-                topp, topi = torch.topk(pred_p1, 4)
+                topp, topi = torch.topk(pred_p1, 3)
                 listp.append(topp.permute(2,0,1))
                 listi.append(topi.permute(2,0,1))
 
