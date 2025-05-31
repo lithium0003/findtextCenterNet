@@ -506,7 +506,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
 
     def add_noise(self, value):
         pls_noise = 5 * rng.normal(loc=0, scale=1, size=value.shape)
-        mul_noise = 0.5 * rng.normal(loc=0, scale=1, size=value.shape)
+        mul_noise = 0.75 * rng.normal(loc=0, scale=1, size=value.shape)
         pls_noise[...,feature_dim:] = 0
         mul_noise[...,feature_dim:] = 0
         return value * (1 + mul_noise) + pls_noise
