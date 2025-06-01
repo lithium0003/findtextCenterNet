@@ -152,9 +152,11 @@ def train():
 
         print(datetime.datetime.now(), 'epoch', epoch, flush=True)
         print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], flush=True)
+        print(datetime.datetime.now(), 'noise', training_dataset.noise_ratio, flush=True)
         with open('log.txt','a') as wf:
             print(datetime.datetime.now(), 'epoch', epoch, file=wf, flush=True)
             print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], file=wf, flush=True)
+            print(datetime.datetime.now(), 'noise', training_dataset.noise_ratio, file=wf, flush=True)
 
         model.train()
         running_loss.train()
