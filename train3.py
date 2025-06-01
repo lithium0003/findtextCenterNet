@@ -120,7 +120,6 @@ def train():
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
     optimizer = RAdamScheduleFree(all_params, lr=lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, factor=0.5, min_lr=4e-5)
 
     running_loss = RunningLoss(device=device, runningcount=100, losses=[
         'loss',
@@ -149,6 +148,8 @@ def train():
 
     scaler = torch.amp.GradScaler()
     for epoch in range(last_epoch, EPOCHS):
+        training_dataset.noise_ratio = 0.99 ** epoch
+
         print(datetime.datetime.now(), 'epoch', epoch, flush=True)
         print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], flush=True)
         with open('log.txt','a') as wf:
@@ -250,8 +251,6 @@ def train():
         with open('log.txt','a') as wf:
             print(epoch, 'val', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
-        scheduler.step(losslog['loss'])
-
         running_loss.reset()
 
         model2.eval()
@@ -287,8 +286,6 @@ def train():
         except UnicodeEncodeError:
             pass
         running_loss.writer.flush()
-
-        training_dataset.noise_ratio *= 0.98
 
 if __name__=='__main__':
     if len(sys.argv) > 1:
