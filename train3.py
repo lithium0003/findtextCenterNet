@@ -288,6 +288,8 @@ def train():
             pass
         running_loss.writer.flush()
 
+        training_dataset.noise_ratio *= 0.98
+
 if __name__=='__main__':
     if len(sys.argv) > 1:
         argv = sys.argv[1:]

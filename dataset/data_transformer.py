@@ -289,7 +289,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             if charparam[c][1] is not None:
                 self.vcodes.append(c)
         self.charparam = charparam
-        self.training = train
+        self.noise_ratio = 1.0 if train else 0.0
 
         self.real_ratio = 10
         self.realdata = []
@@ -506,14 +506,11 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         return self.pad_output(txt, feat)
 
     def add_noise(self, value):
-        if self.training:
-            pls_noise = 6.0 * rng.normal(loc=0, scale=1, size=value.shape)
-            mul_noise = 1.0 * rng.normal(loc=0, scale=1, size=value.shape)
-            pls_noise[...,feature_dim:] = 0
-            mul_noise[...,feature_dim:] = 0
-            return value * (1 + mul_noise) + pls_noise
-        else:
-            return value
+        pls_noise = 10.0 * rng.normal(loc=0, scale=1, size=value.shape) * self.noise_ratio
+        mul_noise = 1.0 * rng.normal(loc=0, scale=1, size=value.shape) * self.noise_ratio
+        pls_noise[...,feature_dim:] = 0
+        mul_noise[...,feature_dim:] = 0
+        return value * (1 + mul_noise) + pls_noise
 
     def generage_feature(self, code, horizontal):
         hori, vert = self.charparam.get(code, (None, None))
