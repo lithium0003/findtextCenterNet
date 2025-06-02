@@ -17,7 +17,7 @@ from loss_func import loss_function3
 from const import decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK
 
 EPOCHS = 100
-lr=1e-4
+lr=4e-4
 batch=256
 logstep=10
 output_iter=None
@@ -148,7 +148,7 @@ def train():
 
     scaler = torch.amp.GradScaler()
     for epoch in range(last_epoch, EPOCHS):
-        training_dataset.noise_ratio = 0.99 ** epoch
+        training_dataset.noise_ratio = 0.9925 ** epoch
 
         print(datetime.datetime.now(), 'epoch', epoch, flush=True)
         print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], flush=True)
