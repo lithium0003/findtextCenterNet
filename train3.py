@@ -148,7 +148,7 @@ def train():
 
     scaler = torch.amp.GradScaler()
     for epoch in range(last_epoch, EPOCHS):
-        training_dataset.noise_ratio = 0.99 ** epoch
+        training_dataset.noise_ratio = 0.9875 ** epoch
 
         print(datetime.datetime.now(), 'epoch', epoch, flush=True)
         print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], flush=True)
