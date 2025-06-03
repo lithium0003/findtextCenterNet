@@ -16,7 +16,7 @@ from dataset.data_transformer import TransformerDataDataset
 from loss_func import loss_function3
 from const import decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK
 
-EPOCHS = 100
+EPOCHS = 30
 lr=1e-3
 batch=256
 logstep=10
