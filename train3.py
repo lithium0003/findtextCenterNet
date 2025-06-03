@@ -16,7 +16,7 @@ from dataset.data_transformer import TransformerDataDataset
 from loss_func import loss_function3
 from const import decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK
 
-EPOCHS = 30
+EPOCHS = 60
 lr=1e-3
 batch=256
 logstep=10
@@ -120,7 +120,7 @@ def train():
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
     optimizer = RAdamScheduleFree(all_params, lr=lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, factor=0.5, min_lr=3e-4)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, factor=0.5, min_lr=5e-5)
 
     running_loss = RunningLoss(device=device, runningcount=100, losses=[
         'loss',
