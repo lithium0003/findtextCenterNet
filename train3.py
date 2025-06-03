@@ -22,7 +22,6 @@ batch=256
 logstep=10
 output_iter=None
 save_all=False
-max_norm=4.0
 
 rng = np.random.default_rng()
 
@@ -120,9 +119,10 @@ def train():
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
     optimizer = RAdamScheduleFree(all_params, lr=lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=0, factor=0.5, min_lr=1e-5)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2, factor=0.5, min_lr=1e-5)
 
-    running_loss = RunningLoss(device=device, runningcount=100, losses=[
+    running_count = 100
+    running_loss = RunningLoss(device=device, runningcount=running_count, losses=[
         'loss',
     ])
 
@@ -175,8 +175,8 @@ def train():
             # optimizer.step()
             scaler.scale(loss).backward()
 
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
+            # scaler.unscale_(optimizer)
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
 
             scaler.step(optimizer)
             scaler.update()
@@ -191,6 +191,9 @@ def train():
                 print(epoch, i+1, f'{(i+1)/loader_len:.2%}', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, flush=True)
                 with open('log.txt','a') as wf:
                     print(epoch, i+1, datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
+
+            if (i + 1) % running_count == 0:
+                scheduler.step(losslog['loss'])
 
             if output_iter is not None and (i + 1) % output_iter == 0:
                 optimizer.eval()
@@ -253,8 +256,6 @@ def train():
         print(epoch, 'val', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, flush=True)
         with open('log.txt','a') as wf:
             print(epoch, 'val', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
-
-        scheduler.step(losslog['loss'])
 
         running_loss.reset()
 
