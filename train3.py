@@ -119,7 +119,7 @@ def train():
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
     optimizer = RAdamScheduleFree(all_params, lr=lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2, factor=0.5, min_lr=1e-5)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2, factor=0.5, min_lr=1e-4)
 
     running_count = 100
     running_loss = RunningLoss(device=device, runningcount=running_count, losses=[
@@ -149,7 +149,7 @@ def train():
 
     scaler = torch.amp.GradScaler()
     for epoch in range(last_epoch, EPOCHS):
-        training_dataset.noise_ratio = 0.97 ** epoch
+        training_dataset.noise_ratio = 0.95 ** epoch
 
         print(datetime.datetime.now(), 'epoch', epoch, flush=True)
         print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], flush=True)
