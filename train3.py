@@ -147,9 +147,13 @@ def train():
         print('logstep', logstep, file=wf, flush=True)
     loader_len = len(training_loader)
 
+    denoise_epoch = -1
     scaler = torch.amp.GradScaler()
     for epoch in range(last_epoch, EPOCHS):
-        training_dataset.noise_ratio = 0.95 ** epoch
+        if denoise_epoch >= 0:
+            training_dataset.noise_ratio = 0.9 ** (epoch - denoise_epoch)
+        else:
+            training_dataset.noise_ratio = 1.0
 
         print(datetime.datetime.now(), 'epoch', epoch, flush=True)
         print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], flush=True)
@@ -258,6 +262,8 @@ def train():
             print(epoch, 'val', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
         running_loss.reset()
+        if loss_value < 0.5:
+            denoise_epoch = epoch
 
         model2.eval()
         idx = rng.integers(len(validation_dataset))
