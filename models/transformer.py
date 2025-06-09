@@ -91,8 +91,8 @@ class MultiheadAttn(nn.Module):
         self.v_proj = nn.Linear(embed_dim, embed_dim, bias=False)
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
 
-        self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
-        self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
+        # self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
+        # self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
 
         self.dropout = dropout
 
@@ -103,16 +103,17 @@ class MultiheadAttn(nn.Module):
     ):
         if key is None:
             key = query
-            pos_emb_k = self.pos_emb_q
+            # pos_emb_k = self.pos_emb_q
         else:
-            pos_emb_k = self.pos_emb_k
+            # pos_emb_k = self.pos_emb_k
+            pass
         if value is None:
             value = key
         bsz, tgt_len, embed_dim = query.size()
         bsz, src_len, embed_dim = key.size()
 
-        query = self.pos_emb_q(query)
-        key = pos_emb_k(key)
+        # query = self.pos_emb_q(query)
+        # key = pos_emb_k(key)
 
         q = self.q_proj(query)
         k = self.k_proj(key)
@@ -254,10 +255,10 @@ class Transformer(nn.Module):
 @dataclass
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
-    embed_dim: int = 768
-    head_num: int = 12
-    enc_block_num: int = 10
-    dec_block_num: int = 10
+    embed_dim: int = 512
+    head_num: int = 16
+    enc_block_num: int = 16
+    dec_block_num: int = 16
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
     dropout: float = 0.0
