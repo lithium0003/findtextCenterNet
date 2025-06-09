@@ -297,7 +297,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         self.charparam = charparam
         self.noise_ratio = 1.0 if train else 0.0
 
-        self.real_ratio = 500
+        self.real_ratio = 100
         self.realdata = []
         if train:
             npyfiles = sorted(glob.glob(os.path.join(train_data4, '*.npy')))
