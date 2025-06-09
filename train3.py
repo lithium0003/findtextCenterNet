@@ -16,7 +16,7 @@ from dataset.data_transformer import TransformerDataDataset
 from loss_func import loss_function3
 from const import decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK
 
-EPOCHS = 50
+EPOCHS = 100
 lr=4e-4
 batch=256
 logstep=10
@@ -151,7 +151,7 @@ def train():
     scaler = torch.amp.GradScaler()
     for epoch in range(last_epoch, EPOCHS):
         if denoise_epoch >= 0:
-            training_dataset.noise_ratio = 0.9 ** (epoch - denoise_epoch)
+            training_dataset.noise_ratio = max(0.5, 0.9 ** (epoch - denoise_epoch))
         else:
             training_dataset.noise_ratio = 1.0
 
