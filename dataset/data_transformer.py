@@ -85,7 +85,10 @@ def find_splitpoint(txt, start=0, split_count=-1):
         return idx0+1
     idx1 = txt.find('\uFFF9', i, i+split_count)
     if idx1 < 0:
-        return min(i+split_count+1, len(txt))
+        idx4 = txt.find(' ', max(i,i+split_count-10), i+split_count)
+        if idx4 < 0:
+            return min(i+split_count+1, len(txt))
+        return idx4+1
     idx2 = txt.find('\uFFFA', idx1)
     idx3 = txt.find('\uFFFB', idx1)
     if idx3+1 >= i+split_count:
@@ -252,7 +255,10 @@ def get_random_furigana():
         j = find_splitpoint(txt, i, split_count)
         if outtxt and j > out_count:
             break
-        outtxt += txt[i:j] + ('' if txt[j-1] == '\n' else '\n')
+        if txt[j-1] == ' ':
+            outtxt += txt[i:j-1] + '\n'
+        else:
+            outtxt += txt[i:j] + ('' if txt[j-1] == '\n' else '\n')
         i = j
         if i > out_count:
             break
@@ -291,7 +297,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         self.charparam = charparam
         self.noise_ratio = 1.0 if train else 0.0
 
-        self.real_ratio = 10
+        self.real_ratio = 500
         self.realdata = []
         if train:
             npyfiles = sorted(glob.glob(os.path.join(train_data4, '*.npy')))
@@ -621,7 +627,10 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             j = find_splitpoint(txt, i, split_count)
             if outtxt and j > out_count:
                 break
-            outtxt += txt[i:j] + ('' if txt[j-1] == '\n' else '\n')
+            if txt[j-1] == ' ':
+                outtxt += txt[i:j-1] + '\n'
+            else:
+                outtxt += txt[i:j] + ('' if txt[j-1] == '\n' else '\n')
             i = j
             if i > out_count:
                 break
