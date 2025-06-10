@@ -262,7 +262,7 @@ def train():
             print(epoch, 'val', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
         running_loss.reset()
-        if denoise_epoch < 0 and loss_value < 1.5:
+        if denoise_epoch < 0 and loss_value < 5:
             denoise_epoch = epoch
 
         model2.eval()
