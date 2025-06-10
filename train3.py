@@ -18,7 +18,7 @@ from const import decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK
 
 EPOCHS = 100
 lr=4e-4
-batch=512
+batch=256
 logstep=10
 output_iter=None
 save_all=False
