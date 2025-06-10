@@ -17,7 +17,7 @@ from loss_func import loss_function3
 from const import decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK
 
 EPOCHS = 100
-lr=4e-4
+lr=2e-4
 batch=256
 logstep=10
 output_iter=None
@@ -119,7 +119,7 @@ def train():
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
     optimizer = RAdamScheduleFree(all_params, lr=lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1, factor=0.5, min_lr=1e-4)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1, factor=0.5, min_lr=5e-5)
 
     running_count = 100
     running_loss = RunningLoss(device=device, runningcount=running_count, losses=[
