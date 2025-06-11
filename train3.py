@@ -151,7 +151,7 @@ def train():
     scaler = torch.amp.GradScaler()
     for epoch in range(last_epoch, EPOCHS):
         if denoise_epoch >= 0:
-            training_dataset.noise_ratio = max(0.01, 0.9 ** (epoch - denoise_epoch))
+            training_dataset.noise_ratio = max(0.05, 0.95 ** (epoch - denoise_epoch))
         else:
             training_dataset.noise_ratio = 0
 
