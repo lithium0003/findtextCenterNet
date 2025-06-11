@@ -153,7 +153,7 @@ def train():
         if denoise_epoch >= 0:
             training_dataset.noise_ratio = max(0.01, 0.9 ** (epoch - denoise_epoch))
         else:
-            training_dataset.noise_ratio = 1.0
+            training_dataset.noise_ratio = 0
 
         print(datetime.datetime.now(), 'epoch', epoch, flush=True)
         print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], flush=True)
@@ -262,7 +262,7 @@ def train():
             print(epoch, 'val', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
         running_loss.reset()
-        if denoise_epoch < 0 and loss_value < 1.5:
+        if denoise_epoch < 0 and loss_value < 0.2:
             denoise_epoch = epoch
 
         model2.eval()
