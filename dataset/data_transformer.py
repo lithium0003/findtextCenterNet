@@ -297,7 +297,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         self.charparam = charparam
         self.noise_ratio = 1.0 if train else 0.0
 
-        self.real_ratio = 100
+        self.real_ratio = 10
         self.realdata = []
         if train:
             npyfiles = sorted(glob.glob(os.path.join(train_data4, '*.npy')))
@@ -428,7 +428,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         p = len(self.realdata) * self.real_ratio + len(self.txtfile)
-        return len(self.realdata) * self.real_ratio + len(self.txtfile) + p // 10
+        return len(self.realdata) * self.real_ratio + len(self.txtfile) + p // 5
     
     def __getitem__(self, idx):
         if idx < len(self.realdata) * self.real_ratio:
