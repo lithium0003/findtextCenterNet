@@ -39,8 +39,8 @@ class PositionalEncoding(nn.Module):
         encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
         # compute positional encoding to consider positional information of words
 
-        # self.encoding = nn.Buffer(encoding).requires_grad_(False)
-        self.encoding = nn.Parameter(encoding)
+        self.encoding = nn.Buffer(encoding).requires_grad_(False)
+        # self.encoding = nn.Parameter(encoding)
 
     def forward(self, x):
         # self.encoding
@@ -255,10 +255,10 @@ class Transformer(nn.Module):
 @dataclass
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
-    embed_dim: int = 1024
-    head_num: int = 16
-    enc_block_num: int = 16
-    dec_block_num: int = 16
+    embed_dim: int = 768
+    head_num: int = 12
+    enc_block_num: int = 10
+    dec_block_num: int = 10
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
     dropout: float = 0.0
