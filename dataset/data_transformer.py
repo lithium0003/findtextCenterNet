@@ -512,7 +512,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         return self.pad_output(txt, feat)
 
     def add_noise(self, value):
-        noise = 20.0 * rng.normal(loc=0, scale=1, size=value.shape) * self.noise_ratio
+        noise = 10.0 * rng.normal(loc=0, scale=1, size=value.shape) * self.noise_ratio
         noise[...,feature_dim:] = 0
         return value + noise
 
