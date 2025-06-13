@@ -24,23 +24,22 @@ class PositionalEncoding(nn.Module):
         """
         super().__init__()
 
-        # # same size with input matrix (for adding with input matrix)
-        # encoding = torch.zeros(max_len, d_model)
+        # same size with input matrix (for adding with input matrix)
+        encoding = torch.zeros(max_len, d_model)
 
-        # pos = torch.arange(0, max_len)
-        # pos = pos.float().unsqueeze(dim=1)
-        # # 1D => 2D unsqueeze to represent word's position
+        pos = torch.arange(0, max_len)
+        pos = pos.float().unsqueeze(dim=1)
+        # 1D => 2D unsqueeze to represent word's position
 
-        # _2i = torch.arange(0, d_model, step=2).float()
-        # # 'i' means index of d_model (e.g. embedding size = 50, 'i' = [0,50])
-        # # "step=2" means 'i' multiplied with two (same with 2 * i)
+        _2i = torch.arange(0, d_model, step=2).float()
+        # 'i' means index of d_model (e.g. embedding size = 50, 'i' = [0,50])
+        # "step=2" means 'i' multiplied with two (same with 2 * i)
 
-        # encoding[:, 0::2] = torch.sin(pos / (10000 ** (_2i / d_model)))
-        # encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
-        # # compute positional encoding to consider positional information of words
+        encoding[:, 0::2] = torch.sin(pos / (10000 ** (_2i / d_model)))
+        encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
+        # compute positional encoding to consider positional information of words
 
         # self.encoding = nn.Buffer(encoding).requires_grad_(False)
-        encoding = torch.empty(max_len, d_model).uniform_(-1,1)
         self.encoding = nn.Parameter(encoding)
 
     def forward(self, x):
