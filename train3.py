@@ -14,10 +14,11 @@ from models.radam_schedulefree import RAdamScheduleFree
 from models.transformer import ModelDimensions, Transformer, TransformerPredictor
 from dataset.data_transformer import TransformerDataDataset
 from loss_func import loss_function3
+from const import decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK
 
 EPOCHS = 100
-lr=1e-4
-batch=512
+lr=2e-4
+batch=256
 logstep=10
 output_iter=None
 save_all=False
@@ -118,8 +119,10 @@ def train():
 
     all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
     optimizer = RAdamScheduleFree(all_params, lr=lr)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1, factor=0.5, min_lr=5e-5)
 
-    running_loss = RunningLoss(device=device, runningcount=100, losses=[
+    running_count = 100
+    running_loss = RunningLoss(device=device, runningcount=running_count, losses=[
         'loss',
     ])
 
@@ -127,14 +130,14 @@ def train():
     def train_step(encoder_input, decoder_input, label_code):
         with torch.autocast(device_type='cuda', dtype=torch.float16):
             outputs = model(encoder_input, decoder_input)
-            rawloss = loss_function3(outputs, label_code)
+            rawloss = loss_function3(outputs, label_code, decoder_input == decoder_MSK)
         return rawloss['loss'], rawloss
 
     @torch.compile
     def test_step(encoder_input, decoder_input, label_code):
         with torch.autocast(device_type='cuda', dtype=torch.float16):
             outputs = model(encoder_input, decoder_input)
-            rawloss = loss_function3(outputs, label_code)
+            rawloss = loss_function3(outputs, label_code, decoder_input == decoder_MSK)
         return rawloss['loss'], rawloss
 
     print('batch', batch, flush=True)
@@ -144,20 +147,28 @@ def train():
         print('logstep', logstep, file=wf, flush=True)
     loader_len = len(training_loader)
 
+    denoise_epoch = -1
     scaler = torch.amp.GradScaler()
     for epoch in range(last_epoch, EPOCHS):
+        if denoise_epoch >= 0:
+            training_dataset.noise_ratio = 0.9 ** (epoch - denoise_epoch)
+        else:
+            training_dataset.noise_ratio = 1.0
+
         print(datetime.datetime.now(), 'epoch', epoch, flush=True)
         print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], flush=True)
+        print(datetime.datetime.now(), 'noise', training_dataset.noise_ratio, flush=True)
         with open('log.txt','a') as wf:
             print(datetime.datetime.now(), 'epoch', epoch, file=wf, flush=True)
             print(datetime.datetime.now(), 'lr', optimizer.param_groups[0]['lr'], file=wf, flush=True)
+            print(datetime.datetime.now(), 'noise', training_dataset.noise_ratio, file=wf, flush=True)
 
         model.train()
         running_loss.train()
         optimizer.train()
 
-        optimizer.zero_grad()
         for i, data in enumerate(training_loader):
+            optimizer.zero_grad()
             text, feature, in_codes, out_codes = data
             feature = feature.to(dtype=torch.float32, device=device, non_blocking=True)
             in_codes = in_codes.to(device=device, non_blocking=True)
@@ -167,9 +178,12 @@ def train():
             # loss.backward()
             # optimizer.step()
             scaler.scale(loss).backward()
+
+            # scaler.unscale_(optimizer)
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
+
             scaler.step(optimizer)
             scaler.update()
-            optimizer.zero_grad()
 
             # Gather data and report
             rawloss['lr'] = optimizer.param_groups[0]['lr']
@@ -181,6 +195,9 @@ def train():
                 print(epoch, i+1, f'{(i+1)/loader_len:.2%}', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, flush=True)
                 with open('log.txt','a') as wf:
                     print(epoch, i+1, datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
+
+            if (i + 1) % running_count == 0:
+                scheduler.step(losslog['loss'])
 
             if output_iter is not None and (i + 1) % output_iter == 0:
                 optimizer.eval()
@@ -198,6 +215,7 @@ def train():
                         'config': config.__dict__,
                         'model_state_dict': model.state_dict(),
                         }, 'result3/model.pt')
+                optimizer.train()
 
         running_loss.write(losslog)
         loss_value = losslog['loss'].item()
@@ -244,6 +262,8 @@ def train():
             print(epoch, 'val', datetime.datetime.now(), 'loss', loss_value, 'acc', acc_value, file=wf, flush=True)
 
         running_loss.reset()
+        if denoise_epoch < 0 and loss_value < 2.0:
+            denoise_epoch = epoch
 
         model2.eval()
         idx = rng.integers(len(validation_dataset))
@@ -257,9 +277,9 @@ def train():
                 pred = model2(feature).squeeze(0).cpu().numpy()
             predstr = ''
             for p in pred:
-                if p == 1:
+                if p == decoder_SOT:
                     continue
-                if p == 0 or p == 2:
+                if p == decoder_PAD or p == decoder_EOT:
                     break
                 if p >= 0xD800 and p <= 0xDFFF:
                     predstr += '\uFFFD'

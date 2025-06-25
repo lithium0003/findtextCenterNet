@@ -7,7 +7,7 @@ import re
 import json
 
 from util_func import feature_dim
-from const import encoder_add_dim, max_decoderlen, max_encoderlen, decoder_SOT, decoder_EOT, decoder_MSK
+from const import encoder_add_dim, max_decoderlen, max_encoderlen, decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK
 encoder_dim = feature_dim + encoder_add_dim
 
 train_data3 = 'train_data3'
@@ -53,6 +53,9 @@ UNICODE_WHITESPACE_CHARACTERS = [
 def is_ascii(s):
     return s and s in '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~!@#$%^&*()_+-={}[]|\\:;"\'<>,.?/‘’“”'
 
+def is_hangul(s):
+    return re.match(s,r'\p{Block=Hangul Syllables}+') is not None
+
 jp_type_list = {}
 with open(os.path.join('data','id_map.csv'),'r') as f:
     reader = csv.reader(f)
@@ -82,7 +85,10 @@ def find_splitpoint(txt, start=0, split_count=-1):
         return idx0+1
     idx1 = txt.find('\uFFF9', i, i+split_count)
     if idx1 < 0:
-        return min(i+split_count+1, len(txt))
+        idx4 = txt.find(' ', max(i,i+split_count-10), i+split_count)
+        if idx4 < 0:
+            return min(i+split_count+1, len(txt))
+        return idx4+1
     idx2 = txt.find('\uFFFA', idx1)
     idx3 = txt.find('\uFFFB', idx1)
     if idx3+1 >= i+split_count:
@@ -98,7 +104,7 @@ def get_random_furigana():
     # 5: 亜
     # 8: 弌
 
-    if rng.uniform() < 0.9:
+    if rng.uniform() < 0.75:
         out_count = max_decoderlen-2
     else:
         out_count = rng.integers(1,max_decoderlen-2)
@@ -249,7 +255,10 @@ def get_random_furigana():
         j = find_splitpoint(txt, i, split_count)
         if outtxt and j > out_count:
             break
-        outtxt += txt[i:j] + ('' if txt[j-1] == '\n' else '\n')
+        if txt[j-1] == ' ':
+            outtxt += txt[i:j-1] + '\n'
+        else:
+            outtxt += txt[i:j] + ('' if txt[j-1] == '\n' else '\n')
         i = j
         if i > out_count:
             break
@@ -286,8 +295,9 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             if charparam[c][1] is not None:
                 self.vcodes.append(c)
         self.charparam = charparam
+        self.noise_ratio = 1.0 if train else 0.0
 
-        self.real_ratio = 1000
+        self.real_ratio = 100
         self.realdata = []
         if train:
             npyfiles = sorted(glob.glob(os.path.join(train_data4, '*.npy')))
@@ -340,7 +350,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                     cur_idx = len(target_text)
                     if subtype & 8 == 8:
                         space = 1
-                        if is_ascii(text):
+                        if is_ascii(text) or is_hangul(text):
                             target_text += ' '
                         else:
                             target_text += '　'
@@ -417,7 +427,8 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             self.text[filename] = txt
 
     def __len__(self):
-        return (len(self.realdata) * self.real_ratio + len(self.txtfile) + 1) * 2
+        p = len(self.realdata) * self.real_ratio + len(self.txtfile)
+        return len(self.realdata) * self.real_ratio + len(self.txtfile) + p // 5
     
     def __getitem__(self, idx):
         if idx < len(self.realdata) * self.real_ratio:
@@ -447,7 +458,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         out_count = 0
         ruby_state = 0
         
-        if rng.uniform() < 0.9:
+        if rng.uniform() < 0.75:
             count = min(max_decoderlen-2,index.shape[0]-start_idx)
         else:
             count = rng.integers(1, min(max_decoderlen-2,index.shape[0]-start_idx))
@@ -495,13 +506,15 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         feat = np.zeros(shape=(max_encoderlen,feature_dim+encoder_add_dim), dtype=np.float16)
         feat[0,:] = self.SP_token # SOT
         txt = text[index[start_idx]:index[end_idx]]
-        feat[0:end_idx-start_idx,:] += self.add_noize(self.realdata[idx]['feature'][start_idx:end_idx])
+        feat[0:end_idx-start_idx,:] += self.add_noise(self.realdata[idx]['feature'][start_idx:end_idx])
         if end_idx-start_idx < max_encoderlen:
             feat[end_idx-start_idx,:] = -self.SP_token # EOT
         return self.pad_output(txt, feat)
 
-    def add_noize(self, value):
-        return value * (1 + 5e-2 * rng.normal(loc=0, scale=1, size=value.shape)) + 5e-1 * rng.normal(loc=0, scale=1, size=value.shape)
+    def add_noise(self, value):
+        noise = 10.0 * rng.normal(loc=0, scale=1, size=value.shape) * self.noise_ratio
+        noise[...,feature_dim:] = 0
+        return value + noise
 
     def generage_feature(self, code, horizontal):
         hori, vert = self.charparam.get(code, (None, None))
@@ -571,7 +584,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
                 ruby = 0
                 continue
             
-            ret[idx,:feature_dim] = self.add_noize(self.generage_feature(ord(c), horizontal))
+            ret[idx,:feature_dim] = self.add_noise(self.generage_feature(ord(c), horizontal))
             if ruby == 1:
                 ret[idx,feature_dim+1] = 5
             elif ruby == 2:
@@ -595,7 +608,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         start_idx = rng.integers(len(txt)-1)
         txt = txt[start_idx:]
         txt = skip_remainruby(txt)
-        if rng.uniform() < 0.9:
+        if rng.uniform() < 0.75:
             out_count = min(max_decoderlen-2,len(txt))
         else:
             out_count = rng.integers(1, min(max_decoderlen-2,len(txt)))
@@ -612,7 +625,10 @@ class TransformerDataDataset(torch.utils.data.Dataset):
             j = find_splitpoint(txt, i, split_count)
             if outtxt and j > out_count:
                 break
-            outtxt += txt[i:j] + ('' if txt[j-1] == '\n' else '\n')
+            if txt[j-1] == ' ':
+                outtxt += txt[i:j-1] + '\n'
+            else:
+                outtxt += txt[i:j] + ('' if txt[j-1] == '\n' else '\n')
             i = j
             if i > out_count:
                 break
@@ -622,7 +638,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
         if rng.uniform() < 0.5:
             return self.pad_output(*self.format_output(get_random_furigana(), orientation='both'))
 
-        if rng.uniform() < 0.9:
+        if rng.uniform() < 0.75:
             out_count = max_decoderlen-2
         else:
             out_count = rng.integers(1,max_decoderlen-2)
@@ -655,28 +671,19 @@ class TransformerDataDataset(torch.utils.data.Dataset):
     def pad_output1(self, text, feature):
         b = text.encode('utf-32-le')
         codes = [decoder_SOT] + [int.from_bytes(b[i:i+4], 'little') for i in range(0,len(b),4)] + [decoder_EOT]
-        codes += [0] * max(0,max_decoderlen+1-len(codes))
+        codes += [decoder_PAD] * max(0,max_decoderlen-len(codes))
         codes = np.array(codes, dtype=int)
-        return text, feature, codes[:max_decoderlen+1]
+        return text, feature, codes[:max_decoderlen]
 
     def pad_output(self, text, feature):
         b = text.encode('utf-32-le')
         codes = [decoder_SOT] + [int.from_bytes(b[i:i+4], 'little') for i in range(0,len(b),4)] + [decoder_EOT]
-        codes += [0] * max(0,max_decoderlen+1-len(codes))
+        codes += [decoder_PAD] * max(0,max_decoderlen-len(codes))
         codes = np.array(codes, dtype=int)
         input_codes = codes[:max_decoderlen]
-        true_codes = np.array(codes[1:max_decoderlen+1])
+        true_codes = np.array(codes[:max_decoderlen])
         p = rng.uniform()
-        if p < 0.1:
-            input_codes[1:] = decoder_MSK
-        elif p < 0.2:
-            p = rng.uniform()
-            input_codes[1:] = np.where(rng.uniform(size=(max_decoderlen-1,)) < p, rng.integers(2, 0x3FFFF, size=(max_decoderlen-1,)), input_codes[1:])
-            p = rng.uniform()
-            input_codes[1:] = np.where(rng.uniform(size=(max_decoderlen-1,)) < p, decoder_MSK, input_codes[1:])
-        else:
-            p = rng.uniform()
-            input_codes[1:] = np.where(rng.uniform(size=(max_decoderlen-1,)) < p, decoder_MSK, input_codes[1:])
+        input_codes[:] = np.where(rng.uniform(size=(max_decoderlen,)) < p, decoder_MSK, input_codes[:])
         return text, feature, input_codes, true_codes
 
 
@@ -697,6 +704,7 @@ class TransformerDataDataset(torch.utils.data.Dataset):
 #
 # sot = 1
 # eot = 2
+# msk = 3
 # pad = 0
 #######################################################
 

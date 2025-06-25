@@ -2,11 +2,10 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from dataclasses import dataclass
-import math
 import itertools
 
 from util_func import modulo_list, calc_predid, feature_dim
-from const import decoder_SOT, decoder_EOT, decoder_MSK, max_decoderlen, max_encoderlen, encoder_add_dim
+from const import decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK, max_decoderlen, max_encoderlen, encoder_add_dim
 
 encoder_dim = feature_dim + encoder_add_dim
 
@@ -23,7 +22,7 @@ class PositionalEncoding(nn.Module):
         :param max_len: max sequence length
         :param device: hardware device setting
         """
-        super(PositionalEncoding, self).__init__()
+        super().__init__()
 
         # same size with input matrix (for adding with input matrix)
         encoding = torch.zeros(max_len, d_model)
@@ -41,7 +40,7 @@ class PositionalEncoding(nn.Module):
         # compute positional encoding to consider positional information of words
 
         # self.encoding = nn.Buffer(encoding).requires_grad_(False)
-        self.encoding = nn.Parameter(encoding, requires_grad=True)
+        self.encoding = nn.Parameter(encoding)
 
     def forward(self, x):
         # self.encoding
@@ -62,7 +61,7 @@ class SwiGLU(nn.Module):
         self.w1 = nn.Linear(dim, dim*2)
         self.wg = nn.Linear(dim, dim*2)
         self.w2 = nn.Linear(dim*2, dim)
-        self.dropout = nn.Dropout(p = dropout, inplace=True)
+        self.dropout = nn.Dropout(p = dropout)
 
     def forward(self, x):
         x1 = self.w1(x)
@@ -71,25 +70,10 @@ class SwiGLU(nn.Module):
         x = self.dropout(x)
         return self.w2(x)
 
-def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
-    """torch.repeat_interleave(x, dim=1, repeats=n_rep)"""
-    bs, n_kv_heads, slen, head_dim = x.shape
-    if n_rep == 1:
-        return x.contiguous()
-    return (
-        x[:, :, None, :, :]
-        .expand(bs, n_kv_heads, n_rep, slen, head_dim)
-        .reshape(bs, n_kv_heads * n_rep, slen, head_dim)
-    )
-
-def lambda_init_fn(depth):
-    return 0.8 - 0.6 * math.exp(-0.3 * depth)
-
-class MultiheadDiffAttn(nn.Module):
+class MultiheadAttn(nn.Module):
     def __init__(
         self,
         embed_dim,
-        depth,
         num_heads,
         dropout = 0.1,
         max_seq_len=5000,
@@ -99,36 +83,22 @@ class MultiheadDiffAttn(nn.Module):
         
         # arg num_heads set to half of Transformer's num_heads
         self.num_heads = num_heads
-        
-        # arg decoder_kv_attention_heads set to half of Transformer's num_kv_heads if use GQA
-        # set to same as num_heads if use normal MHA
-        self.num_kv_heads = num_heads
-        self.n_rep = self.num_heads // self.num_kv_heads
-        
-        self.head_dim = embed_dim // num_heads // 2
-        self.scaling = self.head_dim ** -0.5
+                
+        self.head_dim = embed_dim // num_heads
         
         self.q_proj = nn.Linear(embed_dim, embed_dim, bias=False)
-        self.k_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
-        self.v_proj = nn.Linear(embed_dim, embed_dim // self.n_rep, bias=False)
+        self.k_proj = nn.Linear(embed_dim, embed_dim, bias=False)
+        self.v_proj = nn.Linear(embed_dim, embed_dim, bias=False)
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
 
         self.pos_emb_q = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.pos_emb_k = PositionalEncoding(embed_dim, max_len=max_seq_len)
 
-        self.lambda_init = lambda_init_fn(depth)
-        self.lambda_q1 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
-        self.lambda_k1 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
-        self.lambda_q2 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
-        self.lambda_k2 = nn.Parameter(torch.empty(self.head_dim, dtype=torch.float32).normal_(mean=0,std=0.1))
-
-        self.subln = nn.LayerNorm([2 * self.head_dim], bias=False)
-        self.dropout = nn.Dropout(p = dropout, inplace=True)
+        self.dropout = dropout
 
     def forward(
         self,
         query, key=None, value=None,
-        causal_mask=None,
         key_mask=None,
     ):
         if key is None:
@@ -136,6 +106,7 @@ class MultiheadDiffAttn(nn.Module):
             pos_emb_k = self.pos_emb_q
         else:
             pos_emb_k = self.pos_emb_k
+            pass
         if value is None:
             value = key
         bsz, tgt_len, embed_dim = query.size()
@@ -148,33 +119,19 @@ class MultiheadDiffAttn(nn.Module):
         k = self.k_proj(key)
         v = self.v_proj(value)
 
-        q = q.view(bsz, tgt_len, 2 * self.num_heads, self.head_dim)
-        k = k.view(bsz, src_len, 2 * self.num_kv_heads, self.head_dim)
-        v = v.view(bsz, src_len, self.num_kv_heads, 2 * self.head_dim)
+        q = q.view(bsz, tgt_len, self.num_heads, self.head_dim)
+        k = k.view(bsz, src_len, self.num_heads, self.head_dim)
+        v = v.view(bsz, src_len, self.num_heads, self.head_dim)
 
         q = q.transpose(1, 2).contiguous()
-        k = repeat_kv(k.transpose(1, 2), self.n_rep)
-        v = repeat_kv(v.transpose(1, 2), self.n_rep)
-        q *= self.scaling
-        attn_weights = torch.matmul(q, k.transpose(-1, -2))
+        k = k.transpose(1, 2).contiguous()
+        v = v.transpose(1, 2).contiguous()
+
         if key_mask is not None:
-            attn_weights += key_mask[:,:,:,:src_len].type_as(attn_weights)
-        if causal_mask is not None:
-            attn_weights += causal_mask[:tgt_len,:src_len].type_as(attn_weights)
-        attn_weights = F.softmax(attn_weights.float(), dim=-1, dtype=torch.float32).type_as(attn_weights)
+            key_mask = key_mask[:,:,:,:src_len]
 
-        lambda_1 = torch.exp(torch.sum(self.lambda_q1 * self.lambda_k1, dim=-1).float()).type_as(q)
-        lambda_2 = torch.exp(torch.sum(self.lambda_q2 * self.lambda_k2, dim=-1).float()).type_as(q)
-        lambda_full = lambda_1 - lambda_2 + self.lambda_init
-        attn_weights = attn_weights.view(bsz, self.num_heads, 2, tgt_len, src_len)
-        attn_weights = attn_weights[:, :, 0] - lambda_full * attn_weights[:, :, 1]
-
-        attn_weights = self.dropout(attn_weights)
-
-        attn = torch.matmul(attn_weights, v)
-        attn = self.subln(attn)
-        attn = attn * (1 - self.lambda_init)
-        attn = attn.transpose(1, 2).reshape(bsz, tgt_len, self.num_heads * 2 * self.head_dim)
+        attn = F.scaled_dot_product_attention(q, k, v, key_mask, self.dropout if self.training else 0.0)
+        attn = attn.transpose(1, 2).reshape(bsz, tgt_len, self.num_heads * self.head_dim)
 
         attn = self.out_proj(attn)
         return attn
@@ -182,12 +139,12 @@ class MultiheadDiffAttn(nn.Module):
 class EncoderBlock(nn.Module):
     def __init__(self, embed_dim, depth, num_heads, dropout = 0.1, max_seq_len=5000):
         super().__init__()
-        self.mha = MultiheadDiffAttn(embed_dim=embed_dim, depth=depth, num_heads=num_heads, dropout=dropout, max_seq_len=max_seq_len)
+        self.mha = MultiheadAttn(embed_dim=embed_dim, num_heads=num_heads, dropout=dropout, max_seq_len=max_seq_len)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.ff = SwiGLU(embed_dim, dropout=dropout)
-        self.dropout1 = nn.Dropout(dropout, inplace=True)
-        self.dropout2 = nn.Dropout(dropout, inplace=True)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
 
     def forward(self, x, key_mask=None):
         skip = x
@@ -207,10 +164,10 @@ class Encoder(nn.Module):
         super().__init__()
         self.dim = embed_dim
         self.head_num = head_num
-        self.embed = nn.Linear(input_dim, embed_dim)
+        self.embed = nn.Linear(input_dim, embed_dim, bias=False)
         self.pos_emb = PositionalEncoding(embed_dim, max_len=max_seq_len)
         self.norm = nn.LayerNorm([embed_dim])
-        self.dropout = nn.Dropout(dropout, inplace=True)
+        self.dropout = nn.Dropout(dropout)
         self.blocks = nn.ModuleList([EncoderBlock(embed_dim, d, head_num, dropout=dropout, max_seq_len=max_seq_len) for d in range(block_num)])        
 
     def forward(self, x, key_mask=None):
@@ -225,19 +182,19 @@ class Encoder(nn.Module):
 class DecoderBlock(nn.Module):
     def __init__(self, embed_dim, depth, head_num, dropout = 0.1, max_seq_len=5000):
         super().__init__()
-        self.self_attn = MultiheadDiffAttn(embed_dim, depth, head_num, dropout=dropout, max_seq_len=max_seq_len)
-        self.cross_attn = MultiheadDiffAttn(embed_dim, depth, head_num, dropout=dropout, max_seq_len=max_seq_len)
+        self.self_attn = MultiheadAttn(embed_dim, head_num, dropout=dropout, max_seq_len=max_seq_len)
+        self.cross_attn = MultiheadAttn(embed_dim, head_num, dropout=dropout, max_seq_len=max_seq_len)
         self.norm1 = nn.LayerNorm([embed_dim])
         self.norm2 = nn.LayerNorm([embed_dim])
         self.norm3 = nn.LayerNorm([embed_dim])
         self.ff = SwiGLU(embed_dim, dropout=dropout)
-        self.dropout1 = nn.Dropout(dropout, inplace=True)
-        self.dropout2 = nn.Dropout(dropout, inplace=True)
-        self.dropout3 = nn.Dropout(dropout, inplace=True)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.dropout3 = nn.Dropout(dropout)
 
-    def forward(self, x, y, causal_mask=None, key_mask=None):
+    def forward(self, x, y, key_mask=None):
         skip = x
-        x = self.self_attn(x, causal_mask=causal_mask)
+        x = self.self_attn(x)
         x = self.dropout1(x)
         x = x + skip
         x = self.norm1(x)
@@ -265,7 +222,7 @@ class Decoder(nn.Module):
         self.dropout = nn.Dropout(dropout, inplace=True)
         self.out_layers = nn.ModuleList([nn.Linear(embed_dim, m) for m in modulo_list])
 
-    def forward(self, x, y, causal_mask=None, key_mask=None):
+    def forward(self, x, y, key_mask=None):
         x1 = [x % m for m in modulo_list]
         x = None
         for x2, layer in zip(x1, self.embed):
@@ -277,16 +234,16 @@ class Decoder(nn.Module):
         x = self.norm(x)
         x = self.dropout(x)
         for block in self.blocks:
-            x = block(x, y, causal_mask=causal_mask, key_mask=key_mask)
+            x = block(x, y, key_mask=key_mask)
         return [layer(x) for layer in self.out_layers]
 
 class Transformer(nn.Module):
-    def __init__(self, enc_input_dim, embed_dim, head_num, enc_block_num = 6, dec_block_num = 6, max_enc_seq_len = 5000, max_dec_seq_len = 5000):
+    def __init__(self, enc_input_dim, embed_dim, head_num, enc_block_num = 6, dec_block_num = 6, max_enc_seq_len = 5000, max_dec_seq_len = 5000, dropout = 0.1):
         super().__init__()
         self.head_num = head_num
         self.max_len = max(max_enc_seq_len, max_dec_seq_len)
-        self.encoder = Encoder(input_dim=enc_input_dim, embed_dim=embed_dim, head_num=head_num, max_seq_len=max_enc_seq_len, block_num=enc_block_num)
-        self.decoder = Decoder(embed_dim=embed_dim, head_num=head_num, max_seq_len=max_dec_seq_len, block_num=dec_block_num)
+        self.encoder = Encoder(input_dim=enc_input_dim, embed_dim=embed_dim, head_num=head_num, max_seq_len=max_enc_seq_len, block_num=enc_block_num, dropout=dropout)
+        self.decoder = Decoder(embed_dim=embed_dim, head_num=head_num, max_seq_len=max_dec_seq_len, block_num=dec_block_num, dropout=dropout)
 
     def forward(self, enc_input, dec_input):
         key_mask = torch.all(enc_input == 0, dim=-1)
@@ -298,12 +255,13 @@ class Transformer(nn.Module):
 @dataclass
 class ModelDimensions:
     enc_input_dim: int = encoder_dim
-    embed_dim: int = 512
-    head_num: int = 16
-    enc_block_num: int = 16
-    dec_block_num: int = 16
+    embed_dim: int = 768
+    head_num: int = 12
+    enc_block_num: int = 10
+    dec_block_num: int = 10
     max_enc_seq_len: int = max_encoderlen
     max_dec_seq_len: int = max_decoderlen
+    dropout: float = 0.0
 
 class TransformerPredictor(nn.Module):
     def __init__(self, encoder, decoder):
@@ -318,16 +276,39 @@ class TransformerPredictor(nn.Module):
         key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0)
         enc_output = self.encoder(enc_input, key_mask=key_mask)
         decoder_input = torch.zeros((enc_input.shape[0],max_decoderlen), dtype=torch.long, device=enc_input.device)
-        decoder_input[:,0] = decoder_SOT
-        decoder_input[:,1:] = decoder_MSK
-        rep_count = 16
+        decoder_input[:,:] = decoder_MSK
+        rep_count = 8
         for k in range(rep_count):
+            # print(decoder_input)
+            # pred = decoder_input.squeeze(0).cpu().numpy()
+            # predstr = ''
+            # for p in pred:
+            #     if p == decoder_SOT:
+            #         continue
+            #     if p == decoder_PAD or p == decoder_EOT:
+            #         break
+            #     if p == decoder_MSK:
+            #         predstr += '<MSK>'
+            #     elif p == 0xFFF9:
+            #         predstr += '<base>'
+            #     elif p == 0xFFFA:
+            #         predstr += '<ruby>'
+            #     elif p == 0xFFFB:
+            #         predstr += '</ruby>'
+            #     elif p >= 0xD800 and p <= 0xDFFF:
+            #         predstr += '\uFFFD'
+            #     elif p < 0x3FFFF:
+            #         predstr += chr(p)
+            #     else:
+            #         predstr += '\uFFFD'
+            # print('------------------')
+            # print(predstr)
             outputs = self.decoder(decoder_input, enc_output, key_mask=key_mask)
             listp = []
             listi = []
             for decoder_id1 in outputs:
                 pred_p1 = torch.softmax(decoder_id1, dim=-1)
-                topp, topi = torch.topk(pred_p1, 4)
+                topp, topi = torch.topk(pred_p1, 3)
                 listp.append(topp.permute(2,0,1))
                 listi.append(topi.permute(2,0,1))
 
@@ -340,11 +321,43 @@ class TransformerPredictor(nn.Module):
             maxi = torch.argmax(pred_p, dim=0)
             decoder_output = torch.gather(decoder_output, 0, maxi.unsqueeze(0))[0]
             pred_p = torch.gather(pred_p, 0, maxi.unsqueeze(0))[0]
-            if k > 0 and torch.all(pred_p[decoder_output > 0] > 0.99):
+            # print(pred_p[decoder_output > 0])
+            decoder_output = torch.where(decoder_input == decoder_MSK, decoder_output, decoder_input)
+            if torch.all(pred_p[torch.logical_and(decoder_input == decoder_MSK, decoder_output > 0)] > 0.99):
                 print(f'[{k} early stop]')
                 break
+            # print(decoder_output)
+            # pred = decoder_output.squeeze(0).cpu().numpy()
+            # predstr = ''
+            # for p in pred:
+            #     if p == decoder_SOT:
+            #         continue
+            #     if p == decoder_PAD or p == decoder_EOT:
+            #         break
+            #     if p == 0xFFF9:
+            #         predstr += '<base>'
+            #     elif p == 0xFFFA:
+            #         predstr += '<ruby>'
+            #     elif p == 0xFFFB:
+            #         predstr += '</ruby>'
+            #     elif p >= 0xD800 and p <= 0xDFFF:
+            #         predstr += '\uFFFD'
+            #     elif p < 0x3FFFF:
+            #         predstr += chr(p)
+            #     else:
+            #         predstr += '\uFFFD'
+            # print('------------------')
+            # print(predstr)
             if k < rep_count-1:
-                decoder_input[:,1:] = torch.where(pred_p < 1/rep_count*k, decoder_MSK, decoder_output)[:,:-1]
+                remask = pred_p < 0.9
+                # remask = torch.logical_and(decoder_input == decoder_MSK, pred_p < 0.9)
+                remask = torch.logical_or(remask, decoder_output > 0x3FFFF)
+                # remask = torch.logical_or(remask, decoder_output == decoder_PAD)
+                if not torch.any(remask):
+                    print(f'[{k} no remask stop]')
+                    break
+                decoder_output = torch.where(remask, decoder_MSK, decoder_output)
+                decoder_input[:,:] = decoder_output[:,:]
         return decoder_output
 
 class TransformerEncoderPredictor(nn.Module):
@@ -357,6 +370,21 @@ class TransformerEncoderPredictor(nn.Module):
         enc_output = self.encoder(enc_input, key_mask)
         return enc_output
 
+class DecoderSplited(Decoder):
+    def forward(self, x1, y, key_mask=None):
+        x = None
+        for x2, layer in zip(x1, self.embed):
+            if x is None:
+                x = layer(x2)
+            else:
+                x += layer(x2)
+        x = self.pos_emb(x)
+        x = self.norm(x)
+        x = self.dropout(x)
+        for block in self.blocks:
+            x = block(x, y, key_mask=key_mask)
+        return [layer(x) for layer in self.out_layers]
+
 class TransformerDecoderPredictor(nn.Module):
     def __init__(self, decoder):
         super().__init__()
@@ -365,16 +393,29 @@ class TransformerDecoderPredictor(nn.Module):
 
     def forward(self, enc_output, decoder_input, key_mask):
         outputs = self.decoder(decoder_input, enc_output, key_mask=key_mask)
-        return outputs
+        return [torch.softmax(output, dim=-1) for output in outputs]
+
+class TransformerDecoderPredictorSplited(nn.Module):
+    def __init__(self, decoder):
+        super().__init__()
+        self.head_num = decoder.head_num
+        self.decoder = decoder
+        self.decoder.__class__ = DecoderSplited
+
+    def forward(self, enc_output, decoder_input1, decoder_input2, decoder_input3, key_mask):
+        outputs = self.decoder([decoder_input1, decoder_input2, decoder_input3], enc_output, key_mask=key_mask)
+        return [torch.softmax(output, dim=-1) for output in outputs]
 
 if __name__ == '__main__':
     model = Transformer(enc_input_dim=100, embed_dim=512, head_num=8)
-    # print(model)
-    # out = model(torch.ones(3,1,100),torch.ones(3,2, dtype=torch.long))
-    # print(out)
-    # print([o.shape for o in out])
+    print(model)
+    out = model(torch.ones(3,1,100),torch.ones(3,2, dtype=torch.long))
+    print(out)
+    print([o.shape for o in out])
 
-    model2 = TransformerPredictor(model.encoder, model.decoder)
-    print(model2)
-    d = model2(torch.ones(4,5,100))
-    print(d)
+    # model2 = TransformerPredictor(model.encoder, model.decoder)
+    # print(model2)
+    # d = model2(torch.ones(4,5,100))
+    # print(d)
+
+    # TransformerDecoderPredictor(model.decoder)
