@@ -120,22 +120,22 @@ Decoderは、SOT=1で開始し、EOT=2で終了するまでの数値をUnicode�
 空白を埋めるのは、PAD=0です。
 
 マスクがないとき
-| Index | 0 | 1 | 2 | 3 | 4 | 5 |
-| --- | --- | --- | --- | --- | --- | --- |
-| Input | SOT | t | e | s | t | PAD |
-| Output | t | e | s | t | EOT | PAD |
+| Index | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Input | SOT | t | e | s | t | EOT | PAD |
+| Output | SOT | t | e | s | t | EOT | PAD |
 
 全てマスクがあるとき
-| Index | 0 | 1 | 2 | 3 | 4 | 5 |
-| --- | --- | --- | --- | --- | --- | --- |
-| Input | SOT | MSK | MSK | MSK | MSK | MSK |
-| Output | t | e | s | t | EOT | PAD |
+| Index | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Input | MSK | MSK | MSK | MSK | MSK | MSK | MSK |
+| Output | SOT | t | e | s | t | EOT | PAD |
 
 一部マスクがあるとき
-| Index | 0 | 1 | 2 | 3 | 4 | 5 |
-| --- | --- | --- | --- | --- | --- | --- |
-| Input | SOT | MSK | e | MSK | t | PAD |
-| Output | t | e | s | t | EOT | PAD |
+| Index | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Input | SOT | MSK | e | MSK | t | PAD | PAD |
+| Output | SOT | t | e | s | t | EOT | PAD |
 
 # Prepare
 Python3でPyTorchを使用します。
