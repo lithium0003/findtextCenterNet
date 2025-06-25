@@ -134,7 +134,7 @@ Decoderは、SOT=1で開始し、EOT=2で終了するまでの数値をUnicode�
 一部マスクがあるとき
 | Index | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Input | SOT | MSK | e | MSK | t | PAD | PAD |
+| Input | SOT | MSK | e | MSK | t | MSK | MSK |
 | Output | SOT | t | e | s | t | EOT | PAD |
 
 # Prepare
