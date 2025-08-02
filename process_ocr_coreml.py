@@ -31,15 +31,12 @@ class OCR_coreml_Processer(OCR_Processer):
         })['encoder_output']
 
         decoder_input = np.zeros(shape=(1, max_decoderlen), dtype=np.int32)
-        decoder_input[0,0] = decoder_SOT
-        decoder_input[0,1:] = decoder_MSK
+        decoder_input[0,:] = decoder_MSK
         rep_count = 8
         for k in range(rep_count):
             output = self.mlmodel_transformer_decoder.predict({
                 'encoder_output': encoder_output,
-                'decoder_input_1091': decoder_input % 1091,
-                'decoder_input_1093': decoder_input % 1093,
-                'decoder_input_1097': decoder_input % 1097,
+                'decoder_input': decoder_input,
                 'key_mask': key_mask,
             })
 
@@ -62,10 +59,17 @@ class OCR_coreml_Processer(OCR_Processer):
             maxi = np.argmax(pred_p, axis=0)
             decoder_output = np.take_along_axis(decoder_output, maxi[None,...], axis=0)[0]
             pred_p = np.take_along_axis(pred_p, maxi[None,...], axis=0)[0]
-            if k > 0 and np.all(pred_p[decoder_output > 0] > 0.99):
+            if np.all(pred_p[decoder_output > 0] > 0.99):
                 print(f'[{k} early stop]')
                 break
-            if k < rep_count-1:
-                decoder_input[:,1:] = np.where(pred_p < 1-(k+1)/rep_count, decoder_MSK, decoder_output)[:,:-1]
+
+            remask = decoder_output > 0x3FFFF
+            remask = np.logical_or(remask, pred_p < 0.9)
+            if not np.any(remask):
+                print(f'---[{k} early stop]---')
+                break
+
+            decoder_input[:,:] = np.where(remask, decoder_MSK, decoder_output)
+
         pred = decoder_output[0]
         return pred

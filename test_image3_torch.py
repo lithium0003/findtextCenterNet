@@ -18,14 +18,14 @@ except ImportError:
 from util_func import calc_predid, width, height, scale, feature_dim, sigmoid, decode_ruby
 from models.detector import TextDetectorModel, CenterNetDetector, CodeDecoder
 from models.transformer import ModelDimensions, Transformer, TransformerPredictor
-from const import encoder_add_dim, max_encoderlen
+from const import encoder_add_dim, max_encoderlen, decoder_PAD, decoder_SOT, decoder_EOT
 encoder_dim = feature_dim + encoder_add_dim
 
 if len(sys.argv) < 2:
     print(sys.argv[0],'target.png','(resize ratio)')
     exit(1)
 
-step_ratio = 0.66
+step_ratio = 0.75
 stepx = int(width * step_ratio)
 stepy = int(height * step_ratio)
 
@@ -394,14 +394,14 @@ for id, block, idx, subidx, subtype, pageidx, sectionidx in detected_boxes:
 
     if prev_block != block:
         prev_block = block
-        g = np.zeros([encoder_dim], np.float32)
+        g = np.zeros([encoder_dim], np.float16)
         g[feature_dim+0] = 5 * vertical
         g[-1] = 5
         features.append(g)
         prev_idx = -1
     if prev_idx != idx:
         prev_idx = idx
-        g = np.zeros([encoder_dim], np.float32)
+        g = np.zeros([encoder_dim], np.float16)
         g[feature_dim+0] = 5 * vertical
         g[-1] = 5
         features.append(g)
@@ -422,11 +422,11 @@ for id, block, idx, subidx, subtype, pageidx, sectionidx in detected_boxes:
     else:
         vertical = 1
     
-    g = np.concatenate([glyphfeatures[id,:], 5*np.array([vertical,rubybase,ruby,space,emphasis,0], np.float32)])
+    g = np.concatenate([glyphfeatures[id,:], 5*np.array([vertical,rubybase,ruby,space,emphasis,0], np.float16)])
     features.append(g)
 
-features = np.array(features, np.float32)
-SP_token = np.zeros([encoder_dim], dtype=np.float32)
+features = np.array(features, np.float16)
+SP_token = np.zeros([encoder_dim], dtype=np.float16)
 SP_token[0:feature_dim:2] = 5
 SP_token[1:feature_dim:2] = -5
 
@@ -438,7 +438,7 @@ keep_back = 0
 while cur_i < features.shape[0]:
     r = 0
     s = 0
-    for k in range(cur_i, min(cur_i + max_encoderlen - 3, features.shape[0])):
+    for k in range(cur_i, features.shape[0]):
         # space
         if features[k,-3] > 0:
             r += 1
@@ -451,6 +451,10 @@ while cur_i < features.shape[0]:
             s = 2
         elif s == 2 and features[k,-4] == 0:
             s = 0
+
+        if k - cur_i >= max_encoderlen - 3 - r:
+            break
+
     cur_j = min(features.shape[0], cur_i + (max_encoderlen - 3 - r))
     # horizontal / vertical change point
     for j in range(cur_i+1, cur_j):
@@ -458,7 +462,7 @@ while cur_i < features.shape[0]:
             cur_j = j
             break
     # double newline
-    if cur_j < features.shape[0]-1 and cur_i+1 < cur_j-1:
+    if cur_i+1 < cur_j-1:
         for j in range(cur_i+1, cur_j-1):
             if features[j,-1] > 0 and features[j+1,-1] > 0:
                 cur_j = j+2
@@ -472,6 +476,21 @@ while cur_i < features.shape[0]:
                 if features[j,-4] == 0 and features[j,-5] == 0:
                     cur_j = j+1
                     break
+    # find space/newline saparation
+    if cur_j < features.shape[0]:
+        # last char is not newline
+        if cur_j > 1 and features[cur_j-1, -1] == 0:
+            for j in reversed(range(cur_i+50, cur_j)):
+                # newline
+                if features[j,-1] > 0:
+                    if cur_j - j < 50:
+                        cur_j = j
+                    break
+                # space
+                if features[j,-3] > 0:
+                    if cur_j - j < 50:
+                        cur_j = j
+                    break
 
     if prev_j == cur_j:
         keep_back = 0
@@ -479,7 +498,7 @@ while cur_i < features.shape[0]:
         continue
 
     print(cur_i,cur_j,'/',features.shape[0])
-    encoder_input = np.zeros(shape=(1,max_encoderlen, encoder_dim), dtype=np.float32)
+    encoder_input = np.zeros(shape=(1,max_encoderlen, encoder_dim), dtype=np.float16)
     encoder_input[0,0,:] = SP_token
     encoder_input[0,1:1+cur_j-cur_i,:] = features[cur_i:cur_j,:]
     encoder_input[0,1+cur_j-cur_i,:] = -SP_token
@@ -488,14 +507,28 @@ while cur_i < features.shape[0]:
     pred = model2(encoder_input).squeeze(0).cpu().numpy()
     predstr = ''
     for p in pred:
-        if p == 0:
+        if p == decoder_SOT:
+            continue
+        if p == decoder_PAD or p == decoder_EOT:
             break
-        if p < 0x3FFFF:
+        if p >= 0xD800 and p <= 0xDFFF:
+            predstr += '\uFFFD'
+        elif p < 0x3FFFF:
             predstr += chr(p)
         else:
             predstr += '\uFFFD'
+    print('------------------')
+    try:
+        print(predstr)
+    except UnicodeEncodeError:
+        pass
+    print('------------------')
     # print(keep_back, predstr)
     result_txt += predstr[keep_back:]
+
+    # keep_back = 0
+    # cur_i = cur_j
+    # continue 
 
     if cur_j < features.shape[0]:
         k = cur_j - 1
@@ -511,13 +544,14 @@ while cur_i < features.shape[0]:
                 k += 1
                 break
             # newline
-            if k < cur_j - 1 and features[k,-1] > 0:
-                k += 1
+            if features[k,-1] > 0 and features[k+1,-1] > 0:
+                k += 2
                 break
             # space
             if features[k,-3] > 0:
                 keep_back += 1
-            if k > cur_j - 3:
+                break
+            if k > cur_j - 5:
                 k -= 1
             else:
                 break

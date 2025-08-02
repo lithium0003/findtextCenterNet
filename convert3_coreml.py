@@ -6,9 +6,9 @@ import os
 from datetime import datetime
 import itertools
 
-from models.transformer import ModelDimensions, Transformer, TransformerEncoderPredictor, TransformerDecoderPredictor1
+from models.transformer import ModelDimensions, Transformer, TransformerEncoderPredictor, TransformerDecoderPredictor
 from util_func import feature_dim, modulo_list, calc_predid
-from const import encoder_add_dim, max_decoderlen, max_encoderlen, decoder_SOT, decoder_EOT, decoder_MSK
+from const import encoder_add_dim, max_decoderlen, max_encoderlen, decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK
 
 def convert3():
     # import logging
@@ -26,9 +26,10 @@ def convert3():
         print('empty model')
     model.eval()
     encoder = TransformerEncoderPredictor(model.encoder)
-    decoder = TransformerDecoderPredictor1(model.decoder)
+    decoder = TransformerDecoderPredictor(model.decoder)
     encoder.eval()
     decoder.eval()
+
 
     #########################################################################
     print('encoder')
@@ -38,6 +39,10 @@ def convert3():
     key_mask = torch.all(encoder_input == 0, dim=-1)
     key_mask = torch.where(key_mask[:,None,None,:], float("-inf"), 0)
     traced_model = torch.jit.trace(encoder, [encoder_input, key_mask])
+
+    # def op_selector(op):
+    #     print(op.op_type, [o.name for o in op.outputs])
+    #     return True
 
     mlmodel_detector = ct.convert(traced_model,
             inputs=[
@@ -49,6 +54,7 @@ def convert3():
             ],
             convert_to="mlprogram",
             minimum_deployment_target=ct.target.iOS18)
+            # compute_precision=ct.precision.FLOAT32)
     mlmodel_detector.version = datetime.now().strftime("%Y%m%d%H%M%S")
     mlmodel_detector.save("TransformerEncoder.mlpackage")
 
@@ -57,19 +63,13 @@ def convert3():
 
     encoder_output = torch.rand(1, max_encoderlen, config.embed_dim)
     decoder_input = torch.randint(0, 1000, size=(1, max_decoderlen), dtype=torch.long)
-    traced_model = torch.jit.trace(decoder, (encoder_output, decoder_input, decoder_input, decoder_input, key_mask))
-
-    # def op_selector(op):
-    #     print(op.op_type, [o.name for o in op.outputs])
-    #     return True
+    traced_model = torch.jit.trace(decoder, (encoder_output, decoder_input, key_mask))
 
     mlmodel_decoder = ct.convert(traced_model,
                                  convert_to="mlprogram",
                                  inputs=[
                                     ct.TensorType(name='encoder_output', shape=(1, max_encoderlen, config.embed_dim)),
-                                    ct.TensorType(name='decoder_input_1091', shape=(1, max_decoderlen)),
-                                    ct.TensorType(name='decoder_input_1093', shape=(1, max_decoderlen)),
-                                    ct.TensorType(name='decoder_input_1097', shape=(1, max_decoderlen)),
+                                    ct.TensorType(name='decoder_input', shape=(1, max_decoderlen), dtype=np.int32),
                                     ct.TensorType(name='key_mask', shape=(1, 1, 1, max_encoderlen)),
                                  ],
                                  outputs=[
@@ -111,15 +111,12 @@ def test3():
 
     print('decoder')
     decoder_input = np.zeros(shape=(1, max_decoderlen), dtype=np.int32)
-    decoder_input[0,0] = decoder_SOT
-    decoder_input[0,1:] = decoder_MSK
+    decoder_input[0,:] = decoder_MSK
     rep_count = 8
     for k in range(rep_count):
         output = mlmodel_decoder.predict({
             'encoder_output': encoder_output,
-            'decoder_input_1091': decoder_input % 1091,
-            'decoder_input_1093': decoder_input % 1093,
-            'decoder_input_1097': decoder_input % 1097,
+            'decoder_input': decoder_input,
             'key_mask': key_mask,
         })
 
@@ -142,17 +139,30 @@ def test3():
         maxi = np.argmax(pred_p, axis=0)
         decoder_output = np.take_along_axis(decoder_output, maxi[None,...], axis=0)[0]
         pred_p = np.take_along_axis(pred_p, maxi[None,...], axis=0)[0]
-        if k > 0 and np.all(pred_p[decoder_output > 0] > 0.99):
+        decoder_output = np.where(decoder_input == decoder_MSK, decoder_output, decoder_input)
+        if np.all(pred_p[np.logical_and(decoder_input == decoder_MSK, decoder_output > 0)] > 0.99):
             print(f'---[{k} early stop]---')
             break
         if k < rep_count-1:
-            decoder_input[:,1:] = np.where(pred_p < 1/rep_count*k, decoder_MSK, decoder_output)[:,:-1]
+            r = int(max_decoderlen * (k+1) / rep_count)
+            remask = np.arange(max_decoderlen) > r
+            remask = np.logical_or(remask, decoder_output > 0x3FFFF)
+            if r > 0:
+                remask = np.logical_or(remask, np.logical_and(decoder_input == decoder_MSK, pred_p < 0.9))
+            if not np.any(remask):
+                break
+            decoder_output = np.where(remask, decoder_MSK, decoder_output)
+            decoder_input[:,:] = decoder_output[:,:]
     print(decoder_output[0])
     predstr = ''
     for p in decoder_output[0]:
-        if p == 0 or p == decoder_EOT:
+        if p == decoder_SOT:
+            continue
+        if p == decoder_PAD or p == decoder_EOT:
             break
-        if p < 0x3FFFF:
+        if p >= 0xD800 and p <= 0xDFFF:
+            predstr += '\uFFFD'
+        elif p < 0x3FFFF:
             predstr += chr(p)
         else:
             predstr += '\uFFFD'
@@ -206,9 +216,13 @@ def test32():
     pred = model2(encoder_input).squeeze(0).cpu().numpy()
     predstr = ''
     for p in pred:
-        if p == 0 or p == 2:
+        if p == decoder_SOT:
+            continue
+        if p == decoder_PAD or p == decoder_EOT:
             break
-        if p < 0x3FFFF:
+        if p >= 0xD800 and p <= 0xDFFF:
+            predstr += '\uFFFD'
+        elif p < 0x3FFFF:
             predstr += chr(p)
         else:
             predstr += '\uFFFD'

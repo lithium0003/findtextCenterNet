@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
-import onnxruntime.tools
-import onnxruntime.tools.make_dynamic_shape_fixed
 import onnx
 import onnxruntime
-from onnxconverter_common import float16
 import torch
 import numpy as np
 from PIL import Image

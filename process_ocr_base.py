@@ -5,7 +5,7 @@ import subprocess
 import json
 
 from util_func import width, height, scale, feature_dim, sigmoid, decode_ruby, modulo_list, softmax, calc_predid
-from const import encoder_add_dim, max_encoderlen, max_decoderlen, decoder_SOT, decoder_EOT, decoder_MSK
+from const import encoder_add_dim, max_encoderlen, max_decoderlen, decoder_SOT, decoder_EOT, decoder_MSK, decoder_PAD
 encoder_dim = feature_dim + encoder_add_dim
 
 UNICODE_WHITESPACE_CHARACTERS = [
@@ -235,7 +235,9 @@ class OCR_Processer(ABC):
             pred = self.call_transformer(encoder_input)
             predstr = ''
             for p in pred:
-                if p == 0 or p == decoder_EOT:
+                if p == decoder_SOT:
+                    continue
+                if p == decoder_PAD or p == decoder_EOT:
                     break
                 if p >= 0xD800 and p <= 0xDFFF:
                     predstr += '\uFFFD'
@@ -290,6 +292,9 @@ class OCR_Processer(ABC):
             try:
                 k = next(k_iter)
                 for c in predstr:
+                    if c in ['\uFFF9','\uFFFA','\uFFFB']:
+                        line_text += c
+                        continue
                     if feature_idx[k][0] < 0 or c == '\n':
                         if line_text:
                             lineinfo = {
@@ -314,9 +319,6 @@ class OCR_Processer(ABC):
                             k = next(k_iter)
                         if c == '\n':
                             continue
-                    if c in ['\uFFF9','\uFFFA','\uFFFB']:
-                        line_text += c
-                        continue
                     if c in UNICODE_WHITESPACE_CHARACTERS:
                         line_text += c
                         continue

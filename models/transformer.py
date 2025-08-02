@@ -322,7 +322,7 @@ class TransformerPredictor(nn.Module):
             decoder_output = torch.gather(decoder_output, 0, maxi.unsqueeze(0))[0]
             pred_p = torch.gather(pred_p, 0, maxi.unsqueeze(0))[0]
             # print(pred_p[decoder_output > 0])
-            decoder_output = torch.where(decoder_input == decoder_MSK, decoder_output, decoder_input)
+            # decoder_output = torch.where(decoder_input == decoder_MSK, decoder_output, decoder_input)
             if torch.all(pred_p[torch.logical_and(decoder_input == decoder_MSK, decoder_output > 0)] > 0.99):
                 print(f'[{k} early stop]')
                 break
@@ -356,8 +356,7 @@ class TransformerPredictor(nn.Module):
                 if not torch.any(remask):
                     print(f'[{k} no remask stop]')
                     break
-                decoder_output = torch.where(remask, decoder_MSK, decoder_output)
-                decoder_input[:,:] = decoder_output[:,:]
+                decoder_input[:,:] = torch.where(remask, decoder_MSK, decoder_output)
         return decoder_output
 
 class TransformerEncoderPredictor(nn.Module):
