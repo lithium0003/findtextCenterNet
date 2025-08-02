@@ -5,7 +5,7 @@ import numpy as np
 import os
 import itertools
 
-from models.transformer import ModelDimensions, Transformer, TransformerEncoderPredictor, TransformerDecoderPredictor2
+from models.transformer import ModelDimensions, Transformer, TransformerEncoderPredictor, TransformerDecoderPredictor
 from util_func import feature_dim, modulo_list, calc_predid
 from const import encoder_add_dim, max_decoderlen, max_encoderlen, decoder_SOT, decoder_EOT, decoder_MSK
 
@@ -25,7 +25,7 @@ def convert3():
         print('empty model')
     model.eval()
     encoder = TransformerEncoderPredictor(model.encoder)
-    decoder = TransformerDecoderPredictor2(model.decoder)
+    decoder = TransformerDecoderPredictor(model.decoder)
     encoder.eval()
     decoder.eval()
 

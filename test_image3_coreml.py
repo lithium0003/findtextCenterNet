@@ -16,7 +16,7 @@ except ImportError:
     pass
 
 from util_func import calc_predid, width, height, scale, feature_dim, modulo_list, sigmoid, softmax, decode_ruby
-from const import encoder_add_dim, max_encoderlen, max_decoderlen, decoder_SOT, decoder_EOT, decoder_MSK
+from const import encoder_add_dim, max_encoderlen, max_decoderlen, decoder_PAD, decoder_SOT, decoder_EOT, decoder_MSK
 encoder_dim = feature_dim + encoder_add_dim
 
 if len(sys.argv) < 2:
@@ -25,9 +25,11 @@ if len(sys.argv) < 2:
 
 cutoff = 0.4
 
-step_ratio = 0.66
+step_ratio = 0.75
 stepx = int(width * step_ratio)
 stepy = int(height * step_ratio)
+
+rng = np.random.default_rng()
 
 target_file = sys.argv[1]
 resize = 1.0
@@ -36,7 +38,7 @@ if len(sys.argv) > 2:
     print('resize: ', resize)
 
 print('load')
-mlmodel_detector = ct.models.MLModel('TextDetector.mlpackage')
+mlmodel_detector = ct.models.MLModel('TextDetector.mlpackage', compute_units=ct.ComputeUnit.CPU_ONLY)
 
 mlmodel_transformer_encoder = ct.models.MLModel('TransformerEncoder.mlpackage')
 mlmodel_transformer_decoder = ct.models.MLModel('TransformerDecoder.mlpackage')
@@ -181,8 +183,7 @@ def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
     th_hist = np.median(hists) / 5
 
     idx = np.argsort(-locations[:,0])
-    donefill_map = np.empty([org_img.shape[0], org_img.shape[1]], dtype=int)
-    donefill_map.fill(-1)
+    done_area = np.zeros([0,4])
     selected_idx = []
     for i in idx:
         p = locations[i,0]
@@ -199,45 +200,102 @@ def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
         if imageHist(org_img[y_min:y_max,x_min:x_max,:]) < th_hist:
             continue
         area0_vol = w * h
-        positive_count = np.sum(np.abs(org_img[y_min:y_max,x_min:x_max,:] - np.mean(org_img[y_min:y_max,x_min:x_max,:], axis=(0,1), keepdims=True)) > th_hist) / org_img.shape[2]
-        if positive_count / area0_vol < 0.1:
-            continue
-        valid = True
-        for di in np.unique(donefill_map[y_min:y_max,x_min:x_max]):
-            if di < 0:
-                continue
-            p_cx = locations[di,1]
-            p_cy = locations[di,2]
-            p_w = locations[di,3]
-            p_h = locations[di,4]
-
-            area1_vol = p_w * p_h
-            inter_xmin = max(cx - w / 2, p_cx - p_w / 2)
-            inter_ymin = max(cy - h / 2, p_cy - p_h / 2)
-            inter_xmax = min(cx + w / 2, p_cx + p_w / 2)
-            inter_ymax = min(cy + h / 2, p_cy + p_h / 2)
-            inter_w = max(inter_xmax - inter_xmin, 0.)
-            inter_h = max(inter_ymax - inter_ymin, 0.)
+        fill_map = np.zeros([int(w), int(h)], dtype=bool)
+        if done_area.size > 0:
+            area1_vol = done_area[:,2] * done_area[:,3]
+            inter_xmin = np.maximum(cx - w / 2, done_area[:,0] - done_area[:,2] / 2)
+            inter_ymin = np.maximum(cy - h / 2, done_area[:,1] - done_area[:,3] / 2)
+            inter_xmax = np.minimum(cx + w / 2, done_area[:,0] + done_area[:,2] / 2)
+            inter_ymax = np.minimum(cy + h / 2, done_area[:,1] + done_area[:,3] / 2)
+            inter_w = np.maximum(inter_xmax - inter_xmin, 0.)
+            inter_h = np.maximum(inter_ymax - inter_ymin, 0.)
             inter_vol = inter_w * inter_h
             union_vol = area0_vol + area1_vol - inter_vol
-            if union_vol > 0:
-                iou = inter_vol / union_vol
-            else:
-                iou = 0
+            iou = np.where(union_vol > 0., inter_vol / union_vol, 0.)
+            if iou.max() > 0.5:
+                continue
+            if inter_vol.max() > area0_vol * 0.75:
+                continue
+            # dx = done_area[:,0] - cx
+            # dy = done_area[:,1] - cy
+            # d = np.sqrt(dx * dx + dy * dy)
+            # if d.min() < max(8, min(w,h)/2):
+            #     continue
+            idx_overlap = np.where(iou > 0)[0]
+            for j in idx_overlap:
+                cx1 = done_area[j,0]
+                cy1 = done_area[j,1]
+                w1 = done_area[j,2]
+                h1 = done_area[j,3]
+                p1x = int(max(cx1 - w1/2, cx - w/2) - (cx - w/2))
+                p2x = int(min(cx1 + w1/2, cx + w/2) - (cx - w/2))
+                p1y = int(max(cy1 - h1/2, cy - h/2) - (cy - h/2))+1
+                p2y = int(min(cy1 + h1/2, cy + h/2) - (cy - h/2))+1
+                fill_map[p1x:p2x,p1y:p2y] = True
+            if np.mean(fill_map) > 0.5:
+                continue
 
-            if iou > 0.25:
-                valid = False
-                break
-            if inter_vol > area0_vol * 0.95:
-                valid = False
-                break
-            if np.sum(donefill_map[y_min:y_max,x_min:x_max] == di) > area1_vol * 0.95:
-                valid = False
-                break
-        if not valid:
-            continue
-        donefill_map[y_min:y_max,x_min:x_max] = np.where(donefill_map[y_min:y_max,x_min:x_max] < 0, i, donefill_map[y_min:y_max,x_min:x_max])
+        done_area = np.vstack([done_area, np.array([cx, cy, w, h])])
         selected_idx.append(i)
+
+    # idx = np.argsort(-locations[:,0])
+    # donefill_map = np.empty([org_img.shape[0], org_img.shape[1]], dtype=int)
+    # donefill_map.fill(-1)
+    # selected_idx = []
+    # for i in idx:
+    #     p = locations[i,0]
+    #     if p < cut_off:
+    #         break
+    #     cx = locations[i,1]
+    #     cy = locations[i,2]
+    #     w = locations[i,3]
+    #     h = locations[i,4]
+    #     x_min = max(0, int(cx - w/2))
+    #     x_max = min(org_img.shape[1] - 1, int(cx + w/2) + 1)
+    #     y_min = max(0, int(cy - h/2))
+    #     y_max = min(org_img.shape[0] - 1, int(cy + h/2) + 1)
+    #     if imageHist(org_img[y_min:y_max,x_min:x_max,:]) < th_hist:
+    #         continue
+    #     area0_vol = w * h
+    #     positive_count = np.sum(np.abs(org_img[y_min:y_max,x_min:x_max,:] - np.mean(org_img[y_min:y_max,x_min:x_max,:], axis=(0,1), keepdims=True)) > th_hist) / org_img.shape[2]
+    #     if positive_count / area0_vol < 0.1:
+    #         continue
+    #     valid = True
+    #     for di in np.unique(donefill_map[y_min:y_max,x_min:x_max]):
+    #         if di < 0:
+    #             continue
+    #         p_cx = locations[di,1]
+    #         p_cy = locations[di,2]
+    #         p_w = locations[di,3]
+    #         p_h = locations[di,4]
+
+    #         area1_vol = p_w * p_h
+    #         inter_xmin = max(cx - w / 2, p_cx - p_w / 2)
+    #         inter_ymin = max(cy - h / 2, p_cy - p_h / 2)
+    #         inter_xmax = min(cx + w / 2, p_cx + p_w / 2)
+    #         inter_ymax = min(cy + h / 2, p_cy + p_h / 2)
+    #         inter_w = max(inter_xmax - inter_xmin, 0.)
+    #         inter_h = max(inter_ymax - inter_ymin, 0.)
+    #         inter_vol = inter_w * inter_h
+    #         union_vol = area0_vol + area1_vol - inter_vol
+    #         if union_vol > 0:
+    #             iou = inter_vol / union_vol
+    #         else:
+    #             iou = 0
+
+    #         if iou > 0.25:
+    #             valid = False
+    #             break
+    #         if inter_vol > area0_vol * 0.95:
+    #             valid = False
+    #             break
+    #         if np.sum(donefill_map[y_min:y_max,x_min:x_max] == di) > area1_vol * 0.95:
+    #             valid = False
+    #             break
+    #     if not valid:
+    #         continue
+    #     donefill_map[y_min:y_max,x_min:x_max] = np.where(donefill_map[y_min:y_max,x_min:x_max] < 0, i, donefill_map[y_min:y_max,x_min:x_max])
+    #     selected_idx.append(i)
 
     idx = selected_idx
     selected_idx = []
@@ -437,11 +495,12 @@ prev_j = 0
 result_txt = ''
 loop_count = 0
 keep_back = 0
+margin = 10
 while cur_i < features.shape[0]:
     loop_count += 1
     r = 0
     s = 0
-    for k in range(cur_i, min(cur_i + max_encoderlen - 3, features.shape[0])):
+    for k in range(cur_i, features.shape[0]):
         # space
         if features[k,-3] > 0:
             r += 1
@@ -454,14 +513,17 @@ while cur_i < features.shape[0]:
             s = 2
         elif s == 2 and features[k,-4] == 0:
             s = 0
-    cur_j = min(features.shape[0], cur_i + (max_encoderlen - 3 - r))
+
+        if k - cur_i >= max_encoderlen - margin - r:
+            break
+    cur_j = min(features.shape[0], cur_i + (max_encoderlen - margin - r))
     # horizontal / vertical change point
     for j in range(cur_i+1, cur_j):
         if features[j,-6] != features[cur_i,-6]:
             cur_j = j
             break
     # double newline
-    if cur_j < features.shape[0]-1 and cur_i+1 < cur_j-1:
+    if cur_i+1 < cur_j-1:
         for j in range(cur_i+1, cur_j-1):
             if features[j,-1] > 0 and features[j+1,-1] > 0:
                 cur_j = j+2
@@ -475,12 +537,28 @@ while cur_i < features.shape[0]:
                 if features[j,-4] == 0 and features[j,-5] == 0:
                     cur_j = j+1
                     break
+    # find space/newline saparation
+    if cur_j < features.shape[0]:
+        # last char is not newline
+        if cur_j > 1 and features[cur_j-1, -1] == 0:
+            for j in reversed(range(cur_i+20, cur_j)):
+                # newline
+                if features[j,-1] > 0:
+                    if cur_j - j < 20:
+                        cur_j = j
+                    break
+                # space
+                if features[j,-3] > 0:
+                    if cur_j - j < 20:
+                        cur_j = j
+                    break
 
     if prev_j == cur_j:
         keep_back = 0
         cur_i = cur_j
         continue
 
+    print()
     print(prev_j,cur_i,cur_j,'/',features.shape[0])
     encoder_input = np.zeros(shape=(1, max_encoderlen, encoder_dim), dtype=np.float16)
     encoder_input[0,0,:] = SP_token
@@ -493,23 +571,60 @@ while cur_i < features.shape[0]:
     })['encoder_output']
 
     decoder_input = np.zeros(shape=(1, max_decoderlen), dtype=np.int32)
-    decoder_input[0,0] = decoder_SOT
-    decoder_input[0,1:] = decoder_MSK
-    rep_count = 8
-    for k in range(rep_count):
+    decoder_input[0,:] = decoder_MSK
+    # p_th = 1.0
+    # count = 0
+    # while p_th > 0.5:
+    repeat_count = 8
+    while repeat_count > 0:
+        # print(decoder_input)
+        # pred = decoder_input.squeeze(0)
+        # predstr = ''
+        # for p in pred:
+        #     if p == decoder_SOT:
+        #         continue
+        #     if p == decoder_PAD or p == decoder_EOT:
+        #         break
+        #     if p == decoder_MSK:
+        #         predstr += '<MSK>'
+        #     elif p == 0xFFF9:
+        #         predstr += '<base>'
+        #     elif p == 0xFFFA:
+        #         predstr += '<ruby>'
+        #     elif p == 0xFFFB:
+        #         predstr += '</ruby>'
+        #     elif p >= 0xD800 and p <= 0xDFFF:
+        #         predstr += '\uFFFD'
+        #     elif p < 0x3FFFF:
+        #         predstr += chr(int(p))
+        #     else:
+        #         predstr += '\uFFFD'
+        # print('------------------')
+        # print(predstr)
+
         output = mlmodel_transformer_decoder.predict({
             'encoder_output': encoder_output,
-            'decoder_input_1091': decoder_input % 1091,
-            'decoder_input_1093': decoder_input % 1093,
-            'decoder_input_1097': decoder_input % 1097,
+            'decoder_input': decoder_input,
             'key_mask': key_mask,
         })
+
+        # pred_ids = []
+        # pred_p = []
+        # for m in modulo_list:
+        #     prob = output['modulo_%d'%m]
+        #     topi = np.argmax(prob, axis=-1, keepdims=True)
+        #     topp = np.take_along_axis(prob, topi, axis=-1)
+        #     pred_p.append(np.transpose(topp, (2,0,1)))
+        #     pred_ids.append(np.transpose(topi, (2,0,1)))
+
+        # pred_p = np.exp(np.mean(np.log(np.maximum(pred_p, 1e-10)), axis=0))
+        # decoder_output = calc_predid(*pred_ids)
 
         listp = []
         listi = []
         for m in modulo_list:
-            pred_p1 = softmax(output['modulo_%d'%m])
-            topi = np.argpartition(-pred_p1, 5, axis=-1)[...,:5]
+            pred_p1 = output['modulo_%d'%m]
+            topi = np.argpartition(-pred_p1, 3, axis=-1)[...,:3]
             topp = np.take_along_axis(pred_p1, topi, axis=-1)
             listp.append(np.transpose(topp, (2,0,1)))
             listi.append(np.transpose(topi, (2,0,1)))
@@ -519,20 +634,69 @@ while cur_i < features.shape[0]:
         pred_ids = np.transpose(pred_ids, (1,0,2,3))
         pred_p = np.transpose(pred_p, (1,0,2,3))
         pred_p = np.exp(np.mean(np.log(np.maximum(pred_p, 1e-10)), axis=0))
+
         decoder_output = calc_predid(*pred_ids)
         pred_p[decoder_output > 0x3FFFF] = 0
-        maxi = np.argmax(pred_p, axis=0)
-        decoder_output = np.take_along_axis(decoder_output, maxi[None,...], axis=0)[0]
-        pred_p = np.take_along_axis(pred_p, maxi[None,...], axis=0)[0]
-        if k > 0 and np.all(pred_p[decoder_output > 0] > 0.99):
-            print(f'[{k} early stop]')
+        maxi = np.argmax(pred_p, axis=0, keepdims=True)
+        decoder_output = np.take_along_axis(decoder_output, maxi, axis=0)[0]
+        pred_p = np.take_along_axis(pred_p, maxi, axis=0)[0]
+
+        # decoder_output = np.where(decoder_input == decoder_MSK, decoder_output, decoder_input)
+
+        print(pred_p[decoder_output > 0])
+        pred = decoder_output[0]
+        print(pred)
+        predstr = ''
+        for p in pred:
+            if p == 0 or p == decoder_EOT:
+                break
+            if p == decoder_MSK:
+                predstr += '<MSK>'
+            elif p == 0xFFF9:
+                predstr += '<base>'
+            elif p == 0xFFFA:
+                predstr += '<ruby>'
+            elif p == 0xFFFB:
+                predstr += '</ruby>'
+            elif p >= 0xD800 and p <= 0xDFFF:
+                predstr += '\uFFFD'
+            elif p < 0x3FFFF:
+                predstr += chr(p)
+            else:
+                predstr += '\uFFFD'
+        print(predstr)
+
+        if np.all(pred_p[decoder_output > 0] > 0.99):
+            print(f'---[{repeat_count} early stop]---')
+            # print(f'---[{p_th} early stop]---')
             break
-        if k < rep_count-1:
-            decoder_input[:,1:] = np.where(pred_p < 1-(k+1)/rep_count, decoder_MSK, decoder_output)[:,:-1]
+
+        remask = decoder_output > 0x3FFFF
+        remask = np.logical_or(remask, pred_p < 0.9)
+        if not np.any(remask):
+            print(f'---[{repeat_count} early stop]---')
+            break
+
+        # p1 = pred_p[decoder_output > 0]
+        # p1 = p1[p1 < p_th]
+        # if p1.size > 0:
+        #     p_th = np.max(p1)
+        # print(p_th)
+        # remask = np.logical_or(remask, pred_p < p_th)
+        # if not np.any(remask):
+        #     print(f'===[{p_th} no remask stop]===')
+        #     break
+
+        decoder_input[:,:] = np.where(remask, decoder_MSK, decoder_output)
+
+        repeat_count -= 1
+
     pred = decoder_output[0]
     predstr = ''
-    print(pred)
+    # print(pred)
     for p in pred:
+        if p == decoder_SOT:
+            continue
         if p == 0 or p == decoder_EOT:
             break
         if p >= 0xD800 and p <= 0xDFFF:
@@ -558,13 +722,18 @@ while cur_i < features.shape[0]:
                 k += 1
                 break
             # newline
+            if features[k,-1] > 0 and features[k+1,-1] > 0:
+                k += 2
+                break
+            # newline
             if k < cur_j - 1 and features[k,-1] > 0:
                 k += 1
                 break
             # space
             if features[k,-3] > 0:
                 keep_back += 1
-            if k > cur_j - 3:
+                break
+            if k > cur_j - 10:
                 k -= 1
             else:
                 break

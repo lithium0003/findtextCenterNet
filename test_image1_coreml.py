@@ -53,6 +53,9 @@ if len(sys.argv) > 2:
         elif arg.startswith('offsety'):
             offsety = int(arg[7:])
             print('offsety: ', offsety)
+        elif arg.startswith('cutoff'):
+            cutoff = float(arg[6:])
+            print('cutoff: ', cutoff)
 
 print('load')
 mlmodel_detector = ct.models.MLModel('TextDetector.mlpackage')
@@ -195,7 +198,7 @@ def eval(ds, org_img, cut_off = 0.5, locations0 = None, glyphfeatures0 = None):
         y_min = int(cy - h/2) - 1
         y_max = int(cy + h/2) + 2
         hists.append(imageHist(org_img[y_min:y_max,x_min:x_max,:]))
-    th_hist = np.median(hists) / 10
+    th_hist = min(0, np.median(hists) / 10)
 
     idx = np.argsort(-locations[:,0])
     donefill_map = np.empty([org_img.shape[0], org_img.shape[1]], dtype=int)
@@ -355,10 +358,10 @@ def decode(glyphfeatures):
     
     return glyphids, glyphprobs
 
-# stepx = width * 3 // 4
-# stepy = height * 3 // 4
-stepx = width * 1 // 2
-stepy = height * 1 // 2
+stepx = width * 3 // 4
+stepy = height * 3 // 4
+# stepx = width * 1 // 2
+# stepy = height * 1 // 2
 
 im0 = Image.open(target_file).convert('RGB')
 if resize != 1.0:
